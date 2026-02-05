@@ -1,0 +1,16 @@
+TITLE: Day 1 Homework
+VOCAB:
+Table - 桌子
+Lamp - 灯
+Rug - 地毯
+Sofa - 沙发
+Chair - 椅子
+SENTENCES:
+The lamp is on the table.
+The rug is under the table.
+The chair is next to the sofa.
+Q&A:
+Q: Where is the rug?
+A: It is under the table.
+Q: Where is the lamp?
+A: It is on the table.

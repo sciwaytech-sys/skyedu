@@ -1,0 +1,12 @@
+{
+  "comfy_workdir": "C:\\AI\\ComfyUI",
+  "comfy_python": "C:\\AI\\ComfyUI\\.venv\\Scripts\\python.exe",
+  "comfy_args": ["main.py", "--listen", "127.0.0.1", "--port", "8188"],
+  "comfy_url": "http://127.0.0.1:8188",
+
+  "project_workdir": "C:\\Users\\user\\PycharmProjects\\skyed_automation",
+  "project_python": "C:\\Users\\user\\PycharmProjects\\skyed_automation\\.venv\\Scripts\\python.exe",
+  "pipeline_script": "run_pipeline.py",
+
+  "hf_endpoint": "https://hf.co"
+}
