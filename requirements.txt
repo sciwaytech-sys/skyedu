@@ -1,0 +1,7 @@
+python-dotenv
+requests
+Pillow
+pydub
+pyttsx3
+fastapi
+uvicorn[standard]

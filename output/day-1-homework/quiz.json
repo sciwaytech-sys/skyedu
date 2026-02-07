@@ -1,0 +1,87 @@
+{
+  "title": "Day 1 Homework",
+  "questions": [
+    {
+      "type": "mcq",
+      "q": "Where is the rug?",
+      "choices": [
+        "椅子",
+        "桌子",
+        "灯",
+        "It is under the table."
+      ],
+      "answer_index": 3
+    },
+    {
+      "type": "mcq",
+      "q": "Where is the lamp?",
+      "choices": [
+        "椅子",
+        "It is on the table.",
+        "地毯",
+        "桌子"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "mcq",
+      "q": "What is the meaning of: Rug ?",
+      "choices": [
+        "灯",
+        "地毯",
+        "沙发",
+        "桌子"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "mcq",
+      "q": "What is the meaning of: Lamp ?",
+      "choices": [
+        "沙发",
+        "灯",
+        "椅子",
+        "地毯"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "mcq",
+      "q": "What is the meaning of: Table ?",
+      "choices": [
+        "椅子",
+        "地毯",
+        "灯",
+        "桌子"
+      ],
+      "answer_index": 3
+    },
+    {
+      "type": "mcq",
+      "q": "What is the meaning of: Chair ?",
+      "choices": [
+        "桌子",
+        "椅子",
+        "沙发",
+        "灯"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "mcq",
+      "q": "What is the meaning of: Sofa ?",
+      "choices": [
+        "灯",
+        "沙发",
+        "地毯",
+        "椅子"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "tf",
+      "q": "True or False: The lamp is on the table.",
+      "answer_bool": true
+    }
+  ]
+}
