@@ -4,50 +4,37 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="1.1 updated">
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/bg.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/lamp.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/picture.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/sofa.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/zones.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/bg.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/sprites/ball.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/zones.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/bg.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/bin.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/fridge.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/shelf.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/tap.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/zones.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/bg.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/bench.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/kite.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/slide.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/tree.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/zones.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/bg.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/cage.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/lion.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/sign.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/zebra.svg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/zones.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/build.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/mcq_text.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/prepositions_dragdrop.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/qa_dialog.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/registry.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/base.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/dragdrop.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/mcq.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/qa.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/runtime.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/schema.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/skins/fluent_win11.css" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizes/skins/sky_brand.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="1.1.9 updated">
+      <change afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/app_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app_gui.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/comfy/workflow_api.json" beforeDir="false" afterPath="$PROJECT_DIR$/assets/comfy/workflow_api.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/chair.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/chair.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/lamp.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/lamp.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/rug.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/rug.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_chair_is_next_to_the_sofa.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_chair_is_next_to_the_sofa.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_lamp_is_on_the_table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_lamp_is_on_the_table.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_rug_is_under_the_table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_rug_is_under_the_table.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sofa.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/sofa.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/table.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/chair.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/chair.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/lamp.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/lamp.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/rug.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/rug.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/sofa.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/sofa.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/table.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/chair.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/lamp.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/rug.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/sofa.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/table.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/chair.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/chair.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/lamp.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/lamp.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/rug.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/rug.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/sofa.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/sofa.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/quiz.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/tts_edge.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tts_edge.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -88,21 +75,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/user/PycharmProjects/skyed_automation&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "DefaultHtmlFileTemplate": "HTML File",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.app_gui.executor": "Run",
+    "Python.pyside_gui.executor": "Run",
+    "Python.tts_edge.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "C:/Users/user/PycharmProjects/skyed_automation",
+    "settings.editor.selected.configurable": "advanced.settings"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\user\PycharmProjects\skyedu\.venv" />
@@ -135,11 +124,28 @@
       <option name="project" value="LOCAL" />
       <updated>1770308040369</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="1.1.9 updated">
+      <option name="closed" value="true" />
+      <created>1770477033719</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1770477033719</updated>
+    </task>
+    <task id="LOCAL-00003" summary="1.1.9 updated">
+      <option name="closed" value="true" />
+      <created>1770477047902</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1770477047902</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="1.1 updated" />
-    <option name="LAST_COMMIT_MESSAGE" value="1.1 updated" />
+    <MESSAGE value="1.1.9 updated" />
+    <option name="LAST_COMMIT_MESSAGE" value="1.1.9 updated" />
   </component>
 </project>

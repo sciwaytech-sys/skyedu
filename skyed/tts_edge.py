@@ -2,14 +2,21 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import edge_tts
 
 DEFAULT_VOICE_EN = "en-US-JennyNeural"
 DEFAULT_VOICE_ZH = "zh-CN-XiaoxiaoNeural"
+DEFAULT_RATE = "-10%"
+
+# Env overrides (set by app_gui.py)
+ENV_RATE = "SKYED_TTS_RATE"
+ENV_VOICE_EN = "SKYED_VOICE_EN"
+ENV_VOICE_ZH = "SKYED_VOICE_ZH"
 
 
 def _ensure_parent(out_path: Path) -> None:
@@ -101,6 +108,50 @@ def _add_natural_punctuation(text: str, lang: str) -> str:
     return t
 
 
+def _env_rate(default: str = DEFAULT_RATE) -> str:
+    """
+    Accepts "-10%" / "+10%" / "0%" or integers like "-10" / "10".
+    Returns edge-tts rate string.
+    """
+    raw = (os.getenv(ENV_RATE) or "").strip()
+    if not raw:
+        return default
+    # normalize "10" -> "+10%"
+    m = re.fullmatch(r"([+-]?\d+)\s*%?", raw)
+    if not m:
+        return default
+    n = int(m.group(1))
+    # clamp to something sane for UI / safety
+    if n < -60:
+        n = -60
+    if n > 60:
+        n = 60
+    return f"+{n}%" if n >= 0 else f"{n}%"
+
+
+def _env_voice(var: str, default: str) -> str:
+    v = (os.getenv(var) or "").strip()
+    return v or default
+
+
+def get_tts_defaults(
+    *,
+    rate: str = DEFAULT_RATE,
+    voice_en: str = DEFAULT_VOICE_EN,
+    voice_zh: str = DEFAULT_VOICE_ZH,
+) -> Tuple[str, str, str]:
+    """
+    Central place to resolve effective defaults.
+    Priority:
+      1) env vars (SKYED_TTS_RATE / SKYED_VOICE_EN / SKYED_VOICE_ZH)
+      2) passed-in defaults
+    """
+    eff_rate = _env_rate(rate)
+    eff_en = _env_voice(ENV_VOICE_EN, voice_en)
+    eff_zh = _env_voice(ENV_VOICE_ZH, voice_zh)
+    return eff_rate, eff_en, eff_zh
+
+
 async def _speak_to_mp3(text: str, voice: str, rate: str, out_mp3: Path) -> None:
     _ensure_parent(out_mp3)
     communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
@@ -112,8 +163,9 @@ def tts_en(
     out_mp3: Path,
     *,
     voice: str = DEFAULT_VOICE_EN,
-    rate: str = "-10%",
+    rate: str = DEFAULT_RATE,
 ) -> Path:
+    rate, voice, _ = get_tts_defaults(rate=rate, voice_en=voice, voice_zh=DEFAULT_VOICE_ZH)
     text = _add_natural_punctuation(text, "en")
     asyncio.run(_speak_to_mp3(text=text, voice=voice, rate=rate, out_mp3=Path(out_mp3)))
     return Path(out_mp3)
@@ -124,8 +176,9 @@ def tts_zh(
     out_mp3: Path,
     *,
     voice: str = DEFAULT_VOICE_ZH,
-    rate: str = "-10%",
+    rate: str = DEFAULT_RATE,
 ) -> Path:
+    rate, _, voice = get_tts_defaults(rate=rate, voice_en=DEFAULT_VOICE_EN, voice_zh=voice)
     text = _add_natural_punctuation(text, "zh")
     asyncio.run(_speak_to_mp3(text=text, voice=voice, rate=rate, out_mp3=Path(out_mp3)))
     return Path(out_mp3)
@@ -137,7 +190,7 @@ def generate_audio(
     out_dir: Union[Path, str, None] = None,
     slug: Optional[str] = None,
     *,
-    rate: str = "-10%",
+    rate: str = DEFAULT_RATE,
     voice_en: str = DEFAULT_VOICE_EN,
     voice_zh: str = DEFAULT_VOICE_ZH,
 ) -> List[Path]:
@@ -156,7 +209,15 @@ def generate_audio(
           out_dir/zh/<slug>.mp3
 
         Returns list of created file Paths.
+
+    IMPORTANT:
+      Effective defaults can be overridden by env vars set from the GUI:
+        SKYED_TTS_RATE="-10%"   (or "-10")
+        SKYED_VOICE_EN="en-US-JennyNeural"
+        SKYED_VOICE_ZH="zh-CN-XiaoxiaoNeural"
     """
+    eff_rate, eff_en, eff_zh = get_tts_defaults(rate=rate, voice_en=voice_en, voice_zh=voice_zh)
+
     # --------------------
     # Mode A: generate_audio(spec, out_dir)
     # --------------------
@@ -173,9 +234,9 @@ def generate_audio(
             s = _slugify(en)
             en_path = base_out / "en" / f"{s}.mp3"
             zh_path = base_out / "zh" / f"{s}.mp3"
-            tts_en(en, en_path, voice=voice_en, rate=rate)
+            tts_en(en, en_path, voice=eff_en, rate=eff_rate)
             if (zh or "").strip():
-                tts_zh(zh, zh_path, voice=voice_zh, rate=rate)
+                tts_zh(zh, zh_path, voice=eff_zh, rate=eff_rate)
                 created.extend([en_path, zh_path])
             else:
                 created.append(en_path)
@@ -185,9 +246,9 @@ def generate_audio(
             s = _slugify(en)[:60]
             en_path = base_out / "en" / f"sent_{s}.mp3"
             zh_path = base_out / "zh" / f"sent_{s}.mp3"
-            tts_en(en, en_path, voice=voice_en, rate=rate)
+            tts_en(en, en_path, voice=eff_en, rate=eff_rate)
             if (zh or "").strip():
-                tts_zh(zh, zh_path, voice=voice_zh, rate=rate)
+                tts_zh(zh, zh_path, voice=eff_zh, rate=eff_rate)
                 created.extend([en_path, zh_path])
             else:
                 created.append(en_path)
@@ -211,11 +272,11 @@ def generate_audio(
         (base_out / "zh").mkdir(parents=True, exist_ok=True)
 
         created: List[Path] = []
-        tts_en(en_text, en_path, voice=voice_en, rate=rate)
+        tts_en(en_text, en_path, voice=eff_en, rate=eff_rate)
         created.append(en_path)
 
         if (zh_text or "").strip():
-            tts_zh(zh_text, zh_path, voice=voice_zh, rate=rate)
+            tts_zh(zh_text, zh_path, voice=eff_zh, rate=eff_rate)
             created.append(zh_path)
 
         return created
