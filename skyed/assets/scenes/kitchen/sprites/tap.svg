@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <path d="M70 120 h80 a26 26 0 0 0 0-52 h-22 v-18 h-36 v18 h-22 a26 26 0 0 0 0 52z"
+        fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.22)" stroke-width="6"/>
+  <rect x="98" y="120" width="24" height="44" rx="10" fill="rgba(34,211,238,0.25)"/>
+  <circle cx="110" cy="178" r="10" fill="rgba(34,211,238,0.45)"/>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">tap</text>
+</svg>

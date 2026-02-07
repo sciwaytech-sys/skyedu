@@ -1,0 +1,23 @@
+{
+  "background": "bg.svg",
+  "sprite_ext": "svg",
+  "objects": ["ball", "cat", "book", "bag", "box", "lamp", "sofa", "picture", "rug", "chair"],
+  "zones": [
+    { "id": "zone_on_sofa",         "label": "on the sofa",         "x": 56, "y": 56, "w": 20, "h": 10 },
+    { "id": "zone_in_box",          "label": "in the box",          "x": 18, "y": 66, "w": 12, "h": 12 },
+    { "id": "zone_under_bed",       "label": "under the bed",       "x": 42, "y": 70, "w": 26, "h": 10 },
+    { "id": "zone_behind_chair",    "label": "behind the chair",    "x": 76, "y": 68, "w": 12, "h": 12 },
+    { "id": "zone_infront_picture", "label": "in front of the picture", "x": 40, "y": 26, "w": 22, "h": 10 },
+    { "id": "zone_nextto_lamp",     "label": "next to the lamp",    "x": 72, "y": 46, "w": 14, "h": 10 },
+    { "id": "zone_between_sofa_chair","label":"between the sofa and chair","x": 66, "y": 64, "w": 12, "h": 10 }
+  ],
+  "relations": {
+    "on": ["zone_on_sofa"],
+    "in": ["zone_in_box"],
+    "under": ["zone_under_bed"],
+    "behind": ["zone_behind_chair"],
+    "in front of": ["zone_infront_picture"],
+    "next to": ["zone_nextto_lamp"],
+    "between": ["zone_between_sofa_chair"]
+  }
+}

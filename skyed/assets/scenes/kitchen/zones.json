@@ -1,0 +1,23 @@
+{
+  "background": "bg.svg",
+  "sprite_ext": "svg",
+  "objects": ["ball", "cat", "book", "bag", "box", "fridge", "bin", "tap", "shelf"],
+  "zones": [
+    { "id": "zone_on_shelf",        "label": "on the shelf",        "x": 68, "y": 22, "w": 18, "h": 10 },
+    { "id": "zone_in_bin",          "label": "in the bin",          "x": 14, "y": 66, "w": 12, "h": 12 },
+    { "id": "zone_under_sink",      "label": "under the sink",      "x": 52, "y": 66, "w": 22, "h": 12 },
+    { "id": "zone_behind_fridge",   "label": "behind the fridge",   "x": 10, "y": 34, "w": 16, "h": 14 },
+    { "id": "zone_infront_fridge",  "label": "in front of the fridge", "x": 20, "y": 48, "w": 18, "h": 12 },
+    { "id": "zone_nextto_bin",      "label": "next to the bin",     "x": 26, "y": 70, "w": 14, "h": 10 },
+    { "id": "zone_between_fridge_sink","label":"between the fridge and sink","x": 32, "y": 52, "w": 18, "h": 12 }
+  ],
+  "relations": {
+    "on": ["zone_on_shelf"],
+    "in": ["zone_in_bin"],
+    "under": ["zone_under_sink"],
+    "behind": ["zone_behind_fridge"],
+    "in front of": ["zone_infront_fridge"],
+    "next to": ["zone_nextto_bin"],
+    "between": ["zone_between_fridge_sink"]
+  }
+}

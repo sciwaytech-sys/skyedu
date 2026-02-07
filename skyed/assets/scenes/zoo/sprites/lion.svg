@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <circle cx="110" cy="98" r="60" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.25)" stroke-width="6"/>
+  <circle cx="110" cy="100" r="34" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.18)" stroke-width="6"/>
+  <circle cx="98" cy="96" r="5" fill="rgba(255,255,255,0.65)"/>
+  <circle cx="122" cy="96" r="5" fill="rgba(255,255,255,0.65)"/>
+  <path d="M100 114 Q110 126 120 114" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="6" stroke-linecap="round"/>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">lion</text>
+</svg>

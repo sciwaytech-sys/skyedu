@@ -1,0 +1,23 @@
+{
+  "background": "bg.svg",
+  "sprite_ext": "svg",
+  "objects": ["ball", "cat", "book", "bag", "box", "tree", "bench", "slide", "kite"],
+  "zones": [
+    { "id": "zone_on_bench",        "label": "on the bench",        "x": 54, "y": 62, "w": 18, "h": 10 },
+    { "id": "zone_in_box",          "label": "in the box",          "x": 16, "y": 70, "w": 12, "h": 12 },
+    { "id": "zone_under_slide",     "label": "under the slide",     "x": 76, "y": 66, "w": 16, "h": 12 },
+    { "id": "zone_behind_tree",     "label": "behind the tree",     "x": 22, "y": 44, "w": 14, "h": 14 },
+    { "id": "zone_infront_tree",    "label": "in front of the tree","x": 30, "y": 54, "w": 16, "h": 12 },
+    { "id": "zone_nextto_bench",    "label": "next to the bench",  "x": 72, "y": 64, "w": 12, "h": 10 },
+    { "id": "zone_between_tree_bench","label":"between the tree and bench","x": 40, "y": 62, "w": 12, "h": 10 }
+  ],
+  "relations": {
+    "on": ["zone_on_bench"],
+    "in": ["zone_in_box"],
+    "under": ["zone_under_slide"],
+    "behind": ["zone_behind_tree"],
+    "in front of": ["zone_infront_tree"],
+    "next to": ["zone_nextto_bench"],
+    "between": ["zone_between_tree_bench"]
+  }
+}

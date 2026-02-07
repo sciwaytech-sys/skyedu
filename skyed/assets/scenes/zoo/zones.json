@@ -1,0 +1,23 @@
+{
+  "background": "bg.svg",
+  "sprite_ext": "svg",
+  "objects": ["ball", "cat", "book", "bag", "box", "cage", "lion", "zebra", "sign"],
+  "zones": [
+    { "id": "zone_on_sign",          "label": "on the sign",          "x": 68, "y": 26, "w": 18, "h": 10 },
+    { "id": "zone_in_cage",          "label": "in the cage",          "x": 54, "y": 54, "w": 22, "h": 18 },
+    { "id": "zone_under_tree",       "label": "under the tree",       "x": 18, "y": 66, "w": 18, "h": 12 },
+    { "id": "zone_behind_cage",      "label": "behind the cage",      "x": 78, "y": 52, "w": 14, "h": 14 },
+    { "id": "zone_infront_cage",     "label": "in front of the cage", "x": 46, "y": 72, "w": 18, "h": 12 },
+    { "id": "zone_nextto_sign",      "label": "next to the sign",     "x": 82, "y": 34, "w": 12, "h": 10 },
+    { "id": "zone_between_cage_tree","label":"between the cage and tree","x": 38, "y": 62, "w": 12, "h": 10 }
+  ],
+  "relations": {
+    "on": ["zone_on_sign"],
+    "in": ["zone_in_cage"],
+    "under": ["zone_under_tree"],
+    "behind": ["zone_behind_cage"],
+    "in front of": ["zone_infront_cage"],
+    "next to": ["zone_nextto_sign"],
+    "between": ["zone_between_cage_tree"]
+  }
+}

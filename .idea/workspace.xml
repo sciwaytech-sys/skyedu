@@ -4,18 +4,50 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/app_gui.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/homework.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/comfy_client.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/skyedu.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/skyed_automation.iml" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="1.1 updated">
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/bg.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/lamp.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/picture.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/sprites/sofa.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/bedroom/zones.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/bg.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/sprites/ball.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/classroom/zones.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/bg.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/bin.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/fridge.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/shelf.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/sprites/tap.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/kitchen/zones.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/bg.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/bench.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/kite.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/slide.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/sprites/tree.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/playground/zones.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/bg.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/cage.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/lion.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/sign.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/sprites/zebra.svg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/assets/scenes/zoo/zones.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/build.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/mcq_text.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/prepositions_dragdrop.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/builders/qa_dialog.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/registry.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/base.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/dragdrop.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/mcq.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/qa.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/render/runtime.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/schema.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/skins/fluent_win11.css" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/quizes/skins/sky_brand.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed_automation/requirements.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/app_gui.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,6 +93,7 @@
     &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
     &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
@@ -75,6 +108,7 @@
       <recent name="C:\Users\user\PycharmProjects\skyedu\.venv" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\user\PycharmProjects\skyed_automation\skyed\assets\scenes" />
       <recent name="C:\Users\user\PycharmProjects\skyedu" />
     </key>
   </component>
@@ -93,6 +127,19 @@
       <option name="presentableId" value="Default" />
       <updated>1769777297131</updated>
     </task>
+    <task id="LOCAL-00001" summary="1.1 updated">
+      <option name="closed" value="true" />
+      <created>1770308040369</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1770308040369</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="1.1 updated" />
+    <option name="LAST_COMMIT_MESSAGE" value="1.1 updated" />
   </component>
 </project>

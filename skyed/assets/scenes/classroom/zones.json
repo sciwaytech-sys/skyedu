@@ -1,0 +1,23 @@
+{
+  "background": "bg.svg",
+  "sprite_ext": "svg",
+  "objects": ["ball", "cat", "book", "bag", "box", "chair", "table", "rug"],
+  "zones": [
+    { "id": "zone_on_table",        "label": "on the table",        "x": 46, "y": 44, "w": 18, "h": 10 },
+    { "id": "zone_under_table",     "label": "under the table",     "x": 46, "y": 56, "w": 18, "h": 12 },
+    { "id": "zone_in_box",          "label": "in the box",          "x": 18, "y": 60, "w": 12, "h": 12 },
+    { "id": "zone_behind_chair",    "label": "behind the chair",    "x": 70, "y": 58, "w": 12, "h": 14 },
+    { "id": "zone_infront_board",   "label": "in front of board",   "x": 38, "y": 18, "w": 24, "h": 10 },
+    { "id": "zone_nextto_bag",      "label": "next to the bag",     "x": 10, "y": 74, "w": 14, "h": 10 },
+    { "id": "zone_between_chairs",  "label": "between the chairs",  "x": 60, "y": 70, "w": 18, "h": 10 }
+  ],
+  "relations": {
+    "on": ["zone_on_table"],
+    "in": ["zone_in_box"],
+    "under": ["zone_under_table"],
+    "behind": ["zone_behind_chair"],
+    "in front of": ["zone_infront_board"],
+    "next to": ["zone_nextto_bag"],
+    "between": ["zone_between_chairs"]
+  }
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <path d="M110 40 L160 100 L110 160 L60 100 Z" fill="rgba(34,211,238,0.16)" stroke="rgba(34,211,238,0.30)" stroke-width="6"/>
+  <path d="M110 160 C130 176 142 190 154 204" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="5"/>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">kite</text>
+</svg>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0b2a3a"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <rect y="520" width="1200" height="280" fill="rgba(34,211,238,0.06)"/>
+  <!-- tree -->
+  <rect x="260" y="280" width="60" height="260" rx="20" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="290" cy="260" r="120" fill="rgba(34,211,238,0.08)" stroke="rgba(34,211,238,0.18)"/>
+  <!-- bench -->
+  <rect x="620" y="520" width="260" height="40" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <rect x="650" y="560" width="18" height="90" rx="9" fill="rgba(255,255,255,0.05)"/>
+  <rect x="830" y="560" width="18" height="90" rx="9" fill="rgba(255,255,255,0.05)"/>
+  <!-- slide -->
+  <path d="M920 360 L1040 360 L1080 650 L980 650 Z" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="40" y="60" fill="rgba(255,255,255,0.35)" font-family="Segoe UI, Arial" font-size="28">Playground Scene (placeholder)</text>
+</svg>

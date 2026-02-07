@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <rect x="98" y="96" width="24" height="92" rx="10" fill="rgba(255,255,255,0.10)"/>
+  <circle cx="110" cy="86" r="56" fill="rgba(34,211,238,0.14)" stroke="rgba(34,211,238,0.24)" stroke-width="6"/>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">tree</text>
+</svg>

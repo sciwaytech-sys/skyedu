@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#1b2140"/>
+      <stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#g)"/>
+  <!-- picture -->
+  <rect x="430" y="120" width="340" height="160" rx="18" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)"/>
+  <!-- bed -->
+  <rect x="360" y="520" width="520" height="140" rx="28" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <rect x="400" y="500" width="200" height="50" rx="20" fill="rgba(255,255,255,0.05)"/>
+  <!-- sofa -->
+  <rect x="650" y="420" width="320" height="120" rx="28" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.22)"/>
+  <!-- lamp -->
+  <rect x="920" y="270" width="16" height="230" rx="8" fill="rgba(255,255,255,0.10)"/>
+  <circle cx="928" cy="250" r="42" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.14)"/>
+  <!-- box -->
+  <rect x="170" y="560" width="140" height="120" rx="18" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <!-- chair -->
+  <rect x="870" y="560" width="140" height="70" rx="18" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="40" y="60" fill="rgba(255,255,255,0.35)" font-family="Segoe UI, Arial" font-size="28">Bedroom Scene (placeholder)</text>
+</svg>

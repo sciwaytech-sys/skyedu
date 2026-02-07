@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <rect x="44" y="104" width="132" height="26" rx="12" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="6"/>
+  <rect x="62" y="130" width="14" height="54" rx="7" fill="rgba(255,255,255,0.07)"/>
+  <rect x="144" y="130" width="14" height="54" rx="7" fill="rgba(255,255,255,0.07)"/>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">bench</text>
+</svg>

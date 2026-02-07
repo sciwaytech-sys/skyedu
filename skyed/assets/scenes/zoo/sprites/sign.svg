@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <rect x="42" y="50" width="136" height="70" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.18)" stroke-width="6"/>
+  <rect x="104" y="120" width="12" height="76" rx="6" fill="rgba(255,255,255,0.10)"/>
+  <text x="110" y="96" text-anchor="middle" fill="rgba(255,255,255,0.70)" font-family="Segoe UI, Arial" font-size="16">ZOO</text>
+  <text x="110" y="214" text-anchor="middle" fill="rgba(255,255,255,0.75)" font-family="Segoe UI, Arial" font-size="18">sign</text>
+</svg>

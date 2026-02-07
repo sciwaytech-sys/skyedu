@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from skyed.parser import parse_homework_text
 from skyed.utils import slugify, ensure_dir
 from skyed.cards import generate_vocab_cards
-from skyed.tts import generate_audio
+from skyed.tts_edge import generate_audio
 from skyed.quizgen import generate_quiz
 from skyed.wp import upload_media, create_post
 

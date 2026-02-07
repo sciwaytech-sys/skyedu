@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#0b1220"/>
+  <rect y="520" width="1200" height="280" fill="rgba(34,211,238,0.06)"/>
+  <!-- tree -->
+  <rect x="210" y="280" width="60" height="260" rx="20" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="240" cy="260" r="120" fill="rgba(34,211,238,0.08)" stroke="rgba(34,211,238,0.18)"/>
+  <!-- cage -->
+  <rect x="620" y="360" width="260" height="240" rx="18" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.16)"/>
+  <g stroke="rgba(255,255,255,0.14)" stroke-width="6">
+    <line x1="660" y1="360" x2="660" y2="600"/>
+    <line x1="700" y1="360" x2="700" y2="600"/>
+    <line x1="740" y1="360" x2="740" y2="600"/>
+    <line x1="780" y1="360" x2="780" y2="600"/>
+    <line x1="820" y1="360" x2="820" y2="600"/>
+  </g>
+  <!-- sign -->
+  <rect x="890" y="140" width="220" height="90" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
+  <rect x="990" y="230" width="18" height="180" rx="9" fill="rgba(255,255,255,0.06)"/>
+  <text x="40" y="60" fill="rgba(255,255,255,0.35)" font-family="Segoe UI, Arial" font-size="28">Zoo Scene (placeholder)</text>
+</svg>
