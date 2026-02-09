@@ -4,12 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="1.1.9 updated">
-      <change afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.0 New GUI added">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app_gui.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/assets/comfy/workflow_api.json" beforeDir="false" afterPath="$PROJECT_DIR$/assets/comfy/workflow_api.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/ai/Chair.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/ai/Lamp.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/ai/Rug.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/ai/Sofa.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/ai/Table.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/chair.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/chair.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/lamp.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/lamp.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/rug.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/en/rug.mp3" afterDir="false" />
@@ -23,18 +26,9 @@
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/rug.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/rug.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/sofa.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/sofa.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/audio/zh/table.mp3" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/chair.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/lamp.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/rug.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/sofa.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/table.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/chair.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/chair.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/lamp.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/lamp.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/rug.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/rug.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/sofa.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/sofa.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-1-homework/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/quiz.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/tts_edge.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tts_edge.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -75,23 +69,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.app_gui.executor": "Run",
-    "Python.pyside_gui.executor": "Run",
-    "Python.tts_edge.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "C:/Users/user/PycharmProjects/skyed_automation",
-    "settings.editor.selected.configurable": "advanced.settings"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.55.executor&quot;: &quot;Run&quot;,
+    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.pyside_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tts_edge.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/user/PycharmProjects/skyed_automation&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\user\PycharmProjects\skyedu\.venv" />
@@ -140,12 +135,21 @@
       <option name="project" value="LOCAL" />
       <updated>1770477047902</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="2.0 New GUI added">
+      <option name="closed" value="true" />
+      <created>1770481438082</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1770481438082</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="1.1 updated" />
     <MESSAGE value="1.1.9 updated" />
-    <option name="LAST_COMMIT_MESSAGE" value="1.1.9 updated" />
+    <MESSAGE value="2.0 New GUI added" />
+    <option name="LAST_COMMIT_MESSAGE" value="2.0 New GUI added" />
   </component>
 </project>

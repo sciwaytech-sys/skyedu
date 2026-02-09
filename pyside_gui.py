@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import queue
 import subprocess
 import sys
 import threading
@@ -16,7 +15,6 @@ from urllib.parse import urlparse
 
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
-
 
 CONFIG_NAME = "gui_config.json"
 
@@ -40,8 +38,6 @@ NEG_ALWAYS = (
     "text, watermark, logo, letters, signature"
 )
 
-
-# ---------------- Config ----------------
 
 @dataclass
 class AppConfig:
@@ -69,24 +65,86 @@ class AppConfig:
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
 
 
-def load_config(path: Path) -> AppConfig:
-    data = json.loads(path.read_text(encoding="utf-8"))
+def _default_config(root_dir: Path) -> AppConfig:
+    # Known baseline defaults from your project snapshot
+    project_workdir = str(root_dir.resolve())
+    project_python = str((root_dir / ".venv" / "Scripts" / "python.exe").resolve())
     return AppConfig(
-        comfy_workdir=data["comfy_workdir"],
-        comfy_python=data["comfy_python"],
-        comfy_args=data["comfy_args"],
-        comfy_url=data["comfy_url"],
-        project_workdir=data["project_workdir"],
-        project_python=data["project_python"],
-        pipeline_script=data["pipeline_script"],
-        hf_endpoint=data.get("hf_endpoint", "https://hf.co"),
-        editor_file=str(data.get("editor_file", "homework.txt")),
-        tts_rate_percent=int(data.get("tts_rate_percent", -10)),
-        voice_en=str(data.get("voice_en", "en-US-JennyNeural")),
-        voice_zh=str(data.get("voice_zh", "zh-CN-XiaoxiaoNeural")),
-        comfy_workflow_path=str(data.get("comfy_workflow_path", "assets/comfy/workflow_api.json")),
-        picture_cards_type=str(data.get("picture_cards_type", "Realistic")),
+        comfy_workdir=r"C:\AI\ComfyUI",
+        comfy_python=r"C:\AI\ComfyUI\.venv\Scripts\python.exe",
+        comfy_args=["main.py", "--listen", "127.0.0.1", "--port", "8188"],
+        comfy_url="http://127.0.0.1:8188",
+        project_workdir=project_workdir,
+        project_python=project_python,
+        pipeline_script="run_pipeline.py",
+        hf_endpoint="https://hf.co",
+        editor_file="homework.txt",
+        tts_rate_percent=-16,
+        voice_en="en-US-JennyNeural",
+        voice_zh="zh-CN-XiaoxiaoNeural",
+        comfy_workflow_path=str((root_dir / "assets" / "comfy" / "workflow_api.json").resolve()),
+        picture_cards_type="Realistic",
     )
+
+
+def _coerce_list(x: Any, fallback: List[str]) -> List[str]:
+    if isinstance(x, list) and all(isinstance(i, (str, int, float)) for i in x):
+        return [str(i) for i in x]
+    return fallback
+
+
+def load_config(path: Path, *, root_dir: Path) -> AppConfig:
+    """
+    Robust loader:
+    - If file missing keys, fills defaults from baseline.
+    - If file is totally wrong shape, repairs it.
+    - Writes repaired config back to disk.
+    """
+    base = _default_config(root_dir)
+
+    if not path.exists():
+        save_config(path, base)
+        return base
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+        if not isinstance(data, dict):
+            raise ValueError("config is not a JSON object")
+    except Exception:
+        # Hard repair
+        save_config(path, base)
+        return base
+
+    # Fill with defaults
+    comfy_workdir = str(data.get("comfy_workdir", base.comfy_workdir))
+    comfy_python = str(data.get("comfy_python", base.comfy_python))
+    comfy_args = _coerce_list(data.get("comfy_args", base.comfy_args), base.comfy_args)
+    comfy_url = str(data.get("comfy_url", base.comfy_url))
+
+    project_workdir = str(data.get("project_workdir", base.project_workdir))
+    project_python = str(data.get("project_python", base.project_python))
+    pipeline_script = str(data.get("pipeline_script", base.pipeline_script))
+
+    cfg = AppConfig(
+        comfy_workdir=comfy_workdir,
+        comfy_python=comfy_python,
+        comfy_args=comfy_args,
+        comfy_url=comfy_url,
+        project_workdir=project_workdir,
+        project_python=project_python,
+        pipeline_script=pipeline_script,
+        hf_endpoint=str(data.get("hf_endpoint", base.hf_endpoint)),
+        editor_file=str(data.get("editor_file", base.editor_file)),
+        tts_rate_percent=int(data.get("tts_rate_percent", base.tts_rate_percent)),
+        voice_en=str(data.get("voice_en", base.voice_en)),
+        voice_zh=str(data.get("voice_zh", base.voice_zh)),
+        comfy_workflow_path=str(data.get("comfy_workflow_path", base.comfy_workflow_path)),
+        picture_cards_type=str(data.get("picture_cards_type", base.picture_cards_type)),
+    )
+
+    # Write back a repaired normalized config (important)
+    save_config(path, cfg)
+    return cfg
 
 
 def save_config(path: Path, cfg: AppConfig) -> None:
@@ -109,8 +167,6 @@ def save_config(path: Path, cfg: AppConfig) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# ---------------- Utilities ----------------
-
 def _timestamp() -> str:
     return time.strftime("%Y%m%d_%H%M%S")
 
@@ -127,10 +183,6 @@ def _extract_host_port(url: str) -> Tuple[str, int]:
 
 
 def _netstat_listening_pids(port: int) -> List[int]:
-    """
-    Windows netstat parser. Returns PIDs that are LISTENING on the given local port.
-    TIME_WAIT is ignored (not a blocker).
-    """
     try:
         out = subprocess.check_output(["netstat", "-ano", "-p", "TCP"], text=True, errors="ignore")
     except Exception:
@@ -154,9 +206,8 @@ def _netstat_listening_pids(port: int) -> List[int]:
         parts = line.split()
         if len(parts) < 5:
             continue
-        pid_str = parts[-1]
         try:
-            pids.append(int(pid_str))
+            pids.append(int(parts[-1]))
         except Exception:
             pass
     return sorted(set(pids))
@@ -190,10 +241,23 @@ def _save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _get_prompt_dict(workflow: Dict[str, Any]) -> Dict[str, Any]:
-    if "prompt" in workflow and isinstance(workflow["prompt"], dict):
-        return workflow["prompt"]
-    return workflow
+def _is_node_map(d: Dict[str, Any]) -> bool:
+    if not isinstance(d, dict) or not d:
+        return False
+    return all(isinstance(k, str) and k.isdigit() for k in d.keys())
+
+
+def load_workflow_api_anyshape(path: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    root = _load_json(path)
+    if isinstance(root, dict) and "prompt" in root and isinstance(root["prompt"], dict):
+        return root, root["prompt"]
+    if isinstance(root, dict) and _is_node_map(root):
+        return {"prompt": root}, root
+    raise ValueError("Workflow JSON invalid: expected {'prompt': {...}} or bare node-map of nodes.")
+
+
+def save_workflow_api(path: Path, prompt_dict: Dict[str, Any]) -> None:
+    _save_json(path, {"prompt": prompt_dict})
 
 
 def _node_title_lower(node: Dict[str, Any]) -> str:
@@ -206,22 +270,13 @@ def _node_title_lower(node: Dict[str, Any]) -> str:
 
 
 def patch_workflow_prompts_only(
-    workflow_obj: Dict[str, Any],
+    prompt: Dict[str, Any],
     *,
     positive_text: str,
     negative_text: str,
-) -> Tuple[Dict[str, Any], Dict[str, int]]:
-    """
-    Minimal-safe patch:
-      - Updates CLIPTextEncode / CLIPTextEncodeSDXL inputs.text for positive/negative.
-    Heuristic:
-      - if node title includes 'negative' -> negative
-      - if node title includes 'positive' -> positive
-      - else first encode = positive, second encode = negative (if exists)
-    """
-    prompt = _get_prompt_dict(workflow_obj)
+) -> Dict[str, int]:
     if not isinstance(prompt, dict) or not prompt:
-        raise ValueError("Workflow JSON does not look like ComfyUI API workflow (missing prompt dict).")
+        raise ValueError("Workflow prompt dict is empty/invalid.")
 
     clip_nodes: List[Tuple[str, Dict[str, Any]]] = []
     for node_id, node in prompt.items():
@@ -241,43 +296,37 @@ def patch_workflow_prompts_only(
         title = _node_title_lower(n)
         if "neg" in title or "negative" in title:
             neg_targets.append((nid, n))
-        elif "pos" in title or "positive" in title:
+        elif "pos" in title or "positive" in title or "prompt" in title:
             pos_targets.append((nid, n))
 
     if not pos_targets:
         pos_targets.append(clip_nodes[0])
+
     if not neg_targets and len(clip_nodes) >= 2:
-        neg_targets.append(clip_nodes[1])
+        for cand in clip_nodes[1:]:
+            if cand[0] != pos_targets[0][0]:
+                neg_targets.append(cand)
+                break
 
     def set_text(nodes: List[Tuple[str, Dict[str, Any]]], text: str) -> int:
         c = 0
         for _, n in nodes:
             inp = n.get("inputs")
-            if isinstance(inp, dict):
-                inp["text"] = text
-                c += 1
+            if not isinstance(inp, dict):
+                n["inputs"] = {}
+                inp = n["inputs"]
+            inp["text"] = text
+            c += 1
         return c
 
     stats = {"clip_text_pos": 0, "clip_text_neg": 0}
     stats["clip_text_pos"] = set_text(pos_targets, positive_text)
     if neg_targets:
         stats["clip_text_neg"] = set_text(neg_targets, negative_text)
-
-    return workflow_obj, stats
-
-
-# ---------------- Qt helpers ----------------
-
-class LogEmitter(QtCore.QObject):
-    line = QtCore.Signal(str)
+    return stats
 
 
 class ProcessHarness(QtCore.QObject):
-    """
-    Wrapper around QProcess to run a process and stream output lines.
-    """
-    started = QtCore.Signal()
-    finished = QtCore.Signal(int)
     output = QtCore.Signal(str)
 
     def __init__(self, parent: Optional[QtCore.QObject] = None):
@@ -285,8 +334,6 @@ class ProcessHarness(QtCore.QObject):
         self.proc = QtCore.QProcess(self)
         self.proc.setProcessChannelMode(QtCore.QProcess.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self._read_out)
-        self.proc.started.connect(self.started)
-        self.proc.finished.connect(self._finished)
 
     def is_running(self) -> bool:
         return self.proc.state() != QtCore.QProcess.NotRunning
@@ -320,14 +367,11 @@ class ProcessHarness(QtCore.QObject):
         if data:
             self.output.emit(data)
 
-    def _finished(self, exit_code: int, _status: QtCore.QProcess.ExitStatus) -> None:
-        self.output.emit(f"[Process] EXIT: {exit_code}\n")
-        self.finished.emit(exit_code)
-
-
-# ---------------- Main Window ----------------
 
 class MainWindow(QtWidgets.QMainWindow):
+    voices_loaded = QtCore.Signal(object, object)
+    voices_failed = QtCore.Signal(str)
+
     def __init__(self, root_dir: Path, cfg: AppConfig, cfg_path: Path):
         super().__init__()
         self.root_dir = root_dir
@@ -335,203 +379,307 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cfg_path = cfg_path
 
         self.setWindowTitle("SkyEd Automation — Qt")
-        self.resize(1450, 900)
+        self.resize(1600, 900)
 
-        # Processes
         self.comfy_proc = ProcessHarness(self)
         self.pipe_proc = ProcessHarness(self)
         self.comfy_external_pid: Optional[int] = None
 
-        # Wire logs
         self.comfy_proc.output.connect(lambda t: self.append_log(t, prefix="[ComfyUI] "))
         self.pipe_proc.output.connect(lambda t: self.append_log(t, prefix="[Pipeline] "))
 
-        # UI
-        self._build_ui()
-        self._apply_dark_hint(False)
+        self.voices_loaded.connect(self._apply_voice_lists)
+        self.voices_failed.connect(self._on_voice_error)
 
-        # Timers
+        self._build_ui()
+
         self.status_timer = QtCore.QTimer(self)
         self.status_timer.timeout.connect(self.refresh_comfy_status)
         self.status_timer.start(2500)
 
-        # initial load
         self.load_default_editor_if_exists()
-
-        # try auto-start comfy if needed
         QtCore.QTimer.singleShot(700, self.auto_start_comfy_if_needed)
+        QtCore.QTimer.singleShot(450, self.load_voices_background)
+        QtCore.QTimer.singleShot(0, self.apply_default_sizes)
 
-        # load voices in background
-        QtCore.QTimer.singleShot(500, self.load_voices_background)
-
-    # ---------- UI ----------
+    def resolve_workflow_path(self) -> Path:
+        raw = (self.cfg.comfy_workflow_path or "").strip()
+        if not raw:
+            return (self.root_dir / "assets" / "comfy" / "workflow_api.json").resolve()
+        p = Path(raw)
+        if p.is_absolute():
+            return p
+        return (self.root_dir / p).resolve()
 
     def _build_ui(self) -> None:
-        # Toolbar
         tb = QtWidgets.QToolBar("Main")
         tb.setMovable(False)
         tb.setIconSize(QtCore.QSize(18, 18))
         self.addToolBar(tb)
 
-        # File actions
-        act_new = QtGui.QAction("New", self)
-        act_new.triggered.connect(self.editor_new)
-        tb.addAction(act_new)
+        tb.setStyleSheet(
+            """
+            QToolBar { spacing: 6px; padding: 4px; }
+            QToolButton { padding: 6px 10px; font-size: 10pt; }
+            QComboBox { min-height: 28px; padding: 1px 6px; font-size: 10pt; }
+            QSlider { min-height: 28px; }
+            QLabel { font-size: 10pt; }
+            """
+        )
 
-        act_load = QtGui.QAction("Load…", self)
-        act_load.triggered.connect(self.editor_load)
-        tb.addAction(act_load)
+        def add_btn(text: str, fn) -> QtWidgets.QToolButton:
+            b = QtWidgets.QToolButton()
+            b.setText(text)
+            b.clicked.connect(fn)
+            tb.addWidget(b)
+            return b
 
-        act_save = QtGui.QAction("Save", self)
-        act_save.triggered.connect(self.editor_save_default)
-        tb.addAction(act_save)
-
-        act_save_as = QtGui.QAction("Save As…", self)
-        act_save_as.triggered.connect(self.editor_save_as)
-        tb.addAction(act_save_as)
+        add_btn("New", self.editor_new)
+        add_btn("Load…", self.editor_load)
+        add_btn("Save", self.editor_save_default)
+        add_btn("Save As…", self.editor_save_as)
 
         tb.addSeparator()
 
-        # Picture cards type + Apply
-        tb.addWidget(QtWidgets.QLabel("Picture cards type: "))
+        tb.addWidget(QtWidgets.QLabel("Picture cards type:"))
         self.combo_picture = QtWidgets.QComboBox()
         self.combo_picture.addItems(["Realistic", "Cartoon"])
         if self.cfg.picture_cards_type in ("Realistic", "Cartoon"):
             self.combo_picture.setCurrentText(self.cfg.picture_cards_type)
         tb.addWidget(self.combo_picture)
-
-        btn_apply = QtWidgets.QToolButton()
-        btn_apply.setText("Apply → Comfy workflow")
-        btn_apply.clicked.connect(self.apply_picture_type_to_workflow)
-        tb.addWidget(btn_apply)
+        add_btn("Apply → Comfy workflow", self.apply_picture_type_to_workflow)
 
         tb.addSeparator()
 
-        # Audio controls
-        tb.addWidget(QtWidgets.QLabel("Audio speed: "))
+        tb.addWidget(QtWidgets.QLabel("Audio speed:"))
         self.lbl_rate = QtWidgets.QLabel(_rate_string(int(self.cfg.tts_rate_percent)))
         tb.addWidget(self.lbl_rate)
 
         self.slider_rate = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
         self.slider_rate.setRange(-30, 30)
-        self.slider_rate.setFixedWidth(140)
+        self.slider_rate.setFixedWidth(150)
         self.slider_rate.setValue(int(self.cfg.tts_rate_percent))
         self.slider_rate.valueChanged.connect(self.on_rate_changed)
         tb.addWidget(self.slider_rate)
 
-        tb.addWidget(QtWidgets.QLabel(" EN: "))
+        tb.addWidget(QtWidgets.QLabel("EN:"))
         self.combo_voice_en = QtWidgets.QComboBox()
         self.combo_voice_en.setEditable(True)
-        self.combo_voice_en.setMinimumWidth(230)
+        self.combo_voice_en.setMinimumWidth(220)
         self.combo_voice_en.setCurrentText(self.cfg.voice_en)
         self.combo_voice_en.currentTextChanged.connect(self.on_voice_changed)
         tb.addWidget(self.combo_voice_en)
 
-        tb.addWidget(QtWidgets.QLabel(" ZH: "))
+        tb.addWidget(QtWidgets.QLabel("ZH:"))
         self.combo_voice_zh = QtWidgets.QComboBox()
         self.combo_voice_zh.setEditable(True)
-        self.combo_voice_zh.setMinimumWidth(230)
+        self.combo_voice_zh.setMinimumWidth(220)
         self.combo_voice_zh.setCurrentText(self.cfg.voice_zh)
         self.combo_voice_zh.currentTextChanged.connect(self.on_voice_changed)
         tb.addWidget(self.combo_voice_zh)
 
-        btn_test_en = QtWidgets.QToolButton()
-        btn_test_en.setText("Test EN")
-        btn_test_en.clicked.connect(lambda: self.test_tts("en"))
-        tb.addWidget(btn_test_en)
-
-        btn_test_zh = QtWidgets.QToolButton()
-        btn_test_zh.setText("Test ZH")
-        btn_test_zh.clicked.connect(lambda: self.test_tts("zh"))
-        tb.addWidget(btn_test_zh)
-
         tb.addSeparator()
+        add_btn("Generate", lambda: self.run_pipeline(mode="generate"))
+        add_btn("Generate + Publish", lambda: self.run_pipeline(mode="generate_publish"))
 
-        # Run controls
-        btn_run = QtWidgets.QToolButton()
-        btn_run.setText("Run")
-        btn_run.clicked.connect(lambda: self.run_pipeline(False))
-        tb.addWidget(btn_run)
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        tb.addWidget(spacer)
 
-        btn_run_pub = QtWidgets.QToolButton()
-        btn_run_pub.setText("Run + Publish")
-        btn_run_pub.clicked.connect(lambda: self.run_pipeline(True))
-        tb.addWidget(btn_run_pub)
+        more_btn = QtWidgets.QToolButton()
+        more_btn.setText("More ▾")
+        more_btn.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        tb.addWidget(more_btn)
 
-        btn_stop = QtWidgets.QToolButton()
-        btn_stop.setText("Stop")
-        btn_stop.clicked.connect(self.stop_pipeline)
-        tb.addWidget(btn_stop)
+        more_menu = QtWidgets.QMenu(self)
+        act_refresh_voices = more_menu.addAction("Refresh Voices")
+        more_menu.addSeparator()
+        act_pub_only = more_menu.addAction("Publish Only")
+        act_stop = more_menu.addAction("Stop Pipeline")
+        more_menu.addSeparator()
+        act_test_en = more_menu.addAction("Test EN")
+        act_test_zh = more_menu.addAction("Test ZH")
+        more_menu.addSeparator()
+        act_refresh = more_menu.addAction("Refresh Comfy")
+        act_open = more_menu.addAction("Open Comfy UI")
+        act_start = more_menu.addAction("Start Comfy")
+        act_stop_comfy = more_menu.addAction("Stop Comfy")
 
-        tb.addSeparator()
+        more_btn.setMenu(more_menu)
 
-        # Comfy controls
-        btn_refresh = QtWidgets.QToolButton()
-        btn_refresh.setText("Refresh Comfy")
-        btn_refresh.clicked.connect(self.refresh_comfy_status)
-        tb.addWidget(btn_refresh)
+        act_refresh_voices.triggered.connect(self.load_voices_background)
+        act_pub_only.triggered.connect(lambda: self.run_pipeline(mode="publish_only"))
+        act_stop.triggered.connect(self.stop_pipeline)
+        act_test_en.triggered.connect(lambda: self.test_tts("en"))
+        act_test_zh.triggered.connect(lambda: self.test_tts("zh"))
+        act_refresh.triggered.connect(self.refresh_comfy_status)
+        act_open.triggered.connect(lambda: webbrowser.open(self.cfg.comfy_url))
+        act_start.triggered.connect(self.start_comfy)
+        act_stop_comfy.triggered.connect(self.stop_comfy)
 
-        btn_open = QtWidgets.QToolButton()
-        btn_open.setText("Open Comfy UI")
-        btn_open.clicked.connect(lambda: webbrowser.open(self.cfg.comfy_url))
-        tb.addWidget(btn_open)
+        self.hsplit = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.hsplit.setChildrenCollapsible(False)
+        self.setCentralWidget(self.hsplit)
 
-        btn_start = QtWidgets.QToolButton()
-        btn_start.setText("Start Comfy")
-        btn_start.clicked.connect(self.start_comfy)
-        tb.addWidget(btn_start)
+        left = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
-        btn_stop_comfy = QtWidgets.QToolButton()
-        btn_stop_comfy.setText("Stop Comfy")
-        btn_stop_comfy.clicked.connect(self.stop_comfy)
-        tb.addWidget(btn_stop_comfy)
-
-        # Central splitter: editor top, log bottom
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
-        self.setCentralWidget(splitter)
+        self.vsplit = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.vsplit.setChildrenCollapsible(False)
+        left_layout.addWidget(self.vsplit)
 
         self.editor = QtWidgets.QPlainTextEdit()
         self.editor.setPlaceholderText("Paste your homework.txt content here…")
-        font = QtGui.QFont("Consolas", 11)
-        self.editor.setFont(font)
-        splitter.addWidget(self.editor)
+        self.editor.setFont(QtGui.QFont("Consolas", 11))
+        self.vsplit.addWidget(self.editor)
 
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setFont(QtGui.QFont("Consolas", 10))
-        splitter.addWidget(self.log)
+        self.vsplit.addWidget(self.log)
 
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
+        self.hsplit.addWidget(left)
 
-        # Status bar
+        self.right_tabs = QtWidgets.QTabWidget()
+        self.right_tabs.setDocumentMode(True)
+        self.right_tabs.addTab(self._build_tab_quick_actions(), "Quick")
+        self.right_tabs.addTab(self._build_tab_audio(), "Audio")
+        self.right_tabs.addTab(self._build_tab_images(), "Images")
+        self.right_tabs.addTab(self._build_tab_publish(), "Publish")
+        self.hsplit.addWidget(self.right_tabs)
+
         self.status = QtWidgets.QStatusBar()
         self.setStatusBar(self.status)
         self.status.showMessage("Ready")
 
-        self.append_log("GUI ready.\n")
+        wf = self.resolve_workflow_path()
+        self.append_log(
+            f"GUI ready.\n"
+            f"[ENV] Python={sys.executable}\n"
+            f"[CFG] loaded from: {self.cfg_path}\n"
+            f"[CFG] workflow(raw)={self.cfg.comfy_workflow_path}\n"
+            f"[CFG] workflow(resolved)={wf} exists={wf.exists()}\n"
+        )
 
-    def _apply_dark_hint(self, dark: bool) -> None:
-        # Keep default style; if you want dark mode later, we can add palette.
-        if dark:
-            self.status.showMessage("Theme: dark (not enabled in this build)")
-        else:
-            pass
+    def apply_default_sizes(self) -> None:
+        w = self.hsplit.width() or 1600
+        left_w = int(w * 0.45)
+        self.hsplit.setSizes([left_w, max(200, w - left_w)])
+        h = self.vsplit.height() or 900
+        editor_h = int(h * 0.78)
+        log_h = max(140, h - editor_h)
+        self.vsplit.setSizes([editor_h, log_h])
 
-    # ---------- Logging ----------
+    def _group_box(self, title: str) -> QtWidgets.QGroupBox:
+        g = QtWidgets.QGroupBox(title)
+        g.setStyleSheet("QGroupBox { font-weight: 600; }")
+        return g
+
+    def _build_tab_quick_actions(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+
+        g1 = self._group_box("Pipeline")
+        l1 = QtWidgets.QVBoxLayout(g1)
+        btn1 = QtWidgets.QPushButton("Generate")
+        btn2 = QtWidgets.QPushButton("Generate + Publish")
+        btn3 = QtWidgets.QPushButton("Publish Only")
+        btn4 = QtWidgets.QPushButton("Stop Pipeline")
+        for b in (btn1, btn2, btn3, btn4):
+            b.setMinimumHeight(36)
+            l1.addWidget(b)
+        btn1.clicked.connect(lambda: self.run_pipeline("generate"))
+        btn2.clicked.connect(lambda: self.run_pipeline("generate_publish"))
+        btn3.clicked.connect(lambda: self.run_pipeline("publish_only"))
+        btn4.clicked.connect(self.stop_pipeline)
+
+        g2 = self._group_box("ComfyUI")
+        l2 = QtWidgets.QVBoxLayout(g2)
+        bR = QtWidgets.QPushButton("Refresh status")
+        bO = QtWidgets.QPushButton("Open UI")
+        bS = QtWidgets.QPushButton("Start ComfyUI")
+        bT = QtWidgets.QPushButton("Stop ComfyUI")
+        for b in (bR, bO, bS, bT):
+            b.setMinimumHeight(34)
+            l2.addWidget(b)
+        bR.clicked.connect(self.refresh_comfy_status)
+        bO.clicked.connect(lambda: webbrowser.open(self.cfg.comfy_url))
+        bS.clicked.connect(self.start_comfy)
+        bT.clicked.connect(self.stop_comfy)
+
+        lay.addWidget(g1)
+        lay.addWidget(g2)
+        lay.addStretch(1)
+        return w
+
+    def _build_tab_audio(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        g = self._group_box("Audio settings")
+        gl = QtWidgets.QFormLayout(g)
+
+        self.lbl_rate2 = QtWidgets.QLabel(self.lbl_rate.text())
+        rate_box = QtWidgets.QHBoxLayout()
+        rate_box.addWidget(self.lbl_rate2)
+        rate_box.addStretch(1)
+        gl.addRow("Rate:", rate_box)
+
+        btn_refresh = QtWidgets.QPushButton("Refresh Voices")
+        btn_refresh.setMinimumHeight(34)
+        btn_refresh.clicked.connect(self.load_voices_background)
+
+        btn_test_en = QtWidgets.QPushButton("Test EN")
+        btn_test_zh = QtWidgets.QPushButton("Test ZH")
+        btn_test_en.setMinimumHeight(34)
+        btn_test_zh.setMinimumHeight(34)
+        btn_test_en.clicked.connect(lambda: self.test_tts("en"))
+        btn_test_zh.clicked.connect(lambda: self.test_tts("zh"))
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(btn_test_en)
+        row.addWidget(btn_test_zh)
+
+        gl.addRow("Voices:", btn_refresh)
+        gl.addRow("Preview:", row)
+
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
+
+    def _build_tab_images(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        g = self._group_box("Images")
+        l = QtWidgets.QVBoxLayout(g)
+        wf = self.resolve_workflow_path()
+        info = QtWidgets.QLabel(f"Workflow used:\n{wf}\n\nApply patches CLIP positive/negative.")
+        info.setWordWrap(True)
+        l.addWidget(info)
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
+
+    def _build_tab_publish(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        g = self._group_box("WordPress")
+        l = QtWidgets.QVBoxLayout(g)
+        l.addWidget(QtWidgets.QLabel("Base URL: https://course.skyedu.fun"))
+        l.addWidget(QtWidgets.QLabel("Tip: use Generate + Publish or Publish Only."))
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
 
     def append_log(self, text: str, prefix: str = "") -> None:
         if not text:
             return
-        # Preserve existing line breaks, just prefix block
         if prefix:
             lines = text.splitlines(True)
             text = "".join(prefix + ln for ln in lines)
         self.log.moveCursor(QtGui.QTextCursor.End)
         self.log.insertPlainText(text)
         self.log.moveCursor(QtGui.QTextCursor.End)
-
-    # ---------- Editor file ops ----------
 
     def default_editor_path(self) -> Path:
         p = Path(self.cfg.editor_file)
@@ -542,8 +690,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def load_default_editor_if_exists(self) -> None:
         p = self.default_editor_path()
         if p.exists():
-            txt = p.read_text(encoding="utf-8", errors="ignore")
-            self.editor.setPlainText(txt)
+            self.editor.setPlainText(p.read_text(encoding="utf-8", errors="ignore"))
             self.status.showMessage(f"Loaded: {p.name}")
         else:
             self.status.showMessage(f"Ready (default file not found: {p.name})")
@@ -553,51 +700,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status.showMessage("Editor cleared")
 
     def editor_load(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load homework text", str(self.root_dir), "Text Files (*.txt);;All Files (*.*)")
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Load homework text", str(self.root_dir), "Text Files (*.txt);;All Files (*.*)"
+        )
         if not path:
             return
         p = Path(path)
-        txt = p.read_text(encoding="utf-8", errors="ignore")
-        self.editor.setPlainText(txt)
-
-        # set as new default
-        try:
-            rel = p.resolve().relative_to(self.root_dir.resolve())
-            self.cfg.editor_file = str(rel).replace("\\", "/")
-        except Exception:
-            self.cfg.editor_file = str(p)
+        self.editor.setPlainText(p.read_text(encoding="utf-8", errors="ignore"))
+        self.cfg.editor_file = str(p)
         save_config(self.cfg_path, self.cfg)
-        self.status.showMessage(f"Loaded: {p.name} (set as default)")
+        self.status.showMessage(f"Loaded: {p.name}")
 
     def editor_save_default(self) -> None:
         p = self.default_editor_path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        txt = self.editor.toPlainText().rstrip() + "\n"
-        p.write_text(txt, encoding="utf-8")
+        p.write_text(self.editor.toPlainText().rstrip() + "\n", encoding="utf-8")
         self.status.showMessage(f"Saved: {p.name}")
 
     def editor_save_as(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save homework as", str(self.root_dir), "Text Files (*.txt);;All Files (*.*)")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save homework as", str(self.root_dir), "Text Files (*.txt);;All Files (*.*)"
+        )
         if not path:
             return
         p = Path(path)
-        txt = self.editor.toPlainText().rstrip() + "\n"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(txt, encoding="utf-8")
-
-        try:
-            rel = p.resolve().relative_to(self.root_dir.resolve())
-            self.cfg.editor_file = str(rel).replace("\\", "/")
-        except Exception:
-            self.cfg.editor_file = str(p)
+        p.write_text(self.editor.toPlainText().rstrip() + "\n", encoding="utf-8")
+        self.cfg.editor_file = str(p)
         save_config(self.cfg_path, self.cfg)
-        self.status.showMessage(f"Saved: {p.name} (set as default)")
-
-    # ---------- Persist audio fields ----------
+        self.status.showMessage(f"Saved: {p.name}")
 
     def on_rate_changed(self, v: int) -> None:
         self.cfg.tts_rate_percent = int(v)
-        self.lbl_rate.setText(_rate_string(int(v)))
+        s = _rate_string(int(v))
+        self.lbl_rate.setText(s)
+        if hasattr(self, "lbl_rate2"):
+            self.lbl_rate2.setText(s)
         save_config(self.cfg_path, self.cfg)
 
     def on_voice_changed(self, _txt: str) -> None:
@@ -605,9 +743,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cfg.voice_zh = self.combo_voice_zh.currentText().strip()
         save_config(self.cfg_path, self.cfg)
 
-    # ---------- Voice list loading ----------
-
     def load_voices_background(self) -> None:
+        self.append_log("[Audio] loading voice list…\n")
+
         def worker():
             try:
                 import edge_tts  # type: ignore
@@ -616,69 +754,41 @@ class MainWindow(QtWidgets.QMainWindow):
                     return await edge_tts.list_voices()
 
                 voices = asyncio.run(fetch())
-                en: List[str] = []
-                zh: List[str] = []
-                for v in voices:
-                    short = v.get("ShortName") or ""
-                    locale = (v.get("Locale") or "").lower()
-                    if short.startswith("en-") or locale.startswith("en-"):
-                        en.append(short)
-                    if short.startswith("zh-") or locale.startswith("zh-"):
-                        zh.append(short)
-
-                en = sorted(set([x for x in en if x]))
-                zh = sorted(set([x for x in zh if x]))
-                QtCore.QMetaObject.invokeMethod(
-                    self,
-                    "_apply_voice_lists",
-                    QtCore.Qt.ConnectionType.QueuedConnection,
-                    QtCore.Q_ARG(list, en),
-                    QtCore.Q_ARG(list, zh),
-                )
+                names = sorted({(v.get("ShortName") or "") for v in voices if (v.get("ShortName") or "")})
+                self.voices_loaded.emit(names, names)
             except Exception as e:
-                QtCore.QMetaObject.invokeMethod(
-                    self,
-                    "_log_voice_error",
-                    QtCore.Qt.ConnectionType.QueuedConnection,
-                    QtCore.Q_ARG(str, str(e)),
-                )
+                self.voices_failed.emit(f"{e}\nPython={sys.executable}")
 
         threading.Thread(target=worker, daemon=True).start()
 
-    @QtCore.Slot(list, list)
-    def _apply_voice_lists(self, en_list: List[str], zh_list: List[str]) -> None:
-        # Keep editable; just load options
+    @QtCore.Slot(object, object)
+    def _apply_voice_lists(self, en_list: object, zh_list: object) -> None:
+        if not isinstance(en_list, list):
+            self.append_log("[Audio] voice list payload mismatch\n")
+            return
         cur_en = self.combo_voice_en.currentText()
         cur_zh = self.combo_voice_zh.currentText()
-
         self.combo_voice_en.blockSignals(True)
         self.combo_voice_zh.blockSignals(True)
-
         self.combo_voice_en.clear()
         self.combo_voice_en.addItems(en_list)
         self.combo_voice_en.setEditable(True)
         self.combo_voice_en.setCurrentText(cur_en or self.cfg.voice_en)
-
         self.combo_voice_zh.clear()
-        self.combo_voice_zh.addItems(zh_list)
+        self.combo_voice_zh.addItems(en_list)
         self.combo_voice_zh.setEditable(True)
         self.combo_voice_zh.setCurrentText(cur_zh or self.cfg.voice_zh)
-
         self.combo_voice_en.blockSignals(False)
         self.combo_voice_zh.blockSignals(False)
-
-        self.append_log("[Audio] voice list loaded.\n")
+        self.append_log(f"[Audio] voice list loaded: {len(en_list)}\n")
 
     @QtCore.Slot(str)
-    def _log_voice_error(self, err: str) -> None:
-        self.append_log(f"[Audio] voice list load failed (manual entry ok): {err}\n")
-
-    # ---------- TTS test ----------
+    def _on_voice_error(self, err: str) -> None:
+        self.append_log(f"[Audio] voice list load failed: {err}\n")
 
     def test_tts(self, lang: str) -> None:
         voice = self.combo_voice_en.currentText().strip() if lang == "en" else self.combo_voice_zh.currentText().strip()
-        rate = int(self.cfg.tts_rate_percent)
-        rate_str = _rate_string(rate)
+        rate_str = _rate_string(int(self.cfg.tts_rate_percent))
         sample_text = (
             "Hello. This is Sky Education audio test. One, two, three."
             if lang == "en"
@@ -687,11 +797,6 @@ class MainWindow(QtWidgets.QMainWindow):
         out_dir = (self.root_dir / "output" / "_tts_preview").resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"tts_test_{lang}_{int(time.time())}.mp3"
-
-        # persist
-        self.cfg.voice_en = self.combo_voice_en.currentText().strip()
-        self.cfg.voice_zh = self.combo_voice_zh.currentText().strip()
-        save_config(self.cfg_path, self.cfg)
 
         def worker():
             try:
@@ -702,52 +807,25 @@ class MainWindow(QtWidgets.QMainWindow):
                     await communicate.save(str(out_path))
 
                 asyncio.run(synth())
-                QtCore.QMetaObject.invokeMethod(
-                    self,
-                    "_log_tts_done",
-                    QtCore.Qt.ConnectionType.QueuedConnection,
-                    QtCore.Q_ARG(str, str(out_path)),
-                )
+                self.append_log(f"[Audio] test generated: {out_path}\n")
+                try:
+                    os.startfile(str(out_path))  # type: ignore[attr-defined]
+                except Exception:
+                    pass
             except Exception as e:
-                QtCore.QMetaObject.invokeMethod(
-                    self,
-                    "_log_tts_fail",
-                    QtCore.Qt.ConnectionType.QueuedConnection,
-                    QtCore.Q_ARG(str, str(e)),
-                )
+                self.append_log(f"[Audio] test failed: {e}\n")
 
         threading.Thread(target=worker, daemon=True).start()
-
-    @QtCore.Slot(str)
-    def _log_tts_done(self, path: str) -> None:
-        self.append_log(f"[Audio] test generated: {path}\n")
-        try:
-            os.startfile(path)  # type: ignore[attr-defined]
-        except Exception:
-            pass
-
-    @QtCore.Slot(str)
-    def _log_tts_fail(self, err: str) -> None:
-        self.append_log(f"[Audio] test failed: {err}\n")
-
-    # ---------- Comfy status/control ----------
 
     def refresh_comfy_status(self) -> None:
         _, port = _extract_host_port(self.cfg.comfy_url)
         pids = _netstat_listening_pids(port)
         http_ok = comfy_http_reachable(self.cfg.comfy_url)
-
         if pids:
-            self.comfy_external_pid = pids[0]
             name = _tasklist_name(pids[0])
-            self.status.showMessage(f"ComfyUI LISTENING on {port} (PID {pids[0]}: {name}) • HTTP={'OK' if http_ok else 'NO'}")
-            return
-
-        self.comfy_external_pid = None
-        if http_ok:
-            self.status.showMessage("ComfyUI reachable (PID unknown) • HTTP=OK")
+            self.status.showMessage(f"ComfyUI LISTENING on {port} (PID {pids[0]}:{name}) • HTTP={'OK' if http_ok else 'NO'}")
         else:
-            self.status.showMessage("ComfyUI not reachable")
+            self.status.showMessage("ComfyUI reachable" if http_ok else "ComfyUI not reachable")
 
     def auto_start_comfy_if_needed(self) -> None:
         if comfy_http_reachable(self.cfg.comfy_url):
@@ -761,63 +839,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.start_comfy()
 
     def start_comfy(self) -> None:
-        # Hard guard: never start a second instance.
         if comfy_http_reachable(self.cfg.comfy_url):
             self.append_log("[ComfyUI] reachable → NOT starting a second instance.\n")
             return
-
-        _, port = _extract_host_port(self.cfg.comfy_url)
-        pids = _netstat_listening_pids(port)
-        if pids:
-            name = _tasklist_name(pids[0])
-            self.append_log(f"[ComfyUI] LISTENING detected (PID {pids[0]}: {name}) → NOT starting.\n")
-            return
-
         env = os.environ.copy()
         env["HF_ENDPOINT"] = self.cfg.hf_endpoint
-
-        cmd_program = self.cfg.comfy_python
-        cmd_args = self.cfg.comfy_args
-
-        self.comfy_proc.start(cmd_program, cmd_args, self.cfg.comfy_workdir, env)
-        self.status.showMessage("Starting ComfyUI…")
-        QtCore.QTimer.singleShot(900, self._poll_comfy_ready)
-
-    def _poll_comfy_ready(self) -> None:
-        if comfy_http_reachable(self.cfg.comfy_url):
-            self.append_log("[ComfyUI] READY (HTTP OK)\n")
-            self.refresh_comfy_status()
-            return
-        if not self.comfy_proc.is_running():
-            self.append_log("[ComfyUI] failed to start (process exited)\n")
-            self.refresh_comfy_status()
-            return
-        QtCore.QTimer.singleShot(900, self._poll_comfy_ready)
+        self.comfy_proc.start(self.cfg.comfy_python, self.cfg.comfy_args, self.cfg.comfy_workdir, env)
 
     def stop_comfy(self) -> None:
-        # Only stop if we started it via QProcess
-        if self.comfy_proc.is_running():
-            self.comfy_proc.terminate()
-            return
-
-        if self.comfy_external_pid:
-            self.append_log(f"[ComfyUI] External PID {self.comfy_external_pid} detected (use taskkill if needed).\n")
-        else:
-            self.append_log("[ComfyUI] No managed process to stop.\n")
-
-    # ---------- Apply picture cards type to workflow ----------
+        self.comfy_proc.terminate()
 
     def apply_picture_type_to_workflow(self) -> None:
         sel = self.combo_picture.currentText().strip()
         if sel not in ("Realistic", "Cartoon"):
-            QtWidgets.QMessageBox.critical(self, "Invalid", "Picture cards type must be Realistic or Cartoon.")
             return
-
         self.cfg.picture_cards_type = sel
         save_config(self.cfg_path, self.cfg)
 
-        wf_rel = self.cfg.comfy_workflow_path.strip()
-        wf_path = (self.root_dir / wf_rel).resolve()
+        wf_path = self.resolve_workflow_path()
         if not wf_path.exists():
             QtWidgets.QMessageBox.critical(self, "Workflow not found", f"Not found:\n{wf_path}")
             return
@@ -826,78 +865,71 @@ class MainWindow(QtWidgets.QMainWindow):
         neg = NEG_ALWAYS
 
         try:
-            obj = _load_json(wf_path)
+            original_obj = _load_json(wf_path)
             backup = wf_path.with_suffix(f".bak_{_timestamp()}.json")
-            _save_json(backup, obj)
+            _save_json(backup, original_obj)
 
-            patched, stats = patch_workflow_prompts_only(obj, positive_text=pos, negative_text=neg)
-            _save_json(wf_path, patched)
+            _, prompt = load_workflow_api_anyshape(wf_path)
+            stats = patch_workflow_prompts_only(prompt, positive_text=pos, negative_text=neg)
+            save_workflow_api(wf_path, prompt)
 
             self.append_log(
                 f"[Images] Applied Picture cards type={sel}\n"
                 f"         workflow: {wf_path}\n"
                 f"         backup:   {backup.name}\n"
+                f"         saved as: {{'prompt': ...}}\n"
                 f"         patched:  pos_nodes={stats.get('clip_text_pos')} neg_nodes={stats.get('clip_text_neg')}\n"
             )
-            self.status.showMessage(f"Applied: Picture cards type = {sel}")
-
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Apply failed", f"Workflow update failed:\n{e}")
             self.append_log(f"[Images] apply failed: {e}\n")
+            QtWidgets.QMessageBox.critical(self, "Apply failed", str(e))
 
-    # ---------- Pipeline ----------
+    def _pipeline_script_path(self) -> Path:
+        return (Path(self.cfg.project_workdir) / self.cfg.pipeline_script).resolve()
 
-    def run_pipeline(self, publish: bool) -> None:
-        # save editor → default file
+    def run_pipeline(self, mode: str) -> None:
         self.editor_save_default()
-
-        pipeline_script = str((Path(self.cfg.project_workdir) / self.cfg.pipeline_script).resolve())
-        if not Path(pipeline_script).exists():
-            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{pipeline_script}")
+        script = self._pipeline_script_path()
+        if not script.exists():
+            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
             return
 
         input_path = str(self.default_editor_path())
-        args = [pipeline_script, "--input", input_path]
-        if publish:
+        args: List[str] = [str(script), "--input", input_path]
+        if mode == "generate_publish":
             args.append("--publish")
+        elif mode == "publish_only":
+            args.append("--publish-only")
 
         env = os.environ.copy()
         env["HF_ENDPOINT"] = self.cfg.hf_endpoint
-
-        # TTS env so pipeline can obey GUI
         env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
         env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
         env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
 
-        self.append_log(
-            f"[Audio] env: SKYED_TTS_RATE={env['SKYED_TTS_RATE']} "
-            f"SKYED_VOICE_EN={env['SKYED_VOICE_EN']} SKYED_VOICE_ZH={env['SKYED_VOICE_ZH']}\n"
-        )
+        # ensure pipeline uses same workflow path
+        wf = self.resolve_workflow_path()
+        env["COMFY_URL"] = str(self.cfg.comfy_url)
+        env["COMFY_WORKFLOW"] = str(wf)
 
+        self.append_log(f"[Images] COMFY_WORKFLOW={wf} exists={wf.exists()}\n")
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
-        self.status.showMessage("Pipeline running…")
 
     def stop_pipeline(self) -> None:
         self.pipe_proc.terminate()
-        self.status.showMessage("Stop requested")
 
 
 def main() -> None:
     root_dir = Path(__file__).resolve().parent
     cfg_path = root_dir / CONFIG_NAME
-    if not cfg_path.exists():
-        print(f"ERROR: missing {CONFIG_NAME} in {root_dir}")
-        sys.exit(1)
 
-    cfg = load_config(cfg_path)
+    # Robust load (repairs config if needed)
+    cfg = load_config(cfg_path, root_dir=root_dir)
 
     app = QtWidgets.QApplication(sys.argv)
-
-    # Use native style (Windows)
-    app.setStyle("Fusion")  # keeps it consistent; still modern. If you want native-only, remove this line.
-
+    app.setStyle("Fusion")
     win = MainWindow(root_dir, cfg, cfg_path)
-    win.show()
+    win.showMaximized()
     sys.exit(app.exec())
 
 
