@@ -275,15 +275,79 @@ def patch_workflow_prompts_only(
     positive_text: str,
     negative_text: str,
 ) -> Dict[str, int]:
+    """
+    Patch only CLIPTextEncode nodes inside a ComfyUI workflow prompt dict.
+
+    Deterministic behavior:
+      - Prefer KSampler wiring: KSampler.inputs.positive / negative -> CLIP node ids.
+      - Fallback to title-based heuristics if wiring is missing or doesn't point to CLIP nodes.
+
+    Returns stats:
+      {"clip_text_pos": <count>, "clip_text_neg": <count>, "ksampler": <count>}
+    """
     if not isinstance(prompt, dict) or not prompt:
         raise ValueError("Workflow prompt dict is empty/invalid.")
 
+    def _is_clip(node: Dict[str, Any]) -> bool:
+        ct = str(node.get("class_type") or "")
+        return ct in ("CLIPTextEncode", "CLIPTextEncodeSDXL")
+
+    def _is_ksampler(node: Dict[str, Any]) -> bool:
+        ct = str(node.get("class_type") or "")
+        return ct in ("KSampler", "KSamplerAdvanced")
+
+    def _resolve_ref_node_id(ref: Any) -> Optional[str]:
+        if isinstance(ref, (list, tuple)) and ref:
+            return str(ref[0])
+        if isinstance(ref, str) and ref:
+            return ref
+        return None
+
+    def _set_clip_text(node_id: str, text: str) -> int:
+        node = prompt.get(str(node_id))
+        if not isinstance(node, dict) or not _is_clip(node):
+            return 0
+        inp = node.get("inputs")
+        if not isinstance(inp, dict):
+            node["inputs"] = {}
+            inp = node["inputs"]
+        inp["text"] = text
+        return 1
+
+    # 1) Try deterministic wiring via KSampler
+    ks_nodes: List[Tuple[str, Dict[str, Any]]] = []
+    for node_id, node in prompt.items():
+        if isinstance(node, dict) and _is_ksampler(node):
+            ks_nodes.append((str(node_id), node))
+
+    stats = {"clip_text_pos": 0, "clip_text_neg": 0, "ksampler": 0}
+
+    if ks_nodes:
+        for _, ks in ks_nodes:
+            stats["ksampler"] += 1
+            inp = ks.get("inputs")
+            if not isinstance(inp, dict):
+                continue
+
+            pos_ref = _resolve_ref_node_id(inp.get("positive"))
+            neg_ref = _resolve_ref_node_id(inp.get("negative"))
+
+            if pos_ref:
+                stats["clip_text_pos"] += _set_clip_text(pos_ref, positive_text)
+            if neg_ref:
+                stats["clip_text_neg"] += _set_clip_text(neg_ref, negative_text)
+
+        # If we successfully patched at least one pos node, we are done.
+        if stats["clip_text_pos"] > 0:
+            return stats
+        # otherwise, fall through to heuristics.
+
+    # 2) Heuristic fallback (title-based)
     clip_nodes: List[Tuple[str, Dict[str, Any]]] = []
     for node_id, node in prompt.items():
         if not isinstance(node, dict):
             continue
-        ct = str(node.get("class_type") or "")
-        if ct in ("CLIPTextEncode", "CLIPTextEncodeSDXL"):
+        if _is_clip(node):
             clip_nodes.append((str(node_id), node))
 
     if not clip_nodes:
@@ -319,21 +383,22 @@ def patch_workflow_prompts_only(
             c += 1
         return c
 
-    stats = {"clip_text_pos": 0, "clip_text_neg": 0}
-    stats["clip_text_pos"] = set_text(pos_targets, positive_text)
+    stats["clip_text_pos"] += set_text(pos_targets, positive_text)
     if neg_targets:
-        stats["clip_text_neg"] = set_text(neg_targets, negative_text)
+        stats["clip_text_neg"] += set_text(neg_targets, negative_text)
     return stats
 
 
 class ProcessHarness(QtCore.QObject):
     output = QtCore.Signal(str)
+    finished = QtCore.Signal(int)
 
     def __init__(self, parent: Optional[QtCore.QObject] = None):
         super().__init__(parent)
         self.proc = QtCore.QProcess(self)
         self.proc.setProcessChannelMode(QtCore.QProcess.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self._read_out)
+        self.proc.finished.connect(self._on_finished)
 
     def is_running(self) -> bool:
         return self.proc.state() != QtCore.QProcess.NotRunning
@@ -362,6 +427,9 @@ class ProcessHarness(QtCore.QObject):
             self.output.emit("[Process] terminate timed out -> kill\n")
             self.proc.kill()
 
+    def _on_finished(self, exit_code: int, _status: QtCore.QProcess.ExitStatus) -> None:
+        self.finished.emit(int(exit_code))
+
     def _read_out(self) -> None:
         data = self.proc.readAllStandardOutput().data().decode(errors="ignore")
         if data:
@@ -387,6 +455,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.comfy_proc.output.connect(lambda t: self.append_log(t, prefix="[ComfyUI] "))
         self.pipe_proc.output.connect(lambda t: self.append_log(t, prefix="[Pipeline] "))
+
+        self.pipe_proc.finished.connect(self._on_pipeline_finished)
 
         self.voices_loaded.connect(self._apply_voice_lists)
         self.voices_failed.connect(self._on_voice_error)
@@ -650,14 +720,47 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_tab_images(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
+
         g = self._group_box("Images")
         l = QtWidgets.QVBoxLayout(g)
+
         wf = self.resolve_workflow_path()
-        info = QtWidgets.QLabel(f"Workflow used:\n{wf}\n\nApply patches CLIP positive/negative.")
+        info = QtWidgets.QLabel(
+            "Workflow used:\n"
+            f"{wf}\n\n"
+            "Preview shows the latest generated vocab card PNGs from output/<lesson>/cards.\n"
+            "Run Generate first if empty."
+        )
         info.setWordWrap(True)
         l.addWidget(info)
-        lay.addWidget(g)
-        lay.addStretch(1)
+
+        row = QtWidgets.QHBoxLayout()
+        btn_refresh = QtWidgets.QPushButton("Refresh Preview")
+        btn_open = QtWidgets.QPushButton("Open Latest Output Folder")
+        btn_refresh.setMinimumHeight(34)
+        btn_open.setMinimumHeight(34)
+        btn_refresh.clicked.connect(self.refresh_image_preview)
+        btn_open.clicked.connect(self.open_latest_output_folder)
+        row.addWidget(btn_refresh)
+        row.addWidget(btn_open)
+        row.addStretch(1)
+        l.addLayout(row)
+
+        self.images_scroll = QtWidgets.QScrollArea()
+        self.images_scroll.setWidgetResizable(True)
+        self.images_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        self.images_container = QtWidgets.QWidget()
+        self.images_grid = QtWidgets.QGridLayout(self.images_container)
+        self.images_grid.setContentsMargins(0, 0, 0, 0)
+        self.images_grid.setHorizontalSpacing(12)
+        self.images_grid.setVerticalSpacing(12)
+
+        self.images_scroll.setWidget(self.images_container)
+        l.addWidget(self.images_scroll, 1)
+
+        lay.addWidget(g, 1)
+        lay.addStretch(0)
         return w
 
     def _build_tab_publish(self) -> QtWidgets.QWidget:
@@ -670,6 +773,96 @@ class MainWindow(QtWidgets.QMainWindow):
         lay.addWidget(g)
         lay.addStretch(1)
         return w
+
+    def _find_latest_lesson_dir(self) -> Optional[Path]:
+        out_root = self.root_dir / "output"
+        if not out_root.exists():
+            return None
+        candidates: List[Path] = []
+        for p in out_root.rglob("cards"):
+            if p.is_dir():
+                candidates.append(p.parent)
+        if not candidates:
+            return None
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return candidates[0]
+
+    def open_latest_output_folder(self) -> None:
+        p = self._find_latest_lesson_dir()
+        if not p:
+            QtWidgets.QMessageBox.information(self, "No output", "No output lesson folder found under ./output")
+            return
+        try:
+            os.startfile(str(p))  # type: ignore[attr-defined]
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "Open failed", str(e))
+
+    def _clear_images_grid(self) -> None:
+        if not hasattr(self, "images_grid"):
+            return
+        while self.images_grid.count():
+            it = self.images_grid.takeAt(0)
+            w = it.widget()
+            if w:
+                w.deleteLater()
+
+    def refresh_image_preview(self) -> None:
+        lesson_dir = self._find_latest_lesson_dir()
+        self._clear_images_grid()
+        if not lesson_dir:
+            self.append_log("[Images] No lesson output found for preview.\n")
+            return
+
+        cards_dir = lesson_dir / "cards"
+        imgs = sorted(
+            [p for p in cards_dir.glob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
+        if not imgs:
+            self.append_log(f"[Images] No images in: {cards_dir}\n")
+            return
+
+        col_count = 2
+        r = 0
+        c = 0
+        for p in imgs:
+            frame = QtWidgets.QFrame()
+            frame.setStyleSheet("QFrame{background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;}")
+            v = QtWidgets.QVBoxLayout(frame)
+            v.setContentsMargins(10, 10, 10, 10)
+            v.setSpacing(8)
+
+            lbl_img = QtWidgets.QLabel()
+            lbl_img.setAlignment(QtCore.Qt.AlignCenter)
+            lbl_img.setMinimumHeight(150)
+            pix = QtGui.QPixmap(str(p))
+            if not pix.isNull():
+                lbl_img.setPixmap(
+                    pix.scaled(520, 320, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
+                )
+            else:
+                lbl_img.setText("(image load failed)")
+
+            lbl_name = QtWidgets.QLabel(p.name)
+            lbl_name.setWordWrap(True)
+            lbl_name.setStyleSheet("QLabel{font-weight:600;}")
+
+            v.addWidget(lbl_img)
+            v.addWidget(lbl_name)
+
+            self.images_grid.addWidget(frame, r, c)
+            c += 1
+            if c >= col_count:
+                c = 0
+                r += 1
+
+        self.append_log(f"[Images] Preview loaded: {len(imgs)} image(s) from {cards_dir}\n")
+
+    def _on_pipeline_finished(self, exit_code: int) -> None:
+        self.append_log(f"[Pipeline] FINISHED exit_code={exit_code}\n")
+        QtCore.QTimer.singleShot(200, self.refresh_image_preview)
 
     def append_log(self, text: str, prefix: str = "") -> None:
         if not text:
@@ -823,7 +1016,9 @@ class MainWindow(QtWidgets.QMainWindow):
         http_ok = comfy_http_reachable(self.cfg.comfy_url)
         if pids:
             name = _tasklist_name(pids[0])
-            self.status.showMessage(f"ComfyUI LISTENING on {port} (PID {pids[0]}:{name}) • HTTP={'OK' if http_ok else 'NO'}")
+            self.status.showMessage(
+                f"ComfyUI LISTENING on {port} (PID {pids[0]}:{name}) • HTTP={'OK' if http_ok else 'NO'}"
+            )
         else:
             self.status.showMessage("ComfyUI reachable" if http_ok else "ComfyUI not reachable")
 
@@ -921,11 +1116,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
 def main() -> None:
     root_dir = Path(__file__).resolve().parent
+    os.chdir(root_dir)
     cfg_path = root_dir / CONFIG_NAME
 
     # Robust load (repairs config if needed)
     cfg = load_config(cfg_path, root_dir=root_dir)
-
+    if not Path(cfg.project_workdir).exists():
+        cfg.project_workdir = str(root_dir)
+    if not Path(cfg.project_python).exists():
+        cfg.project_python = str((root_dir / ".venv" / "Scripts" / "python.exe").resolve())
+    save_config(cfg_path, cfg)
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     win = MainWindow(root_dir, cfg, cfg_path)

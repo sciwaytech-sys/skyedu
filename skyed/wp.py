@@ -89,6 +89,14 @@ def _media_endpoints(base: str) -> List[str]:
     ]
 
 
+def _content_endpoints(base: str, post_type_plural: str) -> List[str]:
+    return [
+        f"{base}/wp-json/wp/v2/{post_type_plural}",
+        f"{base}/?rest_route=/wp/v2/{post_type_plural}",
+        f"{base}/index.php?rest_route=/wp/v2/{post_type_plural}",
+    ]
+
+
 def _pick_media_endpoint(wp_base_url: str, wp_user: str, wp_app_password: str, timeout: int = 20) -> str:
     base = _normalize_base_url(wp_base_url)
     _probe_rest_index(base, timeout=timeout)
@@ -113,7 +121,13 @@ def _pick_media_endpoint(wp_base_url: str, wp_user: str, wp_app_password: str, t
     )
 
 
-def upload_media(wp_base_url: str, wp_user: str, wp_app_password: str, file_path: Path, timeout: int = 120) -> Dict[str, Any]:
+def upload_media(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    file_path: Path,
+    timeout: int = 120,
+) -> Dict[str, Any]:
     """
     Upload media via REST. Uses multipart/form-data (often more WAF-friendly than raw streaming).
     """
@@ -200,20 +214,72 @@ def create_post(
     _probe_rest_index(base, timeout=20)
 
     post_type = _normalize_post_type(post_type)
-    url = f"{base}/wp-json/wp/v2/{post_type}"
+    endpoints = _content_endpoints(base, post_type)
 
-    payload = {"title": title, "content": html, "status": status}
-    r = _request("POST", url, auth=_auth(wp_user, wp_app_password), json=payload, timeout=timeout)
+    # Force Gutenberg "Custom HTML" block so WP won't mangle markup into paragraphs/galleries.
+    html_wrapped = f"<!-- wp:html -->\n{html}\n<!-- /wp:html -->"
+
+    payload: Dict[str, Any] = {
+        "title": title,
+        "content": html_wrapped,
+        "status": status,
+        # Reduce “blog chrome” where supported:
+        "comment_status": "closed",
+        "ping_status": "closed",
+    }
+
+    r: Optional[requests.Response] = None
+    used_url = endpoints[0]
+
+    for url in endpoints:
+        used_url = url
+        r = _request("POST", url, auth=_auth(wp_user, wp_app_password), json=payload, timeout=timeout)
+        if r.status_code < 400:
+            break
+
+        # If route missing, try next variant
+        try:
+            j = r.json()
+            if isinstance(j, dict) and j.get("code") == "rest_no_route":
+                continue
+        except Exception:
+            pass
+
+        # Otherwise stop (auth/permission/WAF etc.)
+        break
+
+    if r is None:
+        raise WPError("Create post failed: no response")
 
     if r.status_code >= 400:
-        raise WPError(f"Create post failed: {r.status_code}\nURL: {url}\nBody: {r.text[:800]}")
+        raise WPError(f"Create post failed: {r.status_code}\nURL: {used_url}\nBody: {r.text[:800]}")
+
     return r.json()
 
 
 def list_post_types(wp_base_url: str, timeout: int = 30) -> Dict[str, Any]:
     base = _normalize_base_url(wp_base_url)
-    url = f"{base}/wp-json/wp/v2/types"
-    r = _request("GET", url, timeout=timeout)
-    if r.status_code >= 400:
-        raise WPError(f"List types failed: {r.status_code}\nURL: {url}\nBody: {r.text[:800]}")
-    return r.json()
+    urls = [
+        f"{base}/wp-json/wp/v2/types",
+        f"{base}/?rest_route=/wp/v2/types",
+        f"{base}/index.php?rest_route=/wp/v2/types",
+    ]
+
+    last: Optional[requests.Response] = None
+    for url in urls:
+        last = _request("GET", url, timeout=timeout)
+        if last.status_code < 400:
+            return last.json()
+
+        try:
+            j = last.json()
+            if isinstance(j, dict) and j.get("code") == "rest_no_route":
+                continue
+        except Exception:
+            pass
+        break
+
+    if last is None:
+        raise WPError("List types failed: no response")
+
+    raise WPError(f"List types failed: {last.status_code}\nURL: {urls[0]}\nBody: {last.text[:800]}")

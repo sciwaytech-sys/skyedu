@@ -1,16 +1,31 @@
-TITLE: Day 1 Homework
-VOCAB:
-Table - 桌子
-Lamp - 灯
-Rug - 地毯
-Sofa - 沙发
-Chair - 椅子
-SENTENCES:
-The lamp is on the table.
-The rug is under the table.
-The chair is next to the sofa.
-Q&A:
-Q: Where is the rug?
-A: It is under the table.
-Q: Where is the lamp?
-A: It is on the table.
+#Name Day 2 Homework — Theme Words + Sentence Pattern (Describe/Identify)
+
+#Vocabulary（词汇）：table, chair, lamp, box, picture, big, small
+
+#Sentences（A）
+
+This is a table.
+这是一个桌子。
+This is a chair.
+这是一把椅子。
+I see a lamp.
+我看到一盏灯。
+This is a box.
+这是一个盒子。
+This is a picture.
+这是一张图片。
+It’s big.
+它很大。
+It’s small.
+它很小。
+
+#Questions and answers（B）
+
+Q1: What’s this?
+A1: It’s a table/chair/lamp/box/picture.
+
+Q2: What can you see?
+A2: I can see a ____.
+
+Q3: Is it big or small?
+A3: It’s big. / It’s small.

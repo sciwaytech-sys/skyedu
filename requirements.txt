@@ -3,5 +3,7 @@ requests
 Pillow
 pydub
 pyttsx3
+edge-tts
+PySide6
 fastapi
 uvicorn[standard]

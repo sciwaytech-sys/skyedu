@@ -52,7 +52,7 @@
     },
     "6": {
       "inputs": {
-        "text": "__POS__",
+        "text": "cute cartoon illustration, clean lines, flat shading, bright cheerful colors, children book style, simple background, centered subject, clear silhouette\nSUBJECT: {subject} (single object, clear, centered, no clutter)",
         "clip": [
           "4",
           1
@@ -65,7 +65,7 @@
     },
     "7": {
       "inputs": {
-        "text": "abstract, surreal, painting, sketch, lineart, lowpoly, 3d render, worst quality, low quality, blurry, extra limbs, deformed, disfigured, mutated, bad anatomy, bad hands, text, watermark, logo, cropped, out of frame, weird colors",
+        "text": "abstract, surreal, cubism, expressionism, glitch, noise, watercolor, oil painting, sketch, lineart, lowpoly, 3d render, blurry, low quality, worst quality, messy background, deformed, disfigured, mutated, extra limbs, bad anatomy, bad hands, text, watermark, logo, letters, signature",
         "clip": [
           "4",
           1

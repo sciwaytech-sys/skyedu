@@ -1,12 +1,19 @@
 from __future__ import annotations
+
 import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
+# Resolve output directory robustly:
+# - If OUTPUT_DIR is set, use it.
+# - Otherwise default to <project_root>/output (project_root is the parent of /skyed).
+DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output"
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(DEFAULT_OUTPUT_DIR))).resolve()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI()
 
-# Serve: /quiz/<slug>/... from output/<slug>/quiz/...
-# We mount the whole output folder under /quiz (read-only)
-app.mount("/quiz", StaticFiles(directory=OUTPUT_DIR, html=True), name="quiz")
+# Serve: /quiz/<slug>/... from output/<slug>/...
+app.mount("/quiz", StaticFiles(directory=str(OUTPUT_DIR), html=True), name="quiz")
