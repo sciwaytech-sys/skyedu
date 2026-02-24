@@ -65,6 +65,25 @@ class AppConfig:
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
 
 
+    # image generation backend
+    image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
+    img_width: int = 768
+    img_height: int = 768
+    img_steps: int = 28
+    img_timeout_s: int = 600
+    img_concurrency: int = 1
+
+    # Cloudflare Workers AI (Flux)
+    cf_account_id: str = ""
+    cf_api_token: str = ""
+    cf_model: str = "@cf/black-forest-labs/flux-1-schnell"
+
+    # Hugging Face image endpoint (dedicated endpoint URL)
+    hf_image_endpoint_url: str = ""
+    hf_token: str = ""
+    hf_guidance: float = 6.0
+
+
 def _default_config(root_dir: Path) -> AppConfig:
     # Known baseline defaults from your project snapshot
     project_workdir = str(root_dir.resolve())
@@ -84,6 +103,19 @@ def _default_config(root_dir: Path) -> AppConfig:
         voice_zh="zh-CN-XiaoxiaoNeural",
         comfy_workflow_path=str((root_dir / "assets" / "comfy" / "workflow_api.json").resolve()),
         picture_cards_type="Realistic",
+
+        image_backend="comfyui",
+        img_width=768,
+        img_height=768,
+        img_steps=28,
+        img_timeout_s=600,
+        img_concurrency=1,
+        cf_account_id="",
+        cf_api_token="",
+        cf_model="@cf/black-forest-labs/flux-1-schnell",
+        hf_image_endpoint_url="",
+        hf_token="",
+        hf_guidance=6.0,
     )
 
 
@@ -140,6 +172,18 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         voice_zh=str(data.get("voice_zh", base.voice_zh)),
         comfy_workflow_path=str(data.get("comfy_workflow_path", base.comfy_workflow_path)),
         picture_cards_type=str(data.get("picture_cards_type", base.picture_cards_type)),
+        image_backend=str(data.get("image_backend", base.image_backend)),
+        img_width=int(data.get("img_width", base.img_width)),
+        img_height=int(data.get("img_height", base.img_height)),
+        img_steps=int(data.get("img_steps", base.img_steps)),
+        img_timeout_s=int(data.get("img_timeout_s", base.img_timeout_s)),
+        img_concurrency=int(data.get("img_concurrency", base.img_concurrency)),
+        cf_account_id=str(data.get("cf_account_id", base.cf_account_id)),
+        cf_api_token=str(data.get("cf_api_token", base.cf_api_token)),
+        cf_model=str(data.get("cf_model", base.cf_model)),
+        hf_image_endpoint_url=str(data.get("hf_image_endpoint_url", data.get("hf_endpoint", base.hf_image_endpoint_url))),
+        hf_token=str(data.get("hf_token", base.hf_token)),
+        hf_guidance=float(data.get("hf_guidance", base.hf_guidance)),
     )
 
     # Write back a repaired normalized config (important)
@@ -163,6 +207,18 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "voice_zh": str(cfg.voice_zh),
         "comfy_workflow_path": str(cfg.comfy_workflow_path),
         "picture_cards_type": str(cfg.picture_cards_type),
+        "image_backend": str(cfg.image_backend),
+        "img_width": int(cfg.img_width),
+        "img_height": int(cfg.img_height),
+        "img_steps": int(cfg.img_steps),
+        "img_timeout_s": int(cfg.img_timeout_s),
+        "img_concurrency": int(cfg.img_concurrency),
+        "cf_account_id": str(cfg.cf_account_id),
+        "cf_api_token": str(cfg.cf_api_token),
+        "cf_model": str(cfg.cf_model),
+        "hf_image_endpoint_url": str(cfg.hf_image_endpoint_url),
+        "hf_token": str(cfg.hf_token),
+        "hf_guidance": float(cfg.hf_guidance),
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -275,79 +331,15 @@ def patch_workflow_prompts_only(
     positive_text: str,
     negative_text: str,
 ) -> Dict[str, int]:
-    """
-    Patch only CLIPTextEncode nodes inside a ComfyUI workflow prompt dict.
-
-    Deterministic behavior:
-      - Prefer KSampler wiring: KSampler.inputs.positive / negative -> CLIP node ids.
-      - Fallback to title-based heuristics if wiring is missing or doesn't point to CLIP nodes.
-
-    Returns stats:
-      {"clip_text_pos": <count>, "clip_text_neg": <count>, "ksampler": <count>}
-    """
     if not isinstance(prompt, dict) or not prompt:
         raise ValueError("Workflow prompt dict is empty/invalid.")
 
-    def _is_clip(node: Dict[str, Any]) -> bool:
-        ct = str(node.get("class_type") or "")
-        return ct in ("CLIPTextEncode", "CLIPTextEncodeSDXL")
-
-    def _is_ksampler(node: Dict[str, Any]) -> bool:
-        ct = str(node.get("class_type") or "")
-        return ct in ("KSampler", "KSamplerAdvanced")
-
-    def _resolve_ref_node_id(ref: Any) -> Optional[str]:
-        if isinstance(ref, (list, tuple)) and ref:
-            return str(ref[0])
-        if isinstance(ref, str) and ref:
-            return ref
-        return None
-
-    def _set_clip_text(node_id: str, text: str) -> int:
-        node = prompt.get(str(node_id))
-        if not isinstance(node, dict) or not _is_clip(node):
-            return 0
-        inp = node.get("inputs")
-        if not isinstance(inp, dict):
-            node["inputs"] = {}
-            inp = node["inputs"]
-        inp["text"] = text
-        return 1
-
-    # 1) Try deterministic wiring via KSampler
-    ks_nodes: List[Tuple[str, Dict[str, Any]]] = []
-    for node_id, node in prompt.items():
-        if isinstance(node, dict) and _is_ksampler(node):
-            ks_nodes.append((str(node_id), node))
-
-    stats = {"clip_text_pos": 0, "clip_text_neg": 0, "ksampler": 0}
-
-    if ks_nodes:
-        for _, ks in ks_nodes:
-            stats["ksampler"] += 1
-            inp = ks.get("inputs")
-            if not isinstance(inp, dict):
-                continue
-
-            pos_ref = _resolve_ref_node_id(inp.get("positive"))
-            neg_ref = _resolve_ref_node_id(inp.get("negative"))
-
-            if pos_ref:
-                stats["clip_text_pos"] += _set_clip_text(pos_ref, positive_text)
-            if neg_ref:
-                stats["clip_text_neg"] += _set_clip_text(neg_ref, negative_text)
-
-        # If we successfully patched at least one pos node, we are done.
-        if stats["clip_text_pos"] > 0:
-            return stats
-        # otherwise, fall through to heuristics.
-
-    # 2) Heuristic fallback (title-based)
     clip_nodes: List[Tuple[str, Dict[str, Any]]] = []
     for node_id, node in prompt.items():
         if not isinstance(node, dict):
             continue
-        if _is_clip(node):
+        ct = str(node.get("class_type") or "")
+        if ct in ("CLIPTextEncode", "CLIPTextEncodeSDXL"):
             clip_nodes.append((str(node_id), node))
 
     if not clip_nodes:
@@ -383,9 +375,10 @@ def patch_workflow_prompts_only(
             c += 1
         return c
 
-    stats["clip_text_pos"] += set_text(pos_targets, positive_text)
+    stats = {"clip_text_pos": 0, "clip_text_neg": 0}
+    stats["clip_text_pos"] = set_text(pos_targets, positive_text)
     if neg_targets:
-        stats["clip_text_neg"] += set_text(neg_targets, negative_text)
+        stats["clip_text_neg"] = set_text(neg_targets, negative_text)
     return stats
 
 
@@ -517,7 +510,26 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.cfg.picture_cards_type in ("Realistic", "Cartoon"):
             self.combo_picture.setCurrentText(self.cfg.picture_cards_type)
         tb.addWidget(self.combo_picture)
-        add_btn("Apply → Comfy workflow", self.apply_picture_type_to_workflow)
+
+        tb.addWidget(QtWidgets.QLabel("Backend:"))
+        self.combo_backend = QtWidgets.QComboBox()
+        self.combo_backend.addItems(["ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
+        # map config -> UI
+        _b = (self.cfg.image_backend or "comfyui").lower().strip()
+        if _b in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+            self.combo_backend.setCurrentText("Cloudflare FLUX")
+        elif _b in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
+            self.combo_backend.setCurrentText("HF Endpoint")
+        else:
+            self.combo_backend.setCurrentText("ComfyUI")
+        self.combo_backend.currentTextChanged.connect(self.on_backend_changed)
+        tb.addWidget(self.combo_backend)
+
+        self.btn_apply_picture = QtWidgets.QToolButton()
+        self.btn_apply_picture.setText("Apply → Comfy workflow")
+        self.btn_apply_picture.clicked.connect(self.apply_picture_type_to_workflow)
+        tb.addWidget(self.btn_apply_picture)
+        self.on_backend_changed(self.combo_backend.currentText())
 
         tb.addSeparator()
 
@@ -734,6 +746,81 @@ class MainWindow(QtWidgets.QMainWindow):
         info.setWordWrap(True)
         l.addWidget(info)
 
+
+        # Generator settings (ComfyUI / Cloudflare Flux / HF Endpoint)
+        cfg_box = self._group_box("Generator settings")
+        fl = QtWidgets.QFormLayout(cfg_box)
+
+        self.combo_backend2 = QtWidgets.QComboBox()
+        self.combo_backend2.addItems(["ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
+        self.combo_backend2.setCurrentText(self._backend_ui_from_key(self.cfg.image_backend))
+        self.combo_backend2.currentTextChanged.connect(self.on_backend2_changed)
+        fl.addRow("Backend:", self.combo_backend2)
+
+        self.spin_img_w = QtWidgets.QSpinBox()
+        self.spin_img_w.setRange(256, 2048)
+        self.spin_img_w.setValue(int(self.cfg.img_width))
+        self.spin_img_w.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("Width:", self.spin_img_w)
+
+        self.spin_img_h = QtWidgets.QSpinBox()
+        self.spin_img_h.setRange(256, 2048)
+        self.spin_img_h.setValue(int(self.cfg.img_height))
+        self.spin_img_h.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("Height:", self.spin_img_h)
+
+        self.spin_img_steps = QtWidgets.QSpinBox()
+        self.spin_img_steps.setRange(1, 100)
+        self.spin_img_steps.setValue(int(self.cfg.img_steps))
+        self.spin_img_steps.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("Steps:", self.spin_img_steps)
+
+        self.spin_img_timeout = QtWidgets.QSpinBox()
+        self.spin_img_timeout.setRange(30, 3600)
+        self.spin_img_timeout.setValue(int(self.cfg.img_timeout_s))
+        self.spin_img_timeout.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("Timeout (s):", self.spin_img_timeout)
+
+        self.spin_img_conc = QtWidgets.QSpinBox()
+        self.spin_img_conc.setRange(1, 16)
+        self.spin_img_conc.setValue(int(self.cfg.img_concurrency))
+        self.spin_img_conc.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("Concurrency:", self.spin_img_conc)
+
+        # Cloudflare Flux
+        self.edit_cf_account = QtWidgets.QLineEdit(self.cfg.cf_account_id)
+        self.edit_cf_account.textChanged.connect(lambda _t: self.on_image_settings_changed())
+        fl.addRow("CF Account ID:", self.edit_cf_account)
+
+        self.edit_cf_model = QtWidgets.QLineEdit(self.cfg.cf_model)
+        self.edit_cf_model.textChanged.connect(lambda _t: self.on_image_settings_changed())
+        fl.addRow("CF Model:", self.edit_cf_model)
+
+        self.edit_cf_token = QtWidgets.QLineEdit(self.cfg.cf_api_token)
+        self.edit_cf_token.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.edit_cf_token.textChanged.connect(lambda _t: self.on_image_settings_changed())
+        fl.addRow("CF API Token:", self.edit_cf_token)
+
+        # Hugging Face endpoint
+        self.edit_hf_url = QtWidgets.QLineEdit(self.cfg.hf_image_endpoint_url or "")
+        self.edit_hf_url.setPlaceholderText("https://<your-endpoint>/")
+        self.edit_hf_url.textChanged.connect(lambda _t: self.on_image_settings_changed())
+        fl.addRow("HF Endpoint URL:", self.edit_hf_url)
+
+        self.edit_hf_token = QtWidgets.QLineEdit(self.cfg.hf_token)
+        self.edit_hf_token.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.edit_hf_token.textChanged.connect(lambda _t: self.on_image_settings_changed())
+        fl.addRow("HF Token:", self.edit_hf_token)
+
+        self.spin_hf_guidance = QtWidgets.QDoubleSpinBox()
+        self.spin_hf_guidance.setRange(1.0, 20.0)
+        self.spin_hf_guidance.setSingleStep(0.5)
+        self.spin_hf_guidance.setValue(float(self.cfg.hf_guidance))
+        self.spin_hf_guidance.valueChanged.connect(lambda _v: self.on_image_settings_changed())
+        fl.addRow("HF Guidance:", self.spin_hf_guidance)
+
+        l.addWidget(cfg_box)
+
         row = QtWidgets.QHBoxLayout()
         btn_refresh = QtWidgets.QPushButton("Refresh Preview")
         btn_open = QtWidgets.QPushButton("Open Latest Output Folder")
@@ -870,6 +957,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if prefix:
             lines = text.splitlines(True)
             text = "".join(prefix + ln for ln in lines)
+
+        # _build_ui() can call methods before self.log is created
+        if not hasattr(self, "log") or self.log is None:
+            return
+
         self.log.moveCursor(QtGui.QTextCursor.End)
         self.log.insertPlainText(text)
         self.log.moveCursor(QtGui.QTextCursor.End)
@@ -934,6 +1026,85 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_voice_changed(self, _txt: str) -> None:
         self.cfg.voice_en = self.combo_voice_en.currentText().strip()
         self.cfg.voice_zh = self.combo_voice_zh.currentText().strip()
+        save_config(self.cfg_path, self.cfg)
+
+    
+
+    def _backend_key_from_ui(self, txt: str) -> str:
+        t = (txt or "").strip().lower()
+        if "cloudflare" in t or "flux" in t:
+            return "cloudflare_flux"
+        if "hf" in t or "hugging" in t:
+            return "hf_endpoint"
+        return "comfyui"
+
+    def _backend_ui_from_key(self, key: str) -> str:
+        k = (key or "").strip().lower()
+        if k in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+            return "Cloudflare FLUX"
+        if k in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
+            return "HF Endpoint"
+        return "ComfyUI"
+
+    def on_backend_changed(self, _txt: str) -> None:
+        # toolbar change → config + sync image tab widgets
+        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
+        save_config(self.cfg_path, self.cfg)
+
+        # enable/disable workflow patch button
+        b = (self.cfg.image_backend or "comfyui").lower().strip()
+        if hasattr(self, "btn_apply_picture"):
+            self.btn_apply_picture.setEnabled(b in ("comfyui", "comfy"))
+
+        # sync secondary combo if present
+        if hasattr(self, "combo_backend2"):
+            ui = self._backend_ui_from_key(self.cfg.image_backend)
+            if self.combo_backend2.currentText() != ui:
+                self.combo_backend2.blockSignals(True)
+                self.combo_backend2.setCurrentText(ui)
+                self.combo_backend2.blockSignals(False)
+
+        self.append_log(f"[Images] backend set to {self.cfg.image_backend}\n")
+
+    def on_backend2_changed(self, _txt: str) -> None:
+        # image tab combo → sync toolbar combo then reuse handler
+        ui = self.combo_backend2.currentText()
+        if self.combo_backend.currentText() != ui:
+            self.combo_backend.blockSignals(True)
+            self.combo_backend.setCurrentText(ui)
+            self.combo_backend.blockSignals(False)
+        self.on_backend_changed(ui)
+
+    def _capture_image_tab_settings(self) -> None:
+        # Called before running pipeline; safe if tab widgets not yet created.
+        try:
+            if hasattr(self, "spin_img_w"):
+                self.cfg.img_width = int(self.spin_img_w.value())
+            if hasattr(self, "spin_img_h"):
+                self.cfg.img_height = int(self.spin_img_h.value())
+            if hasattr(self, "spin_img_steps"):
+                self.cfg.img_steps = int(self.spin_img_steps.value())
+            if hasattr(self, "spin_img_timeout"):
+                self.cfg.img_timeout_s = int(self.spin_img_timeout.value())
+            if hasattr(self, "spin_img_conc"):
+                self.cfg.img_concurrency = int(self.spin_img_conc.value())
+            if hasattr(self, "edit_cf_account"):
+                self.cfg.cf_account_id = self.edit_cf_account.text().strip()
+            if hasattr(self, "edit_cf_model"):
+                self.cfg.cf_model = self.edit_cf_model.text().strip() or self.cfg.cf_model
+            if hasattr(self, "edit_cf_token"):
+                self.cfg.cf_api_token = self.edit_cf_token.text().strip()
+            if hasattr(self, "edit_hf_url"):
+                self.cfg.hf_image_endpoint_url = self.edit_hf_url.text().strip()
+            if hasattr(self, "edit_hf_token"):
+                self.cfg.hf_token = self.edit_hf_token.text().strip()
+            if hasattr(self, "spin_hf_guidance"):
+                self.cfg.hf_guidance = float(self.spin_hf_guidance.value())
+        except Exception:
+            pass
+
+    def on_image_settings_changed(self) -> None:
+        self._capture_image_tab_settings()
         save_config(self.cfg_path, self.cfg)
 
     def load_voices_background(self) -> None:
@@ -1038,6 +1209,32 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log("[ComfyUI] reachable → NOT starting a second instance.\n")
             return
         env = os.environ.copy()
+
+        # Persist current toolbar selections
+        self.cfg.picture_cards_type = self.combo_picture.currentText().strip() or self.cfg.picture_cards_type
+        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
+        # Persist image tab settings if available
+        self._capture_image_tab_settings()
+        save_config(self.cfg_path, self.cfg)
+
+        # Pass config to pipeline via env
+        env["PICTURE_CARDS_TYPE"] = self.cfg.picture_cards_type
+        env["IMG_BACKEND"] = self.cfg.image_backend
+        env["IMG_WIDTH"] = str(int(self.cfg.img_width))
+        env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
+        env["IMG_STEPS"] = str(int(self.cfg.img_steps))
+        env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
+        env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
+
+        env["CF_ACCOUNT_ID"] = str(self.cfg.cf_account_id)
+        env["CF_API_TOKEN"] = str(self.cfg.cf_api_token)
+        env["CF_MODEL"] = str(self.cfg.cf_model)
+
+        env["HF_IMAGE_ENDPOINT_URL"] = str(self.cfg.hf_image_endpoint_url or "")
+        env["HF_TOKEN"] = str(self.cfg.hf_token)
+        env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
+
+        # Keep backward-compatible key
         env["HF_ENDPOINT"] = self.cfg.hf_endpoint
         self.comfy_proc.start(self.cfg.comfy_python, self.cfg.comfy_args, self.cfg.comfy_workdir, env)
 
@@ -1050,6 +1247,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.cfg.picture_cards_type = sel
         save_config(self.cfg_path, self.cfg)
+
+        # If we are not using ComfyUI for images, we still keep picture_cards_type for prompt templates,
+        # but we do NOT patch the workflow file.
+        b = (self.cfg.image_backend or "comfyui").lower().strip()
+        if b not in ("comfyui", "comfy"):
+            self.append_log("[Images] picture_cards_type saved; workflow patch skipped (backend is not ComfyUI)\n")
+            return
 
         wf_path = self.resolve_workflow_path()
         if not wf_path.exists():

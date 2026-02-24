@@ -1,0 +1,211 @@
+# skyed/image_backends.py
+from __future__ import annotations
+
+import base64
+import json
+import os
+import time
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+import requests
+from PIL import Image
+from io import BytesIO
+
+from .prompt_templates import render_prompts
+
+
+def _stable_seed_for_text(text: str) -> int:
+    import hashlib
+    h = hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+    return int(h[:8], 16)
+
+
+def _decode_cf_image_json(obj: Any) -> bytes:
+    # Cloudflare /client/v4 endpoints often return:
+    # { "success": true, "result": { "image": "<base64>" } }
+    # but docs also show direct { "image": "<base64>" } in Workers code.
+    if isinstance(obj, dict):
+        if "result" in obj and isinstance(obj["result"], dict):
+            obj = obj["result"]
+        if "image" in obj and isinstance(obj["image"], str):
+            return base64.b64decode(obj["image"])
+    raise ValueError("Cloudflare response missing base64 'image' field")
+
+
+def _ensure_png_bytes(raw: bytes) -> bytes:
+    # Convert whatever we received (jpg/png/webp) into PNG bytes for consistent downstream usage.
+    im = Image.open(BytesIO(raw))
+    out = BytesIO()
+    im.save(out, format="PNG")
+    return out.getvalue()
+
+
+@dataclass
+class ImageGenRequest:
+    subject: str
+    style: str  # 'realistic' | 'cartoon'
+    width: int = 768
+    height: int = 768
+    steps: int = 20
+    seed: Optional[int] = None
+    negative_prompt: Optional[str] = None
+
+
+class BaseImageBackend:
+    name: str = "base"
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 180) -> bytes:
+        raise NotImplementedError
+
+
+class CloudflareFluxBackend(BaseImageBackend):
+    name = "cloudflare_flux"
+
+    def __init__(self, *, account_id: str, api_token: str, model: str) -> None:
+        self.account_id = account_id.strip()
+        self.api_token = api_token.strip()
+        self.model = model.strip() or "@cf/black-forest-labs/flux-1-schnell"
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 180) -> bytes:
+        if not self.account_id:
+            raise ValueError("CF_ACCOUNT_ID missing")
+        if not self.api_token:
+            raise ValueError("CF_API_TOKEN missing")
+
+        # Flux schnell supports: prompt (required), steps (default 4, max 8), seed (used in examples).
+        # It returns JSON {image: base64}. Official docs: https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/
+        steps = int(req.steps)
+        if steps < 1:
+            steps = 1
+        if steps > 8:
+            steps = 8
+
+        seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
+
+        pos, _neg = render_prompts(req.style, req.subject)
+        # Flux API does not document negative_prompt/size params; keep prompt compact.
+        payload: Dict[str, Any] = {
+            "prompt": pos,
+            "steps": steps,
+            "seed": int(seed),
+        }
+
+        url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+
+        r = requests.post(url, headers=headers, json=payload, timeout=timeout_s)
+        r.raise_for_status()
+        obj = r.json()
+        raw = _decode_cf_image_json(obj)
+        return _ensure_png_bytes(raw)
+
+
+class HuggingFaceEndpointBackend(BaseImageBackend):
+    name = "hf_endpoint"
+
+    def __init__(self, *, endpoint_url: str, token: str) -> None:
+        self.endpoint_url = endpoint_url.strip()
+        self.token = token.strip()
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 180) -> bytes:
+        if not self.endpoint_url:
+            raise ValueError("HF_IMAGE_ENDPOINT_URL missing")
+        if not self.token:
+            raise ValueError("HF_TOKEN missing")
+
+        pos, neg = render_prompts(req.style, req.subject)
+        if req.negative_prompt:
+            neg = req.negative_prompt
+
+        payload: Dict[str, Any] = {
+            "inputs": pos,
+            "parameters": {
+                "negative_prompt": neg,
+                "num_inference_steps": int(req.steps),
+                "width": int(req.width),
+                "height": int(req.height),
+            },
+        }
+        if req.seed is not None:
+            payload["parameters"]["seed"] = int(req.seed)
+
+        headers = {"Authorization": f"Bearer {self.token}"}
+
+        r = requests.post(self.endpoint_url, headers=headers, json=payload, timeout=timeout_s)
+        r.raise_for_status()
+
+        ctype = (r.headers.get("Content-Type") or "").lower()
+        if ctype.startswith("image/"):
+            raw = r.content
+            return _ensure_png_bytes(raw)
+
+        # Some endpoints may respond JSON; handle base64 patterns.
+        try:
+            obj = r.json()
+        except Exception:
+            # last resort: treat as raw bytes
+            return _ensure_png_bytes(r.content)
+
+        # Try common fields
+        if isinstance(obj, dict):
+            for key in ("image", "generated_image", "result"):
+                if key in obj:
+                    val = obj[key]
+                    if isinstance(val, str):
+                        raw = base64.b64decode(val)
+                        return _ensure_png_bytes(raw)
+                    if isinstance(val, dict) and "image" in val and isinstance(val["image"], str):
+                        raw = base64.b64decode(val["image"])
+                        return _ensure_png_bytes(raw)
+
+        raise ValueError("HF endpoint response not an image and no decodable base64 field found")
+
+
+class ComfyUIBackend(BaseImageBackend):
+    name = "comfyui"
+
+    def __init__(self, *, base_url: str, workflow_path: Path) -> None:
+        self.base_url = (base_url or "").rstrip("/")
+        self.workflow_path = Path(workflow_path)
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 600) -> bytes:
+        from .comfy_client import generate_image_bytes  # local import to avoid cycles
+        pos, neg = render_prompts(req.style, req.subject)
+        seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
+        return generate_image_bytes(
+            comfy_url=self.base_url,
+            workflow_path=self.workflow_path,
+            positive_text=pos,
+            negative_text=neg,
+            seed=int(seed),
+            steps=int(req.steps),
+            cfg=6.0,
+            timeout_s=timeout_s,
+        )
+
+
+def backend_from_env() -> Tuple[BaseImageBackend, str]:
+    name = (os.environ.get("IMG_BACKEND") or "comfyui").strip().lower()
+    if name in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+        b = CloudflareFluxBackend(
+            account_id=os.environ.get("CF_ACCOUNT_ID", ""),
+            api_token=os.environ.get("CF_API_TOKEN", ""),
+            model=os.environ.get("CF_MODEL", "@cf/black-forest-labs/flux-1-schnell"),
+        )
+        return b, b.name
+    if name in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
+        b = HuggingFaceEndpointBackend(
+            endpoint_url=os.environ.get("HF_IMAGE_ENDPOINT_URL", os.environ.get("HF_ENDPOINT", "")),
+            token=os.environ.get("HF_TOKEN", ""),
+        )
+        return b, b.name
+
+    # default: comfyui
+    b = ComfyUIBackend(
+        base_url=os.environ.get("COMFY_URL", "http://127.0.0.1:8188"),
+        workflow_path=Path(os.environ.get("COMFY_WORKFLOW", "assets/comfy/workflow_api.json")),
+    )
+    return b, b.name

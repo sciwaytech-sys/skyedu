@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
+import json
 import os
 import shutil
 from pathlib import Path
@@ -28,6 +30,14 @@ def _sentence_audio_stem(base_text: str) -> str:
     short = card_slugify(t[:60] if len(t) > 60 else t)
     h = hashlib.sha1(t.encode("utf-8")).hexdigest()[:10]
     return f"{short}_{h}" if short else h
+
+
+def _h(text: str) -> str:
+    return html.escape(text or "", quote=False)
+
+
+def _hu(text: str) -> str:
+    return html.escape(text or "", quote=True)
 
 
 def build_lesson_html(
@@ -82,55 +92,67 @@ def build_lesson_html(
 
     vocab_cards: List[str] = []
     for it in vocab_items:
-        en = it.get("en", "")
-        zh = it.get("zh", "")
-        img = it.get("img", "")
-        a_en = it.get("audio_en", "")
-        a_zh = it.get("audio_zh", "")
+        en = (it.get("en") or "").strip()
+        zh = (it.get("zh") or "").strip()
+        img = (it.get("img") or "").strip()
+        a_en = (it.get("audio_en") or "").strip()
+        a_zh = (it.get("audio_zh") or "").strip()
+
+        en_t = _h(en)
+        zh_t = _h(zh)
+        img_u = _hu(img)
+        a_en_u = _hu(a_en)
+        a_zh_u = _hu(a_zh)
+        alt_t = _hu(en)
 
         card = ['<div class="card">']
         card.append('<div class="media">')
-        if img:
-            card.append(f'<img src="{img}" alt="{en}" loading="lazy">')
+        if img_u:
+            card.append(f'<img src="{img_u}" alt="{alt_t}" loading="lazy">')
         card.append("</div>")
         card.append('<div class="bd">')
         card.append('<div class="row">')
-        card.append(f'<div class="en">{en}</div>')
-        card.append(f'<div class="zh">{zh}</div>' if zh else '<div class="zh"></div>')
+        card.append(f'<div class="en">{en_t}</div>')
+        card.append(f'<div class="zh">{zh_t}</div>' if zh_t else '<div class="zh"></div>')
         card.append("</div>")
-        if a_en:
-            card.append(f'<audio controls src="{a_en}"></audio>')
-        if a_zh:
-            card.append(f'<audio controls src="{a_zh}"></audio>')
+        if a_en_u:
+            card.append(f'<audio controls src="{a_en_u}"></audio>')
+        if a_zh_u:
+            card.append(f'<audio controls src="{a_zh_u}"></audio>')
         card.append("</div></div>")
         vocab_cards.append("".join(card))
 
     sent_cards: List[str] = []
     for it in sentence_items:
-        en = it.get("en", "")
-        zh = it.get("zh", "")
-        a_en = it.get("audio_en", "")
-        a_zh = it.get("audio_zh", "")
+        en = (it.get("en") or "").strip()
+        zh = (it.get("zh") or "").strip()
+        a_en = (it.get("audio_en") or "").strip()
+        a_zh = (it.get("audio_zh") or "").strip()
+
+        en_t = _h(en)
+        zh_t = _h(zh)
+        a_en_u = _hu(a_en)
+        a_zh_u = _hu(a_zh)
 
         row = ['<div class="skyed-sent">']
         row.append('<div class="txt">')
-        if en:
-            row.append(f"<div><b>EN:</b> {en}</div>")
-        if zh:
-            row.append(f"<div><b>CN:</b> {zh}</div>")
+        if en_t:
+            row.append(f"<div><b>EN:</b> {en_t}</div>")
+        if zh_t:
+            row.append(f"<div><b>CN:</b> {zh_t}</div>")
         row.append("</div>")
         row.append('<div class="aud">')
-        if a_en:
-            row.append(f'<audio controls src="{a_en}"></audio>')
-        if a_zh:
-            row.append(f'<audio controls src="{a_zh}"></audio>')
+        if a_en_u:
+            row.append(f'<audio controls src="{a_en_u}"></audio>')
+        if a_zh_u:
+            row.append(f'<audio controls src="{a_zh_u}"></audio>')
         row.append("</div></div>")
         sent_cards.append("".join(row))
 
-    html = f"""{css}
+    html_out = f"""{css}
     <div class="wrap">
       <div class="hero">
-        <h2>{title}</h2>
+        <h2>{_h(title)}</h2>
         <div class="sub">Vocabulary → Sentences → Quiz</div>
       </div>
 
@@ -146,10 +168,19 @@ def build_lesson_html(
       </div>
 
       <div class="h3">Quiz</div>
-      <iframe src="{quiz_iframe_url}" loading="lazy"></iframe>
+      <iframe src="{_hu(quiz_iframe_url)}" loading="lazy"></iframe>
     </div>
     """
-    return html
+    return html_out
+
+
+def _audio_rel_key(audio_root: Path, f: Path) -> str:
+    """Stable key preserving language subfolder, e.g. en/apple.mp3, zh/sent_xxx.mp3"""
+    try:
+        return f.relative_to(audio_root).as_posix()
+    except Exception:
+        # fallback (shouldn't normally happen)
+        return f.name
 
 
 def main() -> None:
@@ -165,7 +196,7 @@ def main() -> None:
     wp_base = os.getenv("WP_BASE_URL", "").strip()
     wp_user = os.getenv("WP_USER", "").strip()
     wp_pass = os.getenv("WP_APP_PASSWORD", "").strip()
-    wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # you said page works normally
+    wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # page works normally in your setup
 
     output_dir = Path(os.getenv("OUTPUT_DIR", "output"))
     font_path = os.getenv("FONT_PATH", "").strip() or None
@@ -180,8 +211,20 @@ def main() -> None:
     slug = slugify(title)
     lesson_root = ensure_dir(output_dir / slug)
 
+    # Useful debug dump for every run (helps inspect parser output quickly)
+    try:
+        (lesson_root / "spec_debug.json").write_text(
+            json.dumps(spec, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
     # publish-only mode: skip generation and just publish using existing files
-    if not args.publish_only:
+    if args.publish_only:
+        if not lesson_root.exists():
+            raise RuntimeError(f"--publish-only requested, but lesson output folder not found: {lesson_root}")
+    else:
         # Clean previous run
         for name in ("cards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json"):
             p = lesson_root / name
@@ -194,16 +237,20 @@ def main() -> None:
                     except Exception:
                         pass
 
+        # Re-write debug spec after cleanup
+        try:
+            (lesson_root / "spec_debug.json").write_text(
+                json.dumps(spec, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
         cards_dir = ensure_dir(lesson_root / "cards")
         audio_dir = ensure_dir(lesson_root / "audio")
 
         vocab_list = spec.get("vocab", []) or []
         if len(vocab_list) == 0:
-            # Write debug spec so GUI error points to a file
-            (lesson_root / "spec_debug.json").write_text(
-                __import__("json").dumps(spec, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
             raise RuntimeError(
                 "Parser produced 0 vocab items. Check output/<slug>/spec_debug.json.\n"
                 "Your homework.txt MUST include:\n"
@@ -213,6 +260,9 @@ def main() -> None:
         # Generate cards + audio (EN + ZH for vocab + sentences)
         card_files = generate_vocab_cards(spec, font_path, cards_dir)
         audio_files = generate_audio(spec, audio_dir)
+
+        # Keep variables referenced so linters don't complain in stricter configs
+        _ = (card_files, audio_files)
 
         # Generate quiz into lesson_root
         quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8)
@@ -285,7 +335,7 @@ def main() -> None:
     if not (wp_base and wp_user and wp_pass):
         raise RuntimeError("Missing WP_BASE_URL / WP_USER / WP_APP_PASSWORD in .env")
 
-    # Upload media (cards + audio). NOTE: we upload the rendered cards (cards/*.png) not raw ai images.
+    # Upload media (cards + audio). NOTE: we upload the rendered cards (cards/*.png), not raw ai images.
     card_url_by_stem: Dict[str, str] = {}
     cards_dir = lesson_root / "cards"
     if cards_dir.exists():
@@ -295,14 +345,15 @@ def main() -> None:
             if url:
                 card_url_by_stem[f.stem] = url
 
-    audio_url_by_stem: Dict[str, str] = {}
+    # IMPORTANT: key by relative path (en/apple.mp3 vs zh/apple.mp3) to avoid collisions
+    audio_url_by_rel: Dict[str, str] = {}
     audio_dir = lesson_root / "audio"
     if audio_dir.exists():
         for f in audio_dir.rglob("*.mp3"):
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
-                audio_url_by_stem[f.stem] = url
+                audio_url_by_rel[_audio_rel_key(audio_dir, f)] = url
 
     # Build REMOTE items using WP URLs
     items_remote: List[Dict[str, str]] = []
@@ -315,8 +366,8 @@ def main() -> None:
                 "en": en,
                 "zh": zh,
                 "img": card_url_by_stem.get(s, ""),
-                "audio_en": audio_url_by_stem.get(s, ""),
-                "audio_zh": audio_url_by_stem.get(s, ""),
+                "audio_en": audio_url_by_rel.get(f"en/{s}.mp3", ""),
+                "audio_zh": audio_url_by_rel.get(f"zh/{s}.mp3", ""),
             }
         )
 
@@ -332,8 +383,8 @@ def main() -> None:
             {
                 "en": en_txt,
                 "zh": zh_txt,
-                "audio_en": audio_url_by_stem.get(f"sent_{stem}", ""),
-                "audio_zh": audio_url_by_stem.get(f"sent_{stem}", ""),
+                "audio_en": audio_url_by_rel.get(f"en/sent_{stem}.mp3", ""),
+                "audio_zh": audio_url_by_rel.get(f"zh/sent_{stem}.mp3", ""),
             }
         )
 
@@ -346,19 +397,23 @@ def main() -> None:
         # Safe fallback: no iframe (avoid recursive embed)
         quiz_url = "about:blank"
 
-    html = build_lesson_html(title, items_remote, sent_remote, quiz_url)
+    html_out = build_lesson_html(title, items_remote, sent_remote, quiz_url)
 
     post = create_post(
         wp_base,
         wp_user,
         wp_pass,
         title=title,
-        html=html,
+        html=html_out,
         post_type=wp_post_type,
         status="publish",
     )
+
     print("Published post:")
-    print(post.get("link"))
+    if isinstance(post, dict):
+        print(post.get("link") or post)
+    else:
+        print(post)
 
 
 if __name__ == "__main__":

@@ -4,56 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.1 Image generation issues solved. New WP connection method involved">
-      <change afterPath="$PROJECT_DIR$/skyed/quizzes/builders/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizzes/render/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/quizzes/skins/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.1.1 minor correction DR,FR,VG, NC">
+      <change afterPath="$PROJECT_DIR$/skyed/image_backends.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/prompt_templates.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/assets/comfy/workflow_api.json" beforeDir="false" afterPath="$PROJECT_DIR$/assets/comfy/workflow_api.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/homework.txt" beforeDir="false" afterPath="$PROJECT_DIR$/homework.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/chair.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/lamp.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/rug.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_chair_is_next_to_the_sofa.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_lamp_is_on_the_table.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sent_the_rug_is_under_the_table.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/sofa.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/chair.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/lamp.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/rug.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/sofa.mp3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/chair.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/lamp.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/rug.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/sofa.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/day-1-homework/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-1-homework/quiz.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/skyed/comfy_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/comfy_client.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quiz_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quiz_server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/build.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/build.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/mcq_text.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/builders/mcq_text.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/prepositions_dragdrop.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/builders/prepositions_dragdrop.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/qa_dialog.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/builders/qa_dialog.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/registry.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/registry.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/render/base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/dragdrop.html" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/render/dragdrop.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/mcq.html" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/render/mcq.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/qa.html" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/render/qa.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/render/runtime.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/schema.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/skins/fluent_win11.css" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/skins/fluent_win11.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/skins/sky_brand.css" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizzes/skins/sky_brand.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizgen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizgen.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/tts_edge.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tts_edge.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/quiz_index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/quiz_index.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -210,7 +170,15 @@
       <option name="project" value="LOCAL" />
       <updated>1770649684989</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="2.1.1 minor correction DR,FR,VG, NC">
+      <option name="closed" value="true" />
+      <created>1771010191152</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1771010191152</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -218,6 +186,7 @@
     <MESSAGE value="1.1.9 updated" />
     <MESSAGE value="2.0 New GUI added" />
     <MESSAGE value="2.1 Image generation issues solved. New WP connection method involved" />
-    <option name="LAST_COMMIT_MESSAGE" value="2.1 Image generation issues solved. New WP connection method involved" />
+    <MESSAGE value="2.1.1 minor correction DR,FR,VG, NC" />
+    <option name="LAST_COMMIT_MESSAGE" value="2.1.1 minor correction DR,FR,VG, NC" />
   </component>
 </project>

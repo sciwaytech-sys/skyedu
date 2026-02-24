@@ -52,7 +52,7 @@
     },
     "6": {
       "inputs": {
-        "text": "cute cartoon illustration, clean lines, flat shading, bright cheerful colors, children book style, simple background, centered subject, clear silhouette\nSUBJECT: {subject} (single object, clear, centered, no clutter)",
+        "text": "photo, highly realistic, natural lighting, sharp focus, detailed textures, clean composition, centered subject, plain background, product photo style, studio quality\nSUBJECT: {subject} (single object, clear, centered, no clutter)",
         "clip": [
           "4",
           1
