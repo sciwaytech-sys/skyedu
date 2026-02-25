@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.2 QG,FlUX support added.Quiz_server modified">
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.2.1   QG,FlUX support added.Quiz_server modified">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -186,7 +186,15 @@
       <option name="project" value="LOCAL" />
       <updated>1771962426521</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="2.2.1    QG,FlUX support added.Quiz_server modified">
+      <option name="closed" value="true" />
+      <created>1771981976672</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1771981976672</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -197,6 +205,7 @@
     <MESSAGE value="2.1.1 minor correction DR,FR,VG, NC" />
     <MESSAGE value="2.2 QG,FlUX support added" />
     <MESSAGE value="2.2 QG,FlUX support added.Quiz_server modified" />
-    <option name="LAST_COMMIT_MESSAGE" value="2.2 QG,FlUX support added.Quiz_server modified" />
+    <MESSAGE value="2.2.1   QG,FlUX support added.Quiz_server modified" />
+    <option name="LAST_COMMIT_MESSAGE" value="2.2.1   QG,FlUX support added.Quiz_server modified" />
   </component>
 </project>
