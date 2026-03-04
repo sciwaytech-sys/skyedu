@@ -44,13 +44,17 @@ def build_lesson_html(
     title: str,
     vocab_items: List[Dict[str, str]],
     sentence_items: List[Dict[str, str]],
-    quiz_iframe_url: str,
+    quiz_url: str,
+    *,
+    quiz_embed_mode: str = "embed",  # embed | link | off
+    quiz_note: str = "",
 ) -> str:
     """
     LMS-style lesson page:
       - Vocab grid: each card contains image + EN+CN + audio (EN+CN).
       - Sentences section: EN+CN line pairs + audio (EN+CN).
-      - Quiz embedded below via iframe.
+      - Quiz block: always shows a "Start Quiz" button when URL is available.
+        iframe is optional (Tutor LMS may sanitize/limit iframe/script behavior).
     """
     css = """
     <style>
@@ -86,6 +90,12 @@ def build_lesson_html(
       .skyed-sent .txt b{color:#0f172a;}
       .skyed-sent .aud{display:flex;flex-direction:column;gap:8px;}
 
+      .quizbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 12px;}
+      .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:999px;
+           text-decoration:none;font-weight:800;border:1px solid rgba(255,255,255,.25);}
+      .btn-primary{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff;}
+      .btn-ghost{background:#fff;color:#0f172a;border:1px solid var(--stroke);}
+      .warn{background:#fff7ed;border:1px solid rgba(249,115,22,.25);color:#9a3412;border-radius:14px;padding:10px 12px;}
       iframe{width:100%;height:900px;border:0;border-radius:16px;box-shadow:var(--shadow);background:#fff;}
     </style>
     """
@@ -149,6 +159,24 @@ def build_lesson_html(
         row.append("</div></div>")
         sent_cards.append("".join(row))
 
+    q_url = (quiz_url or "").strip()
+    embed = (quiz_embed_mode or "embed").strip().lower() == "embed"
+    link_ok = bool(q_url) and q_url.lower() != "about:blank"
+
+    # For Tutor LMS safety: show button always when link exists; embed iframe only if allowed.
+    quiz_block = []
+    if quiz_note:
+        quiz_block.append(f'<div class="warn">{_h(quiz_note)}</div>')
+    quiz_block.append('<div class="quizbar">')
+    if link_ok:
+        quiz_block.append(f'<a class="btn btn-primary" href="{_hu(q_url)}" target="_blank" rel="noopener">▶ Start Quiz</a>')
+        quiz_block.append(f'<a class="btn btn-ghost" href="{_hu(q_url)}">Open here</a>')
+    else:
+        quiz_block.append('<span class="warn">Quiz URL not configured. Set QUIZ_PUBLIC_BASE to host quiz files.</span>')
+    quiz_block.append('</div>')
+    if embed and link_ok:
+        quiz_block.append(f'<iframe src="{_hu(q_url)}" loading="lazy"></iframe>')
+
     html_out = f"""{css}
     <div class="wrap">
       <div class="hero">
@@ -168,7 +196,7 @@ def build_lesson_html(
       </div>
 
       <div class="h3">Quiz</div>
-      <iframe src="{_hu(quiz_iframe_url)}" loading="lazy"></iframe>
+      {''.join(quiz_block)}
     </div>
     """
     return html_out
@@ -191,9 +219,11 @@ def main() -> None:
     ap.add_argument("--lesson_title", default=None)
     ap.add_argument("--publish", action="store_true", help="If set, upload to WordPress and create post/page")
     ap.add_argument("--publish-only", action="store_true", help="Publish from existing output folder (no generation)")
+    ap.add_argument("--dry-run", action="store_true", help="Skip image+audio generation (debug/validation)")
     args = ap.parse_args()
 
-    wp_base = os.getenv("WP_BASE_URL", "").strip()
+    # Support both WP_BASE_URL and WP_BASE (older runs/configs).
+    wp_base = (os.getenv("WP_BASE_URL", "").strip() or os.getenv("WP_BASE", "").strip())
     wp_user = os.getenv("WP_USER", "").strip()
     wp_pass = os.getenv("WP_APP_PASSWORD", "").strip()
     wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # page works normally in your setup
@@ -203,13 +233,17 @@ def main() -> None:
 
     # Quiz hosting base (NOT WordPress permalinks). If not set, we still generate local quiz files.
     quiz_public_base = os.getenv("QUIZ_PUBLIC_BASE", "").rstrip("/")
+    quiz_embed_mode = (os.getenv("QUIZ_EMBED_MODE", "embed") or "embed").strip().lower()
 
     hw_text = Path(args.input).read_text(encoding="utf-8", errors="ignore")
     spec = parse_homework_text(hw_text)
 
+    dry_run = bool(args.dry_run) or (os.getenv("SKYED_DRY_RUN", "").strip().lower() in ("1", "true", "yes", "on"))
+
     title = args.lesson_title or spec.get("title", "Homework")
     slug = slugify(title)
-    lesson_root = ensure_dir(output_dir / slug)
+    # NOTE: do not create output folder eagerly in --publish-only mode.
+    lesson_root = (output_dir / slug)
 
     # Useful debug dump for every run (helps inspect parser output quickly)
     try:
@@ -224,7 +258,15 @@ def main() -> None:
     if args.publish_only:
         if not lesson_root.exists():
             raise RuntimeError(f"--publish-only requested, but lesson output folder not found: {lesson_root}")
+        # sanity check
+        if not (lesson_root / "lesson.html").exists():
+            raise RuntimeError(
+                "--publish-only requested, but lesson.html is missing.\n"
+                f"Expected: {lesson_root / 'lesson.html'}\n"
+                "Run generation first (without --publish-only)."
+            )
     else:
+        lesson_root = ensure_dir(lesson_root)
         # Clean previous run
         for name in ("cards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json"):
             p = lesson_root / name
@@ -257,9 +299,14 @@ def main() -> None:
                 "#Vocabulary（词汇）：table, chair, ..."
             )
 
-        # Generate cards + audio (EN + ZH for vocab + sentences)
-        card_files = generate_vocab_cards(spec, font_path, cards_dir)
-        audio_files = generate_audio(spec, audio_dir)
+        if dry_run:
+            print("[DRY RUN] Skipping image + audio generation.")
+            card_files = []
+            audio_files = []
+        else:
+            # Generate cards + audio (EN + ZH for vocab + sentences)
+            card_files = generate_vocab_cards(spec, font_path, cards_dir)
+            audio_files = generate_audio(spec, audio_dir)
 
         # Keep variables referenced so linters don't complain in stricter configs
         _ = (card_files, audio_files)
@@ -321,7 +368,14 @@ def main() -> None:
         sent_local.append({"en": en_txt, "zh": zh_txt, "audio_en": a_en_rel, "audio_zh": a_zh_rel})
 
     # Local quiz iframe points to local index.html (works as file)
-    lesson_html_local = build_lesson_html(title, items_local, sent_local, quiz_iframe_url="index.html")
+    lesson_html_local = build_lesson_html(
+        title,
+        items_local,
+        sent_local,
+        quiz_url="index.html",
+        quiz_embed_mode="embed",
+        quiz_note="",
+    )
     (lesson_root / "lesson.html").write_text(lesson_html_local, encoding="utf-8")
 
     print(f"Generated: {lesson_root}")
@@ -391,13 +445,22 @@ def main() -> None:
     # Remote quiz URL:
     # If QUIZ_PUBLIC_BASE is configured to a real static host (recommended), use it.
     # Otherwise, do NOT point iframe back to the WordPress lesson permalink (prevents recursion).
+    quiz_note = ""
     if quiz_public_base:
         quiz_url = f"{quiz_public_base}/{slug}/index.html"
     else:
-        # Safe fallback: no iframe (avoid recursive embed)
-        quiz_url = "about:blank"
+        # IMPORTANT: do NOT silently embed about:blank (looks like "quiz missing").
+        quiz_url = ""
+        quiz_note = "Quiz hosting is not configured. Set QUIZ_PUBLIC_BASE to a static host (recommended)."
 
-    html_out = build_lesson_html(title, items_remote, sent_remote, quiz_url)
+    html_out = build_lesson_html(
+        title,
+        items_remote,
+        sent_remote,
+        quiz_url,
+        quiz_embed_mode=quiz_embed_mode,
+        quiz_note=quiz_note,
+    )
 
     post = create_post(
         wp_base,

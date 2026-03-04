@@ -1306,12 +1306,41 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
         env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
 
+        # Persist current toolbar selections + image settings
+        self.cfg.picture_cards_type = self.combo_picture.currentText().strip() or self.cfg.picture_cards_type
+        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
+        self._capture_image_tab_settings()
+        save_config(self.cfg_path, self.cfg)
+
+        # Pass image backend config to pipeline via env
+        env["PICTURE_CARDS_TYPE"] = self.cfg.picture_cards_type
+        env["IMG_BACKEND"] = self.cfg.image_backend
+        env["IMG_WIDTH"] = str(int(self.cfg.img_width))
+        env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
+        env["IMG_STEPS"] = str(int(self.cfg.img_steps))
+        env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
+        env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
+        env["IMG_MAX_RETRIES"] = str(int(os.getenv("IMG_MAX_RETRIES", "2")))
+
+        env["CF_ACCOUNT_ID"] = str(self.cfg.cf_account_id)
+        env["CF_API_TOKEN"] = str(self.cfg.cf_api_token)
+        env["CF_MODEL"] = str(self.cfg.cf_model)
+
+        env["HF_IMAGE_ENDPOINT_URL"] = str(self.cfg.hf_image_endpoint_url or "")
+        env["HF_TOKEN"] = str(self.cfg.hf_token)
+        env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
+
         # ensure pipeline uses same workflow path
         wf = self.resolve_workflow_path()
         env["COMFY_URL"] = str(self.cfg.comfy_url)
         env["COMFY_WORKFLOW"] = str(wf)
 
         self.append_log(f"[Images] COMFY_WORKFLOW={wf} exists={wf.exists()}\n")
+        self.append_log(
+            f"[Images] BACKEND={self.cfg.image_backend} STYLE={self.cfg.picture_cards_type} "
+            f"W={self.cfg.img_width} H={self.cfg.img_height} STEPS={self.cfg.img_steps} "
+            f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency}\n"
+        )
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
     def stop_pipeline(self) -> None:

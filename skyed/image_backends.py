@@ -47,6 +47,7 @@ def _ensure_png_bytes(raw: bytes) -> bytes:
 class ImageGenRequest:
     subject: str
     style: str  # 'realistic' | 'cartoon'
+    render_mode: str = "single_object"  # single_object|action_scene|contrast_pair|attribute_scene|icon_card|text_card
     width: int = 768
     height: int = 768
     steps: int = 20
@@ -85,7 +86,7 @@ class CloudflareFluxBackend(BaseImageBackend):
 
         seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
 
-        pos, _neg = render_prompts(req.style, req.subject)
+        pos, _neg = render_prompts(req.style, req.subject, req.render_mode)
         # Flux API does not document negative_prompt/size params; keep prompt compact.
         payload: Dict[str, Any] = {
             "prompt": pos,
@@ -116,7 +117,7 @@ class HuggingFaceEndpointBackend(BaseImageBackend):
         if not self.token:
             raise ValueError("HF_TOKEN missing")
 
-        pos, neg = render_prompts(req.style, req.subject)
+        pos, neg = render_prompts(req.style, req.subject, req.render_mode)
         if req.negative_prompt:
             neg = req.negative_prompt
 
@@ -173,7 +174,7 @@ class ComfyUIBackend(BaseImageBackend):
 
     def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 600) -> bytes:
         from .comfy_client import generate_image_bytes  # local import to avoid cycles
-        pos, neg = render_prompts(req.style, req.subject)
+        pos, neg = render_prompts(req.style, req.subject, req.render_mode)
         seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
         return generate_image_bytes(
             comfy_url=self.base_url,
@@ -187,8 +188,36 @@ class ComfyUIBackend(BaseImageBackend):
         )
 
 
+class NoopBackend(BaseImageBackend):
+    """Debug backend: returns a placeholder PNG.
+
+    Useful to validate pipeline outputs without any image backend.
+    """
+
+    name = "noop"
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 180) -> bytes:
+        from PIL import Image, ImageDraw, ImageFont
+
+        W, H = int(req.width), int(req.height)
+        img = Image.new("RGB", (max(64, W), max(64, H)), (240, 245, 250))
+        d = ImageDraw.Draw(img)
+        msg = f"NOOP\n{req.render_mode}\n{(req.subject or '')[:64]}"
+        try:
+            f = ImageFont.load_default()
+        except Exception:
+            f = None
+        d.text((12, 12), msg, fill=(20, 40, 80), font=f)
+        out = BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+
+
 def backend_from_env() -> Tuple[BaseImageBackend, str]:
     name = (os.environ.get("IMG_BACKEND") or "comfyui").strip().lower()
+    if name in ("none", "noop", "debug"):
+        b = NoopBackend()
+        return b, b.name
     if name in ("cloudflare", "cloudflare_flux", "cf", "flux"):
         b = CloudflareFluxBackend(
             account_id=os.environ.get("CF_ACCOUNT_ID", ""),

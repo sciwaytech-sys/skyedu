@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 class VocabItem:
     en: str
     zh: str = ""
+    pos: str = ""  # optional: noun|verb|adjective
 
 
 @dataclass
@@ -43,21 +44,69 @@ def _parse_vocab_token(tok: str) -> VocabItem:
     if not t:
         return VocabItem(en="", zh="")
 
-    # table - 桌子
+    def _norm_pos(p: str) -> str:
+        p = (p or "").strip().lower()
+        if p in ("n", "noun"):
+            return "noun"
+        if p in ("v", "verb"):
+            return "verb"
+        if p in ("adj", "adjective"):
+            return "adjective"
+        return ""
+
+    def _extract_pos_prefix(s: str) -> tuple[str, str]:
+        # Examples:
+        #   v: jump
+        #   adj: big
+        m = re.match(r"^(n|noun|v|verb|adj|adjective)\s*:\s*(.+)$", s, flags=re.IGNORECASE)
+        if m:
+            return _norm_pos(m.group(1)), (m.group(2) or "").strip()
+        return "", s
+
+    def _extract_pos_suffix(s: str) -> tuple[str, str]:
+        # Examples:
+        #   jump/v
+        #   big/adj
+        m = re.match(r"^(.+?)/(n|noun|v|verb|adj|adjective)$", s, flags=re.IGNORECASE)
+        if m:
+            return _norm_pos(m.group(2)), (m.group(1) or "").strip()
+        return "", s
+
+    def _extract_pos_parens(s: str) -> tuple[str, str]:
+        # Examples:
+        #   jump (v)
+        #   big (adj)
+        m = re.match(r"^(.+?)\s*[（(]\s*(n|noun|v|verb|adj|adjective)\s*[）)]\s*$", s, flags=re.IGNORECASE)
+        if m:
+            return _norm_pos(m.group(2)), (m.group(1) or "").strip()
+        return "", s
+
+    # Split EN and ZH first (supports "table - 桌子")
+    en_part = t
+    zh_part = ""
     if "-" in t:
         left, right = t.split("-", 1)
-        en = left.strip()
-        zh = right.strip()
-        return VocabItem(en=en, zh=zh)
+        en_part = left.strip()
+        zh_part = right.strip()
 
-    # table(桌子) / table（桌子）
-    m = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", t)
-    if m:
-        en = (m.group(1) or "").strip()
-        zh = (m.group(2) or "").strip()
-        return VocabItem(en=en, zh=zh)
+    # table(桌子) / table（桌子） (ZH in parens)
+    mzh = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", en_part)
+    if mzh and _has_zh(mzh.group(2) or ""):
+        en_part = (mzh.group(1) or "").strip()
+        zh_part = (mzh.group(2) or "").strip()
 
-    return VocabItem(en=t, zh="")
+    # Extract POS from EN part
+    pos, en_part2 = _extract_pos_prefix(en_part)
+    if not pos:
+        pos, en_part2 = _extract_pos_suffix(en_part)
+    if not pos:
+        # Only treat parens as POS if it is not Chinese
+        pos, en_part2 = _extract_pos_parens(en_part)
+    en_part = en_part2.strip()
+
+    # If we didn't extract ZH earlier and we still have a parens form that is NOT POS, keep as EN.
+
+    return VocabItem(en=en_part, zh=zh_part, pos=pos)
 
 
 def parse_homework_text(text: str) -> Dict:
@@ -203,7 +252,10 @@ def parse_homework_text(text: str) -> Dict:
 
     return {
         "title": title,
-        "vocab": [{"en": v.en, "zh": v.zh} for v in dedup_vocab],
+        "vocab": [
+            {"en": v.en, "zh": v.zh, **({"pos": v.pos} if v.pos else {})}
+            for v in dedup_vocab
+        ],
         "sentences": norm_sents,
         "qa": [{"q": x.q, "a": x.a} for x in qa],
     }

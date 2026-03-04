@@ -6,7 +6,10 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-import edge_tts  # type: ignore
+try:
+    import edge_tts  # type: ignore
+except Exception:  # pragma: no cover
+    edge_tts = None
 
 
 def _slugify(s: str) -> str:
@@ -22,6 +25,11 @@ def _rate_string(rate_percent: int) -> str:
 
 async def _synth_to_mp3(text: str, voice: str, rate: str, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    if edge_tts is None:
+        raise RuntimeError(
+            "edge-tts is not installed in this Python environment. "
+            "Install it with: pip install edge-tts"
+        )
     comm = edge_tts.Communicate(text, voice=voice, rate=rate)
     await comm.save(str(out_path))
 

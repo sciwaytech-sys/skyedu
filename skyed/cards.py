@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -11,6 +12,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .image_backends import ImageGenRequest, backend_from_env
 from .prompt_templates import normalize_style
+from .image_planner import build_image_plans, PlannedItem
 
 
 def slugify(s: str) -> str:
@@ -137,7 +139,10 @@ def _normalize_vocab(spec: Dict[str, Any]) -> List[Dict[str, str]]:
                 en = str(it).strip()
                 zh = ""
             if en:
-                out.append({"en": en, "zh": zh})
+                pos = ""
+                if isinstance(it, dict):
+                    pos = str(it.get("pos") or "").strip().lower()
+                out.append({"en": en, "zh": zh, "pos": pos})
     return out
 
 
@@ -185,6 +190,30 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     ai_dir.mkdir(parents=True, exist_ok=True)
 
     vocab = _normalize_vocab(spec)
+    plans: List[PlannedItem] = build_image_plans(spec)
+
+    # Debug dump: how each vocab item was planned (POS + render_mode + subject phrase)
+    try:
+        (out_dir / "image_plans.json").write_text(
+            __import__("json").dumps(
+                [
+                    {
+                        "en": p.en,
+                        "zh": p.zh,
+                        "pos": p.pos,
+                        "render_mode": p.render_mode,
+                        "subject": p.subject,
+                        "fallback_mode": p.fallback_mode,
+                    }
+                    for p in plans
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
     results: List[Path] = []
 
     # Status marker for debugging
@@ -208,6 +237,36 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     status_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # Generate AI images first (possibly concurrently)
+    def _looks_blank(png_bytes: bytes) -> bool:
+        """Heuristic blank/gray detection.
+
+        Note: flashcard-style images can have large flat backgrounds.
+        We only treat as blank if variance is extremely low.
+        """
+        try:
+            im = Image.open(BytesIO(png_bytes)).convert("L")
+            # downscale for speed
+            im = im.resize((128, 128))
+            hist = im.histogram()
+            total = sum(hist)
+            if total <= 0:
+                return True
+            mean = sum(i * c for i, c in enumerate(hist)) / float(total)
+            var = sum(((i - mean) ** 2) * c for i, c in enumerate(hist)) / float(total)
+            return var < 1.0  # extremely flat
+        except Exception:
+            return False
+
+    def _int_env2(name: str, default: int) -> int:
+        try:
+            return int(str(os.environ.get(name, "")).strip() or default)
+        except Exception:
+            return default
+
+    max_retries = _int_env2("IMG_MAX_RETRIES", 2)
+
+    plan_by_word = {p.en.strip().lower(): p for p in plans}
+
     def _gen_one(en_word: str) -> Tuple[str, Optional[str]]:
         slug = slugify(en_word)
         ai_png = ai_dir / f"{slug}.png"
@@ -216,23 +275,39 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         if ai_png.exists() and ai_png.stat().st_size > 0 and not fail_marker.exists():
             return en_word, None
 
-        try:
-            req = ImageGenRequest(
-                subject=en_word,
-                style=style,
-                width=width,
-                height=height,
-                steps=steps,
-                seed=None,
-            )
-            png_bytes = backend.generate_png(req, timeout_s=timeout_s)
-            ai_png.write_bytes(png_bytes)
-            if fail_marker.exists():
-                fail_marker.unlink(missing_ok=True)
-            return en_word, None
-        except Exception as e:
-            fail_marker.write_text(f"{type(e).__name__}: {e}", encoding="utf-8")
-            return en_word, f"{type(e).__name__}: {e}"
+        planned = plan_by_word.get(en_word.strip().lower())
+        subj = planned.subject if planned else en_word
+        mode = planned.render_mode if planned else "single_object"
+
+        last_err: Optional[str] = None
+        import hashlib
+        base_seed = int(hashlib.sha256((subj or en_word).encode("utf-8")).hexdigest()[:8], 16)
+
+        for attempt in range(0, max(0, max_retries) + 1):
+            try:
+                req = ImageGenRequest(
+                    subject=subj,
+                    style=style,
+                    render_mode=mode,
+                    width=width,
+                    height=height,
+                    steps=steps,
+                    seed=None if attempt == 0 else (base_seed + attempt),
+                )
+                png_bytes = backend.generate_png(req, timeout_s=timeout_s)
+                if _looks_blank(png_bytes):
+                    last_err = "Blank/near-blank output detected"
+                    continue
+                ai_png.write_bytes(png_bytes)
+                if fail_marker.exists():
+                    fail_marker.unlink(missing_ok=True)
+                return en_word, None
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                continue
+
+        fail_marker.write_text(str(last_err or "Unknown error"), encoding="utf-8")
+        return en_word, str(last_err or "Unknown error")
 
     if vocab:
         if concurrency <= 1:
