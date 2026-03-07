@@ -169,10 +169,10 @@ def build_lesson_html(
         quiz_block.append(f'<div class="warn">{_h(quiz_note)}</div>')
     quiz_block.append('<div class="quizbar">')
     if link_ok:
-        quiz_block.append(f'<a class="btn btn-primary" href="{_hu(q_url)}" target="_blank" rel="noopener">▶ Start Quiz</a>')
+        quiz_block.append(f'<a class="btn btn-primary" href="{_hu(q_url)}" target="_blank" rel="noopener">▶ Start Practice</a>')
         quiz_block.append(f'<a class="btn btn-ghost" href="{_hu(q_url)}">Open here</a>')
     else:
-        quiz_block.append('<span class="warn">Quiz URL not configured. Set QUIZ_PUBLIC_BASE to host quiz files.</span>')
+        quiz_block.append('<span class="warn">Practice URL not configured. Configure QUIZ_PUBLIC_BASE only if you want a separate hosted practice page.</span>')
     quiz_block.append('</div>')
     if embed and link_ok:
         quiz_block.append(f'<iframe src="{_hu(q_url)}" loading="lazy"></iframe>')
@@ -181,7 +181,7 @@ def build_lesson_html(
     <div class="wrap">
       <div class="hero">
         <h2>{_h(title)}</h2>
-        <div class="sub">Vocabulary → Sentences → Quiz</div>
+        <div class="sub">Vocabulary → Sentences → Practice</div>
       </div>
 
       <div class="h3">Vocabulary Cards</div>
@@ -195,7 +195,7 @@ def build_lesson_html(
         {''.join(sent_cards)}
       </div>
 
-      <div class="h3">Quiz</div>
+      <div class="h3">Practice</div>
       {''.join(quiz_block)}
     </div>
     """
@@ -209,6 +209,34 @@ def _audio_rel_key(audio_root: Path, f: Path) -> str:
     except Exception:
         # fallback (shouldn't normally happen)
         return f.name
+
+
+def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str]) -> Dict:
+    """Map local cards/<stem>.png references inside practice JSON to uploaded WP media URLs."""
+    if not isinstance(practice, dict):
+        return practice
+
+    def map_img(value: str) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return raw
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        path = Path(raw)
+        if path.parts and path.parts[0] == "cards":
+            stem = path.stem
+            return card_url_by_stem.get(stem, raw)
+        return raw
+
+    for q in practice.get("questions", []) or []:
+        if not isinstance(q, dict):
+            continue
+        if "prompt_image" in q:
+            q["prompt_image"] = map_img(q.get("prompt_image", ""))
+        for choice in q.get("choices", []) or []:
+            if isinstance(choice, dict) and "img" in choice:
+                choice["img"] = map_img(choice.get("img", ""))
+    return practice
 
 
 def main() -> None:
@@ -227,6 +255,8 @@ def main() -> None:
     wp_user = os.getenv("WP_USER", "").strip()
     wp_pass = os.getenv("WP_APP_PASSWORD", "").strip()
     wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # page works normally in your setup
+    wp_render_mode = (os.getenv("WP_RENDER_MODE", "shortcode") or "shortcode").strip().lower()
+    lesson_theme = (os.getenv("WP_LESSON_THEME", "sky") or "sky").strip().lower()
 
     output_dir = Path(os.getenv("OUTPUT_DIR", "output"))
     font_path = os.getenv("FONT_PATH", "").strip() or None
@@ -382,7 +412,8 @@ def main() -> None:
     print(f"Lesson local path: {(lesson_root / 'lesson.html')}")
     print(f"Quiz local path: {(lesson_root / 'index.html')}")
 
-    if not args.publish:
+    do_publish = bool(args.publish or args.publish_only)
+    if not do_publish:
         print("Skipping publish. Use --publish to upload + create page/post.")
         return
 
@@ -442,36 +473,86 @@ def main() -> None:
             }
         )
 
-    # Remote quiz URL:
-    # If QUIZ_PUBLIC_BASE is configured to a real static host (recommended), use it.
-    # Otherwise, do NOT point iframe back to the WordPress lesson permalink (prevents recursion).
+    # Remote practice URL:
+    # If QUIZ_PUBLIC_BASE is configured to a real static host, use it.
+    # Otherwise shortcode mode will render in-page practice from payload.
     quiz_note = ""
     if quiz_public_base:
         quiz_url = f"{quiz_public_base}/{slug}/index.html"
     else:
-        # IMPORTANT: do NOT silently embed about:blank (looks like "quiz missing").
         quiz_url = ""
-        quiz_note = "Quiz hosting is not configured. Set QUIZ_PUBLIC_BASE to a static host (recommended)."
+        quiz_note = "In-page practice is enabled. Static practice hosting is not configured."
 
-    html_out = build_lesson_html(
-        title,
-        items_remote,
-        sent_remote,
-        quiz_url,
-        quiz_embed_mode=quiz_embed_mode,
-        quiz_note=quiz_note,
-    )
+    if wp_render_mode in ("raw_html", "html"):
+        # Legacy mode: publish full HTML into a Gutenberg Custom HTML block.
+        # NOTE: requires unfiltered_html capability for the API user, otherwise WP will strip <style>/<audio>/<iframe> etc.
+        html_out = build_lesson_html(
+            title,
+            items_remote,
+            sent_remote,
+            quiz_url,
+            quiz_embed_mode=quiz_embed_mode,
+            quiz_note=quiz_note,
+        )
 
-    post = create_post(
-        wp_base,
-        wp_user,
-        wp_pass,
-        title=title,
-        html=html_out,
-        post_type=wp_post_type,
-        status="publish",
-    )
+        post = create_post(
+            wp_base,
+            wp_user,
+            wp_pass,
+            title=title,
+            html=html_out,
+            post_type=wp_post_type,
+            status="publish",
+            content_mode="html_block",
+        )
+    else:
+        # Recommended mode: publish a shortcode block that renders the lesson via a WP plugin.
+        # This survives restrictive WP roles (no unfiltered_html) and allows real styling + audio + quiz JS.
+        quiz_dict = {}
+        try:
+            qp = lesson_root / "quiz.json"
+            if qp.exists():
+                quiz_dict = json.loads(qp.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            quiz_dict = {}
 
+        quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem)
+
+        payload = {
+            "title": title,
+            "slug": slug,
+            "vocab": items_remote,
+            "sentences": sent_remote,
+            "quiz": quiz_dict,
+            "practice": quiz_dict,
+            "meta": {
+                "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+                "quiz_public_base": quiz_public_base,
+                "quiz_embed_mode": quiz_embed_mode,
+                "theme_variant": lesson_theme,
+            },
+        }
+
+        payload_path = lesson_root / "lesson_payload.txt"
+        payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        payload_media = upload_media(wp_base, wp_user, wp_pass, payload_path)
+        data_url = (payload_media or {}).get("source_url") or ""
+        if not data_url:
+            raise RuntimeError("Failed to upload lesson_payload.txt to WordPress (no source_url).")
+
+        shortcode = f'[skyed_lesson data_url="{data_url}" theme="{lesson_theme}"]'
+
+        post = create_post(
+            wp_base,
+            wp_user,
+            wp_pass,
+            title=title,
+            html=shortcode,
+            post_type=wp_post_type,
+            status="publish",
+            content_mode="shortcode_block",
+        )
     print("Published post:")
     if isinstance(post, dict):
         print(post.get("link") or post)

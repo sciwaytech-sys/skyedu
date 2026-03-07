@@ -3,14 +3,40 @@
   "questions": [
     {
       "type": "mcq",
+      "q": "What’s this?",
+      "choices": [
+        "选项C",
+        "It’s a table/chair/lamp/box/picture.",
+        "选项A",
+        "选项B"
+      ],
+      "answer_index": 1
+    },
+    {
+      "type": "tf",
+      "q": "True or False: This is a picture.",
+      "answer_bool": false
+    },
+    {
+      "type": "mcq",
       "q": "Choose the correct sentence:",
       "choices": [
-        "It’s big.",
-        "This is a picture.",
-        "This is a table.",
-        "It’s small."
+        "This is a chair.",
+        "This is a box.",
+        "It’s small.",
+        "I see a lamp."
       ],
-      "answer_index": 3
+      "answer_index": 2
+    },
+    {
+      "type": "tf",
+      "q": "True or False: It’s small.",
+      "answer_bool": false
+    },
+    {
+      "type": "tf",
+      "q": "True or False: This is a table.",
+      "answer_bool": true
     },
     {
       "type": "tf",
@@ -24,46 +50,14 @@
     },
     {
       "type": "mcq",
-      "q": "Choose the correct sentence:",
+      "q": "What can you see?",
       "choices": [
-        "This is a table.",
-        "It’s small.",
-        "I see a lamp.",
-        "It’s big."
-      ],
-      "answer_index": 0
-    },
-    {
-      "type": "mcq",
-      "q": "What’s this?",
-      "choices": [
-        "选项A",
         "选项B",
-        "It’s a table/chair/lamp/box/picture.",
-        "选项C"
-      ],
-      "answer_index": 2
-    },
-    {
-      "type": "tf",
-      "q": "True or False: This is a picture.",
-      "answer_bool": false
-    },
-    {
-      "type": "mcq",
-      "q": "Is it big or small?",
-      "choices": [
-        "选项A",
+        "I can see a ____.",
         "选项C",
-        "选项B",
-        "It’s big. / It’s small."
+        "选项A"
       ],
-      "answer_index": 3
-    },
-    {
-      "type": "tf",
-      "q": "True or False: It’s small.",
-      "answer_bool": false
+      "answer_index": 1
     }
   ]
 }

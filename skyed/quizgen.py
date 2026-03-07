@@ -1,235 +1,408 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import random
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
-from .utils import ensure_dir
+from .image_planner import ANTONYM_PAIRS, infer_pos_map
+from .utils import ensure_dir, slugify as card_slugify
 
 
-def _as_sentence_strings(sentences: Any) -> List[str]:
-    """
-    Accepts:
-      - list[str]
-      - list[{"en":..., "zh":...}]
-    Returns a clean list of EN sentences (strings).
-    """
-    out: List[str] = []
-    if not sentences:
+QUESTION_LIMIT_DEFAULT = 8
+
+
+def _as_sentence_dicts(sentences: Any) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    if not isinstance(sentences, list):
         return out
-
-    if isinstance(sentences, list):
-        for s in sentences:
-            if isinstance(s, str):
-                t = s.strip()
-                if t:
-                    out.append(t)
-            elif isinstance(s, dict):
-                en = str(s.get("en") or "").strip()
-                # Prefer EN-only to keep MCQ readable.
-                if en:
-                    out.append(en)
+    for s in sentences:
+        if isinstance(s, str):
+            t = s.strip()
+            if t:
+                out.append({"en": t, "zh": ""})
+        elif isinstance(s, dict):
+            en = str(s.get("en") or "").strip()
+            zh = str(s.get("zh") or "").strip()
+            if en or zh:
+                out.append({"en": en, "zh": zh})
     return out
 
 
-def _dedupe_preserve(items: List[str]) -> List[str]:
+def _dedupe_preserve(items: Sequence[str]) -> List[str]:
     seen = set()
     out: List[str] = []
     for x in items:
-        if not x:
+        t = str(x or "").strip()
+        if not t or t in seen:
             continue
-        if x in seen:
-            continue
-        seen.add(x)
-        out.append(x)
+        seen.add(t)
+        out.append(t)
     return out
 
 
-def _make_mcq(q: str, correct: str, pool: List[str], n_choices: int = 4) -> Dict[str, Any]:
-    correct = str(correct or "").strip() or "—"
-    q = str(q or "").strip()
+def _norm_word(w: str) -> str:
+    return re.sub(r"\s+", " ", str(w or "").strip().lower())
 
-    # Remove duplicates and exclude correct from distractor pool
-    pool2 = _dedupe_preserve([str(x).strip() for x in pool if str(x).strip() and str(x).strip() != correct])
-    random.shuffle(pool2)
 
-    choices = [correct]
-    for x in pool2:
-        if len(choices) >= n_choices:
-            break
-        choices.append(x)
+def _seed_from_spec(spec: Dict[str, Any]) -> int:
+    base = json.dumps(
+        {
+            "title": spec.get("title", ""),
+            "vocab": spec.get("vocab", []),
+            "sentences": spec.get("sentences", []),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return int(hashlib.sha1(base.encode("utf-8")).hexdigest()[:8], 16)
 
-    # Fill with unique placeholders if needed (avoid repeated '—')
-    placeholder_idx = 1
-    while len(choices) < n_choices:
-        filler = f"— {placeholder_idx}"
-        if filler not in choices:
-            choices.append(filler)
-        placeholder_idx += 1
 
-    random.shuffle(choices)
+def _blank_word(sentence: str, word: str) -> Optional[str]:
+    if not sentence or not word:
+        return None
+    pattern = re.compile(rf"\b{re.escape(word)}\b", flags=re.IGNORECASE)
+    if not pattern.search(sentence):
+        return None
+    return pattern.sub("____", sentence, count=1)
 
+
+class Entry(dict):
+    @property
+    def en(self) -> str:
+        return str(self.get("en") or "").strip()
+
+    @property
+    def zh(self) -> str:
+        return str(self.get("zh") or "").strip()
+
+    @property
+    def pos(self) -> str:
+        return str(self.get("pos") or "noun").strip().lower() or "noun"
+
+    @property
+    def image(self) -> str:
+        return str(self.get("img") or "").strip()
+
+
+def _build_entries(spec: Dict[str, Any]) -> List[Entry]:
+    pos_map = infer_pos_map(spec)
+    entries: List[Entry] = []
+    for raw in spec.get("vocab", []) or []:
+        if not isinstance(raw, dict):
+            continue
+        en = str(raw.get("en") or "").strip()
+        if not en:
+            continue
+        zh = str(raw.get("zh") or "").strip()
+        pos = str(raw.get("pos") or pos_map.get(_norm_word(en), "noun")).strip().lower() or "noun"
+        img = f"cards/{card_slugify(en)}.png"
+        entries.append(Entry(en=en, zh=zh, pos=pos, img=img))
+    return entries
+
+
+def _choice_text(text: str, *, subtext: str = "") -> Dict[str, Any]:
+    return {"text": text, "subtext": subtext}
+
+
+def _choice_image(img: str, *, text: str = "", subtext: str = "") -> Dict[str, Any]:
+    return {"img": img, "text": text, "subtext": subtext}
+
+
+def _mcq(
+    *,
+    q: str,
+    choices: List[Any],
+    answer_index: int,
+    kind: str,
+    prompt_image: str = "",
+    helper: str = "",
+) -> Dict[str, Any]:
     return {
         "type": "mcq",
+        "kind": kind,
         "q": q,
         "choices": choices,
-        "answer_index": choices.index(correct),
+        "answer_index": int(answer_index),
+        **({"prompt_image": prompt_image} if prompt_image else {}),
+        **({"helper": helper} if helper else {}),
     }
 
 
-def _make_mcq_from_qa(qa: Dict[str, Any], distractors: List[str]) -> Dict[str, Any]:
-    return _make_mcq(q=str(qa["q"]), correct=str(qa["a"]), pool=distractors, n_choices=4)
+def _sample_others(rng: random.Random, items: Sequence[Entry], exclude_en: str, n: int) -> List[Entry]:
+    pool = [x for x in items if _norm_word(x.en) != _norm_word(exclude_en)]
+    rng.shuffle(pool)
+    return pool[:n]
 
 
-def _choose_correct_sentence_mcq(sentences: List[str]) -> List[Dict[str, Any]]:
-    """
-    For each sentence, build an MCQ where correct option is the original sentence,
-    distractors are other sentences.
-    """
-    sents = [s.strip() for s in (sentences or []) if isinstance(s, str) and s.strip()]
-    sents = _dedupe_preserve(sents)
-    if len(sents) < 2:
+def _build_word_to_picture(entries: List[Entry], rng: random.Random) -> List[Dict[str, Any]]:
+    usable = [e for e in entries if e.image]
+    if len(usable) < 2:
+        return []
+    rng.shuffle(usable)
+    out: List[Dict[str, Any]] = []
+    for correct in usable:
+        same_pos = [e for e in usable if e.pos == correct.pos and _norm_word(e.en) != _norm_word(correct.en)]
+        distractors = same_pos[:]
+        rng.shuffle(distractors)
+        if len(distractors) < 3:
+            extra = _sample_others(rng, usable, correct.en, 3)
+            for x in extra:
+                if all(_norm_word(x.en) != _norm_word(y.en) for y in distractors):
+                    distractors.append(x)
+        distractors = distractors[:3]
+        if len(distractors) < 2:
+            continue
+        options = distractors + [correct]
+        rng.shuffle(options)
+        choices = [_choice_image(opt.image, text="", subtext=opt.en) for opt in options]
+        out.append(
+            _mcq(
+                q=f"Tap the picture for: {correct.en}",
+                choices=choices,
+                answer_index=options.index(correct),
+                kind="word_to_picture",
+                helper="Look carefully at the picture cards.",
+            )
+        )
+    return out
+
+
+def _build_picture_to_word(entries: List[Entry], rng: random.Random) -> List[Dict[str, Any]]:
+    usable = [e for e in entries if e.image]
+    if len(usable) < 2:
+        return []
+    rng.shuffle(usable)
+    out: List[Dict[str, Any]] = []
+    for correct in usable:
+        same_pos = [e for e in entries if e.pos == correct.pos and _norm_word(e.en) != _norm_word(correct.en)]
+        distractors = same_pos[:]
+        rng.shuffle(distractors)
+        if len(distractors) < 3:
+            extra = _sample_others(rng, entries, correct.en, 3)
+            for x in extra:
+                if all(_norm_word(x.en) != _norm_word(y.en) for y in distractors):
+                    distractors.append(x)
+        distractors = distractors[:3]
+        if len(distractors) < 2:
+            continue
+        options = [x.en for x in distractors] + [correct.en]
+        options = _dedupe_preserve(options)
+        if len(options) < 3:
+            continue
+        rng.shuffle(options)
+        out.append(
+            _mcq(
+                q="What is this?",
+                prompt_image=correct.image,
+                choices=[_choice_text(x) for x in options],
+                answer_index=options.index(correct.en),
+                kind="picture_to_word",
+                helper="Choose the correct word.",
+            )
+        )
+    return out
+
+
+def _build_meaning_questions(entries: List[Entry], rng: random.Random) -> List[Dict[str, Any]]:
+    zh_entries = [e for e in entries if e.zh]
+    if len(zh_entries) < 2:
+        return []
+    rng.shuffle(zh_entries)
+    out: List[Dict[str, Any]] = []
+    for correct in zh_entries:
+        same_pos = [e for e in zh_entries if e.pos == correct.pos and _norm_word(e.en) != _norm_word(correct.en)]
+        distractors = same_pos or _sample_others(rng, zh_entries, correct.en, 3)
+        distractors = distractors[:3]
+        if len(distractors) < 2:
+            continue
+        options = [x.en for x in distractors] + [correct.en]
+        options = _dedupe_preserve(options)
+        rng.shuffle(options)
+        out.append(
+            _mcq(
+                q=f"Which word matches: {correct.zh}",
+                choices=[_choice_text(x) for x in options],
+                answer_index=options.index(correct.en),
+                kind="meaning_to_word",
+                helper="Use the Chinese meaning to choose the English word.",
+            )
+        )
+    return out
+
+
+def _build_sentence_cloze(entries: List[Entry], spec: Dict[str, Any], rng: random.Random) -> List[Dict[str, Any]]:
+    sentences = _as_sentence_dicts(spec.get("sentences", []))
+    if not sentences:
         return []
 
-    pool = sents[:]
+    nouns = [e for e in entries if e.pos == "noun"]
+    adjs = [e for e in entries if e.pos == "adjective"]
+    verbs = [e for e in entries if e.pos == "verb"]
     out: List[Dict[str, Any]] = []
 
-    for s in sents:
-        distract = [x for x in pool if x != s]
-        random.shuffle(distract)
+    for s in sentences:
+        en = s.get("en", "")
+        if not en:
+            continue
+        matched: Optional[Entry] = None
+        for e in entries:
+            if re.search(rf"\b{re.escape(e.en)}\b", en, flags=re.IGNORECASE):
+                matched = e
+                break
+        if not matched:
+            continue
 
-        # If not enough distractors, add placeholders
-        while len(distract) < 3:
-            distract.append(f"Sentence option {len(distract) + 1}")
+        blanked = _blank_word(en, matched.en)
+        if not blanked:
+            continue
 
-        q = "Choose the correct sentence:"
-        out.append(_make_mcq(q=q, correct=s, pool=distract, n_choices=4))
+        if matched.pos == "adjective":
+            pool = adjs or entries
+        elif matched.pos == "verb":
+            pool = verbs or entries
+        else:
+            pool = nouns or entries
 
+        distractors = [e.en for e in pool if _norm_word(e.en) != _norm_word(matched.en)]
+        distractors = _dedupe_preserve(distractors)
+        rng.shuffle(distractors)
+        options = distractors[:3] + [matched.en]
+        options = _dedupe_preserve(options)
+        if len(options) < 3:
+            continue
+        rng.shuffle(options)
+        out.append(
+            _mcq(
+                q=f"Complete the sentence: {blanked}",
+                choices=[_choice_text(x) for x in options],
+                answer_index=options.index(matched.en),
+                kind="sentence_cloze",
+                helper="Choose the word that completes the sentence correctly.",
+            )
+        )
     return out
 
 
-def _sentence_true_false(sentences: List[str]) -> List[Dict[str, Any]]:
-    """
-    Simple T/F:
-      - True items from original sentences
-      - Some False items created by swapping in a different sentence (if possible)
-    """
-    sents = [s.strip() for s in (sentences or []) if isinstance(s, str) and s.strip()]
-    sents = _dedupe_preserve(sents)
+def _build_adjective_pair(entries: List[Entry], rng: random.Random) -> List[Dict[str, Any]]:
+    adjs = [e for e in entries if e.pos == "adjective"]
+    if not adjs:
+        return []
 
+    adj_map = {_norm_word(e.en): e for e in adjs}
     out: List[Dict[str, Any]] = []
-    if not sents:
-        return out
-
-    # True items
-    for s in sents:
-        out.append({"type": "tf", "q": f"True or False: {s}", "answer_bool": True})
-
-    # Optional false items (safe/simple: reuse other sentence but mark false to add variety)
-    # This is pedagogically weak but better than all-true; frontend can still render it.
-    if len(sents) >= 2:
-        shuffled = sents[:]
-        random.shuffle(shuffled)
-        for i, s in enumerate(sents[: max(1, len(sents) // 2)]):
-            alt = shuffled[i % len(shuffled)]
-            if alt == s:
-                # choose a different one
-                for cand in shuffled:
-                    if cand != s:
-                        alt = cand
-                        break
-            if alt != s:
-                out.append({"type": "tf", "q": f"True or False: {alt}", "answer_bool": False})
-
+    used = set()
+    for e in adjs:
+        key = _norm_word(e.en)
+        if key in used:
+            continue
+        opp = ANTONYM_PAIRS.get(key)
+        if not opp or opp not in adj_map:
+            continue
+        used.add(key)
+        used.add(opp)
+        other = adj_map[opp]
+        # Use the adjective card images directly if available.
+        if e.image and other.image:
+            choices = [
+                _choice_image(e.image, text=e.en),
+                _choice_image(other.image, text=other.en),
+            ]
+            rng.shuffle(choices)
+            correct_text = e.en
+            out.append(
+                _mcq(
+                    q=f"Which picture shows: {correct_text}?",
+                    choices=choices,
+                    answer_index=next(i for i, c in enumerate(choices) if c.get("text") == correct_text),
+                    kind="adjective_picture",
+                    helper="Use the size / contrast clue.",
+                )
+            )
+        out.append(
+            _mcq(
+                q=f"Choose the correct sentence for {e.en}.",
+                choices=[_choice_text(f"It's {e.en}."), _choice_text(f"It's {other.en}.")],
+                answer_index=0,
+                kind="adjective_sentence",
+                helper="Pick the sentence that matches the adjective.",
+            )
+        )
     return out
 
 
-def generate_quiz(spec: Dict[str, Any], out_dir: Path, n_questions: int = 8) -> Path:
+def generate_quiz(spec: Dict[str, Any], out_dir: Path, n_questions: int = QUESTION_LIMIT_DEFAULT) -> Path:
     """
-    Output: quiz.json in out_dir
+    Generates a deterministic, lesson-aware practice set.
 
-    Pools (in priority):
-      1) Q&A MCQ
-      2) Vocab EN->ZH meaning MCQ (requires zh)
-      3) Choose-correct-sentence MCQ (uses EN)
-      4) Sentence True/False (uses EN)
+    Design goals:
+      - logical beginner-level questions
+      - no generic true/false filler
+      - picture/word/sentence practice aligned to lesson content
+      - current in-page practice stays different from checkpoint-3 tag_s
     """
     ensure_dir(out_dir)
 
-    vocab = spec.get("vocab", []) or []
-    qa_list = spec.get("qa", []) or []
-    sentences_raw = spec.get("sentences", []) or []
+    rng = random.Random(_seed_from_spec(spec))
+    entries = _build_entries(spec)
+    title = str(spec.get("title") or "Practice")
 
-    # normalize
-    sentences_en = _as_sentence_strings(sentences_raw)
+    buckets: List[List[Dict[str, Any]]] = [
+        _build_picture_to_word(entries, rng),
+        _build_word_to_picture(entries, rng),
+        _build_sentence_cloze(entries, spec, rng),
+        _build_meaning_questions(entries, rng),
+        _build_adjective_pair(entries, rng),
+    ]
 
-    vocab_en = [str(v.get("en") or "").strip() for v in vocab if (v.get("en") or "").strip()]
-    vocab_zh = [str(v.get("zh") or "").strip() for v in vocab if (v.get("zh") or "").strip()]
-    vocab_zh = _dedupe_preserve(vocab_zh)
+    questions: List[Dict[str, Any]] = []
+    target = max(1, int(n_questions or QUESTION_LIMIT_DEFAULT))
+    # round-robin so each lesson gets mixed practice instead of one block type only
+    while len(questions) < target and any(buckets):
+        progressed = False
+        for bucket in buckets:
+            if len(questions) >= target:
+                break
+            if bucket:
+                questions.append(bucket.pop(0))
+                progressed = True
+        if not progressed:
+            break
 
-    distractors = vocab_zh[:] if vocab_zh else ["选项A", "选项B", "选项C"]
-
-    pools: List[Dict[str, Any]] = []
-
-    # 1) Q&A
-    for qa in qa_list:
-        q = str(qa.get("q") or "").strip()
-        a = str(qa.get("a") or "").strip()
-        if q and a:
-            pools.append(_make_mcq_from_qa({"q": q, "a": a}, distractors))
-
-    # 2) Vocab meaning EN->ZH
-    vocab_pairs: List[Tuple[str, str]] = []
-    for v in vocab:
-        en = str(v.get("en") or "").strip()
-        zh = str(v.get("zh") or "").strip()
-        if en and zh:
-            vocab_pairs.append((en, zh))
-
-    random.shuffle(vocab_pairs)
-    for en, zh in vocab_pairs:
-        pools.append(
-            _make_mcq(
-                q=f"What is the meaning of: {en} ?",
-                correct=zh,
-                pool=vocab_zh,
-                n_choices=4,
-            )
-        )
-
-    # 3) Sentence MCQ (choose correct sentence)
-    pools.extend(_choose_correct_sentence_mcq(sentences_en))
-
-    # 4) Sentence T/F
-    pools.extend(_sentence_true_false(sentences_en))
-
-    # If still empty, produce a minimal fallback question instead of blank quiz.json
-    if not pools:
-        if vocab_en:
-            pools.append(
-                _make_mcq(
-                    q=f"Which word did we learn today?",
-                    correct=vocab_en[0],
-                    pool=vocab_en[1:] + ["apple", "book", "cat"],
-                    n_choices=4,
+    if not questions:
+        vocab_words = [e.en for e in entries]
+        if vocab_words:
+            choices = _dedupe_preserve(vocab_words[:4])
+            while len(choices) < 4:
+                filler = f"option {len(choices)+1}"
+                if filler not in choices:
+                    choices.append(filler)
+            answer = choices[0]
+            rng.shuffle(choices)
+            questions = [
+                _mcq(
+                    q="Choose one word from today’s lesson.",
+                    choices=[_choice_text(x) for x in choices],
+                    answer_index=choices.index(answer),
+                    kind="fallback",
                 )
-            )
+            ]
         else:
-            pools.append(
-                {
-                    "type": "mcq",
-                    "q": "Ready to start practice?",
-                    "choices": ["Yes", "No", "Maybe", "Later"],
-                    "answer_index": 0,
-                }
-            )
-
-    random.shuffle(pools)
-    questions = pools[: max(0, int(n_questions))]
+            questions = [
+                _mcq(
+                    q="Ready to start practice?",
+                    choices=[_choice_text("Yes"), _choice_text("No")],
+                    answer_index=0,
+                    kind="fallback",
+                )
+            ]
 
     quiz = {
-        "title": f"{spec.get('title', 'Quiz')}",
+        "title": title,
+        "section_title": "Practice",
+        "practice_family": "lesson_practice",
         "questions": questions,
     }
 

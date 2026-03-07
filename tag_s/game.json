@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "schema": "taggame.v1",
+    "tag": "animals",
+    "game_id": "listen_click_v1",
+    "title": "Animals — Listen & Click",
+    "level": "A1",
+    "renderer": "listen_click_image",
+    "variant": "4_choices",
+    "assets_base": "./assets"
+  },
+  "items": [
+    {
+      "id": "q1",
+      "prompt": {"audio": "en/cat.mp3"},
+      "choices": [
+        {"img": "img/cat.png", "text": "cat"},
+        {"img": "img/dog.png", "text": "dog"},
+        {"img": "img/fish.png", "text": "fish"},
+        {"img": "img/bird.png", "text": "bird"}
+      ],
+      "answer": 0
+    }
+  ]
+}

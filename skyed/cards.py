@@ -75,6 +75,71 @@ def _cover_fit(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     return im2.crop((left, top, left + target_w, top + target_h))
 
 
+def _hash_color_triplet(key: str) -> Tuple[Tuple[int,int,int], Tuple[int,int,int], Tuple[int,int,int]]:
+    import hashlib
+    h = hashlib.sha256((key or "x").encode("utf-8")).hexdigest()
+    def c(off: int) -> Tuple[int,int,int]:
+        r = int(h[off:off+2], 16)
+        g = int(h[off+2:off+4], 16)
+        b = int(h[off+4:off+6], 16)
+        # soften and brighten a bit
+        r = 80 + (r % 140)
+        g = 90 + (g % 140)
+        b = 110 + (b % 140)
+        return (r, g, b)
+    return c(0), c(6), c(12)
+
+
+def _make_placeholder_panel(en: str, w: int, h: int, font_path: Optional[str]) -> Image.Image:
+    """
+    Deterministic fallback art when AI image is missing.
+    Goal: never ship a blank panel.
+    """
+    en_t = (en or "").strip()
+    c1, c2, c3 = _hash_color_triplet(en_t.lower())
+    img = Image.new("RGB", (max(64, int(w)), max(64, int(h))), (238, 244, 252))
+    d = ImageDraw.Draw(img)
+
+    # simple vertical gradient
+    for y in range(img.size[1]):
+        t = y / max(1, img.size[1] - 1)
+        r = int(c1[0] * (1 - t) + c2[0] * t)
+        g = int(c1[1] * (1 - t) + c2[1] * t)
+        b = int(c1[2] * (1 - t) + c2[2] * t)
+        d.line([(0, y), (img.size[0], y)], fill=(r, g, b))
+
+    pad = int(min(img.size) * 0.08)
+    d.rounded_rectangle(
+        (pad, pad, img.size[0] - pad, img.size[1] - pad),
+        radius=int(min(img.size) * 0.09),
+        outline=(255, 255, 255),
+        width=3,
+    )
+
+    cx = int(img.size[0] * 0.72)
+    cy = int(img.size[1] * 0.38)
+    cr = int(min(img.size) * 0.18)
+    d.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=c3)
+
+    # small dots
+    for i in range(8):
+        x = int(img.size[0] * (0.15 + (i % 4) * 0.07))
+        y = int(img.size[1] * (0.25 + (i // 4) * 0.12))
+        d.ellipse((x, y, x + 8, y + 8), fill=(255, 255, 255))
+
+    # centered word (inside panel)
+    f = _load_font(int(min(img.size) * 0.16), font_path)
+    text = (en_t[:20] if en_t else "?")
+    bbox = d.textbbox((0, 0), text, font=f)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = (img.size[0] - tw) // 2
+    ty = int(img.size[1] * 0.60)
+
+    d.text((tx + 2, ty + 2), text, fill=(0, 0, 0), font=f)
+    d.text((tx, ty), text, fill=(255, 255, 255), font=f)
+
+    return img
+
 def make_flashcard(
     en: str,
     zh: str,
@@ -83,10 +148,16 @@ def make_flashcard(
     *,
     ai_image: Optional[Image.Image] = None,
 ) -> None:
-    """A simple vocab flashcard with brand-ish styling."""
+    """A simple vocab flashcard with brand-ish styling.
+
+    Important: even if AI image generation fails, we NEVER leave the image panel blank.
+    """
     W, H = 1024, 768
     bg = Image.new("RGB", (W, H), (245, 248, 252))
     d = ImageDraw.Draw(bg)
+
+    en_text = (en or "").strip()
+    zh_text = (zh or "").strip()
 
     # soft top ribbon
     ribbon = Image.new("RGB", (W, 160), (6, 182, 212))
@@ -106,6 +177,9 @@ def make_flashcard(
     if ai_image is not None:
         fitted = _cover_fit(ai_image, img_x2 - img_x1, img_y2 - img_y1)
         bg.paste(fitted, (img_x1, img_y1))
+    else:
+        ph = _make_placeholder_panel(en_text, img_x2 - img_x1, img_y2 - img_y1, font_path)
+        bg.paste(ph, (img_x1, img_y1))
 
     f_hint = _load_font(28, font_path)
     f_en = _load_font(78, font_path)
@@ -113,9 +187,6 @@ def make_flashcard(
     f_small = _load_font(30, font_path)
 
     d.text((panel_x1 + 34, panel_y1 + 34), "WORD", fill=(2, 132, 199), font=f_hint)
-
-    en_text = (en or "").strip()
-    zh_text = (zh or "").strip()
 
     d.text((panel_x1 + 34, panel_y1 + 78), en_text, fill=(15, 23, 42), font=f_en)
     if zh_text:
@@ -307,6 +378,26 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
             except Exception as e:
                 last_err = f"{type(e).__name__}: {e}"
                 continue
+
+        # Final fallback attempt: try icon_card prompt once (often succeeds when object prompt fails).
+        try:
+            req_fb = ImageGenRequest(
+                subject=f"{en_word} simple icon",
+                style=style,
+                render_mode="icon_card",
+                width=width,
+                height=height,
+                steps=max(1, min(steps, 6)),
+                seed=base_seed + 99,
+            )
+            png_bytes = backend.generate_png(req_fb, timeout_s=timeout_s)
+            if not _looks_blank(png_bytes):
+                ai_png.write_bytes(png_bytes)
+                if fail_marker.exists():
+                    fail_marker.unlink(missing_ok=True)
+                return en_word, None
+        except Exception:
+            pass
 
         fail_marker.write_text(str(last_err or "Unknown error"), encoding="utf-8")
         return en_word, str(last_err or "Unknown error")

@@ -1,6 +1,7 @@
 AI IMAGE GEN: ENABLED
-BACKEND=comfyui
+BACKEND=cloudflare_flux
 STYLE=realistic
 IMG_WIDTH=768 IMG_HEIGHT=768 IMG_STEPS=28 IMG_TIMEOUT_S=600 IMG_CONCURRENCY=1
-COMFY_URL=http://127.0.0.1:8188
-COMFY_WORKFLOW=C:\Users\user\PycharmProjects\skyed_automation\assets\comfy\workflow_api.json exists=True
+CF_ACCOUNT_ID=de056911d1f7e46abfa67f8610cf2914
+CF_MODEL=@cf/black-forest-labs/flux-1-schnell
+CF_API_TOKEN_SET=yes

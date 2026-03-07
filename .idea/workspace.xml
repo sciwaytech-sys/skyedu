@@ -5,7 +5,38 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.2.1   minor modification">
-      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/build_tag_s_once.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/deploy_sftp.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/skyed/tag_gamegen.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tag_s/game.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/index.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/renderers/matching_pairs.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/runtime.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/styes.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/box.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/box.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_box_3861b60043.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_box_3861b60043.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/big.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/big.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/box.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/box.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/chair.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/chair.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/lamp.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/lamp.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/picture.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/picture.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/small.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/small.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai_status.txt" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai_status.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/big.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/big.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/box.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/box.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/chair.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/chair.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/lamp.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/lamp.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/picture.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/picture.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/small.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/small.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/table.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/table.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/quiz.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/quizgen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizgen.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -39,6 +70,10 @@
     &quot;accountId&quot;: &quot;2f877169-c391-4bd8-89f3-3e6e488acbe6&quot;
   }
 }</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -218,5 +253,8 @@
     <MESSAGE value="2.2.1   QG,FlUX support added.Quiz_server modified" />
     <MESSAGE value="2.2.1   minor modification" />
     <option name="LAST_COMMIT_MESSAGE" value="2.2.1   minor modification" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1772911991230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

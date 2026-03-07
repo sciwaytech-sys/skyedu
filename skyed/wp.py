@@ -208,22 +208,39 @@ def create_post(
     html: str,
     post_type: str = "posts",
     status: str = "publish",
+    content_mode: str = "html_block",  # html_block | shortcode_block | raw
     timeout: int = 60,
 ) -> Dict[str, Any]:
+    """
+    Create a post/page via REST.
+
+    content_mode:
+      - html_block: wrap content in Gutenberg Custom HTML block.
+                   Use when you publish full HTML (requires unfiltered_html capability).
+      - shortcode_block: wrap content in Gutenberg Shortcode block.
+                         Use when you publish a shortcode like [skyed_lesson ...].
+                         This is robust even when REST user cannot publish unfiltered HTML.
+      - raw: send content as-is (not wrapped).
+    """
     base = _normalize_base_url(wp_base_url)
     _probe_rest_index(base, timeout=20)
 
     post_type = _normalize_post_type(post_type)
     endpoints = _content_endpoints(base, post_type)
 
-    # Force Gutenberg "Custom HTML" block so WP won't mangle markup into paragraphs/galleries.
-    html_wrapped = f"<!-- wp:html -->\n{html}\n<!-- /wp:html -->"
+    mode = (content_mode or "html_block").strip().lower()
+    if mode == "shortcode_block":
+        content = f"<!-- wp:shortcode -->\n{html}\n<!-- /wp:shortcode -->"
+    elif mode == "raw":
+        content = html
+    else:
+        # Default: Custom HTML block
+        content = f"<!-- wp:html -->\n{html}\n<!-- /wp:html -->"
 
     payload: Dict[str, Any] = {
         "title": title,
-        "content": html_wrapped,
+        "content": content,
         "status": status,
-        # Reduce “blog chrome” where supported:
         "comment_status": "closed",
         "ping_status": "closed",
     }
@@ -245,7 +262,6 @@ def create_post(
         except Exception:
             pass
 
-        # Otherwise stop (auth/permission/WAF etc.)
         break
 
     if r is None:
