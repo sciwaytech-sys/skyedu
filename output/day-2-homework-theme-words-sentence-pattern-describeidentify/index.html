@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quiz</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background: #f8fafc; }
+    .top { padding: 16px; background: #2563eb; color: white; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 18px rgba(15,23,42,0.08); margin: 12px 0; }
+    .q { font-size: 18px; font-weight: 650; margin-bottom: 10px; white-space: pre-wrap; }
+    .choice { display: block; margin: 8px 0; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
+    .choice:hover { border-color: #38bdf8; }
+    .choice-inner { display:flex; gap:12px; align-items:center; }
+    .choice img { width: 120px; height: 90px; object-fit: contain; background: #eef2ff; border-radius: 12px; }
+    .btn { background:#f97316; color:white; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; font-weight:650; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .result { font-size: 18px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="top"><div class="wrap"><b id="title">Quiz</b></div></div>
+  <div class="wrap">
+    <div id="app"></div>
+  </div>
+
+<script>
+function normalizeChoice(c){
+  if (typeof c === "string") return { text: c, img: "" };
+  if (c && typeof c === "object") return { text: c.text || "", img: c.img || "" };
+  return { text: "—", img: "" };
+}
+
+async function main(){
+  const res = await fetch("quiz.json", { cache: "no-store" });
+  const quiz = await res.json();
+
+  document.getElementById("title").textContent = quiz.title || "Quiz";
+  const app = document.getElementById("app");
+
+  let answers = {}; // qIndex -> value (number for mcq, bool for tf)
+
+  (quiz.questions || []).forEach((q, idx) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const qt = document.createElement("div");
+    qt.className = "q";
+    qt.textContent = `${idx+1}. ${q.q || ""}`;
+    card.appendChild(qt);
+
+    if (q.type === "mcq") {
+      (q.choices || []).forEach((rawChoice, ci) => {
+        const ch = normalizeChoice(rawChoice);
+
+        const lab = document.createElement("div");
+        lab.className = "choice";
+
+        const inner = document.createElement("div");
+        inner.className = "choice-inner";
+
+        if (ch.img) {
+          const im = document.createElement("img");
+          im.src = ch.img;
+          im.alt = ch.text || `choice ${ci+1}`;
+          inner.appendChild(im);
+        }
+
+        const tx = document.createElement("div");
+        tx.textContent = ch.text || "";
+        inner.appendChild(tx);
+
+        lab.appendChild(inner);
+
+        lab.onclick = () => {
+          answers[idx] = ci;
+          [...card.querySelectorAll(".choice")].forEach(x => x.style.borderColor = "#e2e8f0");
+          lab.style.borderColor = "#38bdf8";
+        };
+
+        card.appendChild(lab);
+      });
+    }
+
+    if (q.type === "tf") {
+      ["True", "False"].forEach((label, bi) => {
+        const lab = document.createElement("div");
+        lab.className = "choice";
+        lab.textContent = label;
+        lab.onclick = () => {
+          answers[idx] = (bi === 0);
+          [...card.querySelectorAll(".choice")].forEach(x => x.style.borderColor = "#e2e8f0");
+          lab.style.borderColor = "#38bdf8";
+        };
+        card.appendChild(lab);
+      });
+    }
+
+    app.appendChild(card);
+  });
+
+  const footer = document.createElement("div");
+  footer.className = "card";
+
+  const btn = document.createElement("button");
+  btn.className = "btn";
+  btn.textContent = "Submit";
+  btn.onclick = () => {
+    let score = 0;
+    (quiz.questions || []).forEach((q, idx) => {
+      if (q.type === "mcq" && answers[idx] === q.answer_index) score++;
+      if (q.type === "tf" && answers[idx] === q.answer_bool) score++;
+    });
+    footer.innerHTML = `<div class="result">Score: ${score} / ${(quiz.questions || []).length}</div>`;
+  };
+
+  footer.appendChild(btn);
+  app.appendChild(footer);
+}
+main();
+</script>
+</body>
+</html>

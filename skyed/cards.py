@@ -28,6 +28,8 @@ def _font_candidates(user_font: Optional[str]) -> List[str]:
         cands.append(str(user_font))
 
     cands += [
+        str(Path("assets/fonts/NotoSansCJKsc-VF.ttf")),
+        str(Path("assets/fonts/NotoSansMonoCJKsc-VF.ttf")),
         str(Path("assets/fonts/NotoSansCJKsc-Regular.ttf")),
         str(Path("assets/fonts/NotoSansSC-Regular.otf")),
         str(Path("assets/fonts/SourceHanSansSC-Regular.otf")),

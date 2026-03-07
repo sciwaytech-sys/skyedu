@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtualenv
+.venv/
+venv/
+
+# Local secrets / env
+.env
+
+# Local GUI config (may contain tokens)
+gui_config.json
+
+# Generated output
+output/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
