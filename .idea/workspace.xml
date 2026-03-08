@@ -4,19 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.0.1 Final">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.0.2 changes in structure and pipeline logic">
       <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/homework.txt" beforeDir="false" afterPath="$PROJECT_DIR$/homework.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/homework/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/output/homework/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/homework/lesson.html" beforeDir="false" afterPath="$PROJECT_DIR$/output/homework/lesson.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/homework/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/homework/quiz.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/homework/spec_debug.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/homework/spec_debug.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -88,7 +77,7 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "advanced.settings",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -147,7 +136,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1769777297131</updated>
-      <workItem from="1772992417293" duration="2245000" />
+      <workItem from="1772992417293" duration="2958000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -253,7 +242,15 @@
       <option name="project" value="LOCAL" />
       <updated>1772976827453</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="3.0.2 changes in structure and pipeline logic">
+      <option name="closed" value="true" />
+      <created>1772997046875</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1772997046875</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -271,7 +268,8 @@
     <MESSAGE value="2.2.1   minor modification" />
     <MESSAGE value="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged" />
     <MESSAGE value="3.0.1 Final" />
-    <option name="LAST_COMMIT_MESSAGE" value="3.0.1 Final" />
+    <MESSAGE value="3.0.2 changes in structure and pipeline logic" />
+    <option name="LAST_COMMIT_MESSAGE" value="3.0.2 changes in structure and pipeline logic" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1772994835871" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
