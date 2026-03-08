@@ -3,20 +3,50 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
 class VocabItem:
     en: str
     zh: str = ""
-    pos: str = ""  # optional: noun|verb|adjective
+    pos: str = ""  # noun|verb|adjective
 
 
 @dataclass
 class QAItem:
     q: str
     a: str
+
+
+SECTION_ALIASES = {
+    "title": ["name", "title", "lesson", "homework", "标题", "作业"],
+    "vocab": ["vocabulary", "vocab", "words", "word bank", "theme words", "词汇", "单词"],
+    "sentences": ["sentences", "sentence pattern", "useful sentences", "句型", "重点句型"],
+    "qa": ["questions and answers", "q&a", "qa", "问答"],
+    "tags": ["tags", "tag", "标签"],
+}
+
+ZH_FALLBACK = {
+    "table": "桌子",
+    "chair": "椅子",
+    "lamp": "灯",
+    "box": "盒子",
+    "picture": "图片",
+    "big": "大的",
+    "small": "小的",
+    "book": "书",
+    "pen": "钢笔",
+    "pencil": "铅笔",
+    "bag": "书包",
+    "desk": "课桌",
+    "door": "门",
+    "window": "窗户",
+    "run": "跑",
+    "jump": "跳",
+    "read": "读",
+    "write": "写",
+}
 
 
 def _norm_line(s: str) -> str:
@@ -30,83 +60,100 @@ def _norm_line(s: str) -> str:
 
 
 def _has_zh(s: str) -> bool:
-    # CJK Unified Ideographs
     return bool(re.search(r"[\u4e00-\u9fff]", s or ""))
 
 
 def _split_vocab_tokens(s: str) -> List[str]:
-    parts = [p.strip() for p in (s or "").split(",")]
+    parts = [p.strip() for p in re.split(r"[,，、]", s or "")]
     return [p for p in parts if p]
+
+
+def _norm_pos(p: str) -> str:
+    p = (p or "").strip().lower()
+    if p in ("n", "noun"):
+        return "noun"
+    if p in ("v", "verb"):
+        return "verb"
+    if p in ("adj", "adjective"):
+        return "adjective"
+    return ""
+
+
+def _match_section(line: str, key: str) -> Tuple[bool, str]:
+    aliases = SECTION_ALIASES[key]
+    for alias in aliases:
+        m = re.match(rf"^\s*#?\s*{re.escape(alias)}\s*[:：]?\s*(.*)$", line, flags=re.IGNORECASE)
+        if m:
+            return True, (m.group(1) or "").strip()
+    return False, ""
 
 
 def _parse_vocab_token(tok: str) -> VocabItem:
     t = (tok or "").strip()
     if not t:
         return VocabItem(en="", zh="")
-
-    def _norm_pos(p: str) -> str:
-        p = (p or "").strip().lower()
-        if p in ("n", "noun"):
-            return "noun"
-        if p in ("v", "verb"):
-            return "verb"
-        if p in ("adj", "adjective"):
-            return "adjective"
-        return ""
-
-    def _extract_pos_prefix(s: str) -> tuple[str, str]:
-        # Examples:
-        #   v: jump
-        #   adj: big
-        m = re.match(r"^(n|noun|v|verb|adj|adjective)\s*:\s*(.+)$", s, flags=re.IGNORECASE)
-        if m:
-            return _norm_pos(m.group(1)), (m.group(2) or "").strip()
-        return "", s
-
-    def _extract_pos_suffix(s: str) -> tuple[str, str]:
-        # Examples:
-        #   jump/v
-        #   big/adj
-        m = re.match(r"^(.+?)/(n|noun|v|verb|adj|adjective)$", s, flags=re.IGNORECASE)
-        if m:
-            return _norm_pos(m.group(2)), (m.group(1) or "").strip()
-        return "", s
-
-    def _extract_pos_parens(s: str) -> tuple[str, str]:
-        # Examples:
-        #   jump (v)
-        #   big (adj)
-        m = re.match(r"^(.+?)\s*[（(]\s*(n|noun|v|verb|adj|adjective)\s*[）)]\s*$", s, flags=re.IGNORECASE)
-        if m:
-            return _norm_pos(m.group(2)), (m.group(1) or "").strip()
-        return "", s
-
-    # Split EN and ZH first (supports "table - 桌子")
     en_part = t
     zh_part = ""
-    if "-" in t:
-        left, right = t.split("-", 1)
-        en_part = left.strip()
-        zh_part = right.strip()
+    pos = ""
 
-    # table(桌子) / table（桌子） (ZH in parens)
-    mzh = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", en_part)
-    if mzh and _has_zh(mzh.group(2) or ""):
-        en_part = (mzh.group(1) or "").strip()
-        zh_part = (mzh.group(2) or "").strip()
+    m = re.match(r"^(n|noun|v|verb|adj|adjective)\s*:\s*(.+)$", en_part, flags=re.IGNORECASE)
+    if m:
+        pos = _norm_pos(m.group(1))
+        en_part = (m.group(2) or "").strip()
 
-    # Extract POS from EN part
-    pos, en_part2 = _extract_pos_prefix(en_part)
     if not pos:
-        pos, en_part2 = _extract_pos_suffix(en_part)
+        m = re.match(r"^(.+?)/(n|noun|v|verb|adj|adjective)$", en_part, flags=re.IGNORECASE)
+        if m:
+            en_part = (m.group(1) or "").strip()
+            pos = _norm_pos(m.group(2))
+
     if not pos:
-        # Only treat parens as POS if it is not Chinese
-        pos, en_part2 = _extract_pos_parens(en_part)
-    en_part = en_part2.strip()
+        m = re.match(r"^(.+?)\s*[（(]\s*(n|noun|v|verb|adj|adjective)\s*[）)]\s*$", en_part, flags=re.IGNORECASE)
+        if m:
+            en_part = (m.group(1) or "").strip()
+            pos = _norm_pos(m.group(2))
 
-    # If we didn't extract ZH earlier and we still have a parens form that is NOT POS, keep as EN.
+    if "-" in en_part:
+        left, right = en_part.split("-", 1)
+        if _has_zh(right):
+            en_part, zh_part = left.strip(), right.strip()
 
-    return VocabItem(en=en_part, zh=zh_part, pos=pos)
+    m = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", en_part)
+    if m and _has_zh(m.group(2) or ""):
+        en_part = (m.group(1) or "").strip()
+        zh_part = (m.group(2) or "").strip()
+
+    return VocabItem(en=en_part.strip(), zh=zh_part.strip(), pos=pos)
+
+
+def _infer_pos(en: str, sentences_en: List[str]) -> str:
+    w = (en or "").strip().lower()
+    if not w:
+        return ""
+    for s in sentences_en:
+        t = (s or "").lower().replace("’", "'")
+        if re.search(rf"\b(it\s*'?s|it\s+is|is|are|am)\s+{re.escape(w)}\b", t):
+            return "adjective"
+    for s in sentences_en:
+        t = (s or "").lower().replace("’", "'")
+        if re.search(rf"\b(can|to|will|want\s+to|like\s+to|likes\s+to)\s+{re.escape(w)}\b", t):
+            return "verb"
+        if re.search(rf"\b(i|we|you|they|he|she)\s+{re.escape(w)}\b", t):
+            return "verb"
+    return "noun"
+
+
+def _backfill_vocab(vocab: List[VocabItem], sentences: List[Dict[str, str]]) -> None:
+    sentences_en = []
+    for s in sentences:
+        en = (s.get("en") or "").strip()
+        if en:
+            sentences_en.append(en)
+    for item in vocab:
+        if not item.pos:
+            item.pos = _infer_pos(item.en, sentences_en)
+        if not item.zh:
+            item.zh = ZH_FALLBACK.get(item.en.strip().lower(), "")
 
 
 def parse_homework_text(text: str) -> Dict:
@@ -114,24 +161,17 @@ def parse_homework_text(text: str) -> Dict:
     lines = [_norm_line(ln) for ln in raw_lines]
 
     title = "Homework"
+    tags: List[str] = []
     vocab: List[VocabItem] = []
-    sentences: List[Dict[str, str]] = []  # [{"en":..., "zh":...}, ...]
+    sentences: List[Dict[str, str]] = []
     qa: List[QAItem] = []
 
     section: Optional[str] = None
     current_q: Optional[str] = None
-
-    # sentence pairing state
     pending_en: Optional[str] = None
-
-    re_name = re.compile(r"^\s*#?\s*Name\s+(.*)$", re.IGNORECASE)
-    re_vocab = re.compile(r"^\s*#?\s*Vocabulary", re.IGNORECASE)
-    re_sent = re.compile(r"^\s*#?\s*Sentences", re.IGNORECASE)
-    re_qa_head = re.compile(r"^\s*#?\s*Questions\s+and\s+answers", re.IGNORECASE)
 
     re_q = re.compile(r"^\s*Q\d*\s*:\s*(.*)$", re.IGNORECASE)
     re_a = re.compile(r"^\s*A\d*\s*:\s*(.*)$", re.IGNORECASE)
-
     re_zh_prefix = re.compile(r"^(CN|ZH)\s*:\s*", re.IGNORECASE)
 
     def flush_pending_en() -> None:
@@ -144,33 +184,44 @@ def parse_homework_text(text: str) -> Dict:
         if not ln:
             continue
 
-        m = re_name.match(ln)
-        if m:
-            title = (m.group(1) or "").strip()
+        matched, after = _match_section(ln, "title")
+        if matched:
+            if after:
+                title = after
             section = None
             current_q = None
             flush_pending_en()
             continue
 
-        if re_vocab.match(ln):
+        matched, after = _match_section(ln, "tags")
+        if matched:
+            tags = [x.strip() for x in re.split(r"[,，、]", after) if x.strip()]
+            section = None
+            continue
+
+        matched, after = _match_section(ln, "vocab")
+        if matched:
             section = "vocab"
             current_q = None
             flush_pending_en()
-            if ":" in ln:
-                after = ln.split(":", 1)[1].strip()
+            if after:
                 for tok in _split_vocab_tokens(after):
                     it = _parse_vocab_token(tok)
                     if it.en:
                         vocab.append(it)
             continue
 
-        if re_sent.match(ln):
+        matched, after = _match_section(ln, "sentences")
+        if matched:
             section = "sentences"
             current_q = None
             flush_pending_en()
+            if after:
+                pending_en = after
             continue
 
-        if re_qa_head.match(ln):
+        matched, after = _match_section(ln, "qa")
+        if matched:
             section = "qa"
             current_q = None
             flush_pending_en()
@@ -178,9 +229,9 @@ def parse_homework_text(text: str) -> Dict:
 
         if section == "vocab":
             work = ln
-            if ":" in work:
+            if ":" in work and not re.match(r"^(n|noun|v|verb|adj|adjective)\s*:", work, flags=re.IGNORECASE):
                 work = work.split(":", 1)[1].strip()
-            toks = _split_vocab_tokens(work) if "," in work else [work]
+            toks = _split_vocab_tokens(work) if re.search(r"[,，、]", work) else [work]
             for tok in toks:
                 it = _parse_vocab_token(tok)
                 if it.en:
@@ -188,30 +239,21 @@ def parse_homework_text(text: str) -> Dict:
             continue
 
         if section == "sentences":
-            # Support:
-            #   EN line then ZH line
-            #   CN: xxx / ZH: xxx
             if re_zh_prefix.match(ln):
                 zh = re_zh_prefix.sub("", ln).strip()
                 if pending_en:
                     sentences.append({"en": pending_en, "zh": zh})
                     pending_en = None
                 else:
-                    # ZH without EN -> store standalone
                     sentences.append({"en": "", "zh": zh})
                 continue
-
             if _has_zh(ln):
-                # If a Chinese line follows an EN sentence, pair them
                 if pending_en:
                     sentences.append({"en": pending_en, "zh": ln})
                     pending_en = None
                 else:
                     sentences.append({"en": "", "zh": ln})
                 continue
-
-            # Otherwise treat as EN sentence
-            # If there was a pending EN with no ZH, flush it first
             if pending_en:
                 sentences.append({"en": pending_en, "zh": ""})
             pending_en = ln
@@ -224,38 +266,34 @@ def parse_homework_text(text: str) -> Dict:
                 continue
             am = re_a.match(ln)
             if am and current_q:
-                ans = (am.group(1) or "").strip()
-                qa.append(QAItem(q=current_q, a=ans))
+                qa.append(QAItem(q=current_q, a=(am.group(1) or "").strip()))
                 current_q = None
             continue
 
     flush_pending_en()
 
-    # dedup vocab preserve order
     seen = set()
     dedup_vocab: List[VocabItem] = []
     for v in vocab:
-        key = (v.en.lower(), v.zh)
+        key = (v.en.lower(), v.zh, v.pos)
         if key in seen:
             continue
         seen.add(key)
         dedup_vocab.append(v)
 
-    # normalize sentences list (remove empties)
     norm_sents: List[Dict[str, str]] = []
     for s in sentences:
         en = (s.get("en") or "").strip()
         zh = (s.get("zh") or "").strip()
-        if not en and not zh:
-            continue
-        norm_sents.append({"en": en, "zh": zh})
+        if en or zh:
+            norm_sents.append({"en": en, "zh": zh})
+
+    _backfill_vocab(dedup_vocab, norm_sents)
 
     return {
         "title": title,
-        "vocab": [
-            {"en": v.en, "zh": v.zh, **({"pos": v.pos} if v.pos else {})}
-            for v in dedup_vocab
-        ],
+        "tags": tags,
+        "vocab": [{"en": v.en, "zh": v.zh, **({"pos": v.pos} if v.pos else {})} for v in dedup_vocab],
         "sentences": norm_sents,
         "qa": [{"q": x.q, "a": x.a} for x in qa],
     }

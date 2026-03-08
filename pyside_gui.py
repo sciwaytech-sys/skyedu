@@ -16,7 +16,39 @@ from urllib.parse import urlparse
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
+# Load .env for the GUI process so os.getenv() can see values when launching the pipeline.
+# Safe fallback if python-dotenv is not installed in this environment.
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover
+    def load_dotenv(*args, **kwargs):  # type: ignore
+        return False
+
 CONFIG_NAME = "gui_config.json"
+
+
+def _strip_wrapping_quotes(s: str) -> str:
+    s = (s or "").strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        return s[1:-1].strip()
+    return s
+
+
+def _clean_env_value(v: Any) -> str:
+    return _strip_wrapping_quotes(str(v or "").strip())
+
+
+def _set_env_if_nonempty(env: Dict[str, str], key: str, value: Any) -> None:
+    """Only set env var if value is non-empty; otherwise remove it.
+
+    This prevents the GUI from overwriting .env values with empty strings.
+    """
+    cleaned = _clean_env_value(value)
+    if cleaned:
+        env[key] = cleaned
+    else:
+        env.pop(key, None)
+
 
 # Style-locked prompt templates (minimizes abstract outputs)
 POS_REALISTIC = (
@@ -63,7 +95,6 @@ class AppConfig:
     # comfy workflow
     comfy_workflow_path: str = "assets/comfy/workflow_api.json"
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
-
 
     # image generation backend
     image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
@@ -119,6 +150,40 @@ def _default_config(root_dir: Path) -> AppConfig:
     )
 
 
+def _autofill_cfg_from_env(cfg: "AppConfig") -> None:
+    """If sensitive fields are empty in gui_config.json, pull them from env (including .env)."""
+    # Cloudflare
+    if not _clean_env_value(cfg.cf_account_id):
+        v = os.getenv("CF_ACCOUNT_ID", "")
+        if _clean_env_value(v):
+            cfg.cf_account_id = _clean_env_value(v)
+
+    if not _clean_env_value(cfg.cf_api_token):
+        v = os.getenv("CF_API_TOKEN", "")
+        if _clean_env_value(v):
+            cfg.cf_api_token = _clean_env_value(v)
+
+    v = os.getenv("CF_MODEL", "")
+    if _clean_env_value(v) and not _clean_env_value(cfg.cf_model):
+        cfg.cf_model = _clean_env_value(v)
+
+    # Hugging Face
+    if not _clean_env_value(cfg.hf_image_endpoint_url):
+        v = os.getenv("HF_IMAGE_ENDPOINT_URL", os.getenv("HF_ENDPOINT", ""))
+        if _clean_env_value(v):
+            cfg.hf_image_endpoint_url = _clean_env_value(v)
+
+    if not _clean_env_value(cfg.hf_token):
+        v = os.getenv("HF_TOKEN", "")
+        if _clean_env_value(v):
+            cfg.hf_token = _clean_env_value(v)
+
+    # Optional backend autofill if user prefers env-driven setup
+    v = os.getenv("IMG_BACKEND", "")
+    if _clean_env_value(v) and (cfg.image_backend or "").strip().lower() in ("", "comfyui"):
+        cfg.image_backend = _clean_env_value(v)
+
+
 def _coerce_list(x: Any, fallback: List[str]) -> List[str]:
     if isinstance(x, list) and all(isinstance(i, (str, int, float)) for i in x):
         return [str(i) for i in x]
@@ -135,6 +200,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
     base = _default_config(root_dir)
 
     if not path.exists():
+        _autofill_cfg_from_env(base)
         save_config(path, base)
         return base
 
@@ -144,6 +210,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
             raise ValueError("config is not a JSON object")
     except Exception:
         # Hard repair
+        _autofill_cfg_from_env(base)
         save_config(path, base)
         return base
 
@@ -178,13 +245,16 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         img_steps=int(data.get("img_steps", base.img_steps)),
         img_timeout_s=int(data.get("img_timeout_s", base.img_timeout_s)),
         img_concurrency=int(data.get("img_concurrency", base.img_concurrency)),
-        cf_account_id=str(data.get("cf_account_id", base.cf_account_id)),
-        cf_api_token=str(data.get("cf_api_token", base.cf_api_token)),
-        cf_model=str(data.get("cf_model", base.cf_model)),
-        hf_image_endpoint_url=str(data.get("hf_image_endpoint_url", data.get("hf_endpoint", base.hf_image_endpoint_url))),
-        hf_token=str(data.get("hf_token", base.hf_token)),
+        cf_account_id=_clean_env_value(data.get("cf_account_id", base.cf_account_id)),
+        cf_api_token=_clean_env_value(data.get("cf_api_token", base.cf_api_token)),
+        cf_model=_clean_env_value(data.get("cf_model", base.cf_model)) or base.cf_model,
+        hf_image_endpoint_url=_clean_env_value(
+            data.get("hf_image_endpoint_url", data.get("hf_endpoint", base.hf_image_endpoint_url))),
+        hf_token=_clean_env_value(data.get("hf_token", base.hf_token)),
         hf_guidance=float(data.get("hf_guidance", base.hf_guidance)),
     )
+
+    _autofill_cfg_from_env(cfg)
 
     # Write back a repaired normalized config (important)
     save_config(path, cfg)
@@ -326,10 +396,10 @@ def _node_title_lower(node: Dict[str, Any]) -> str:
 
 
 def patch_workflow_prompts_only(
-    prompt: Dict[str, Any],
-    *,
-    positive_text: str,
-    negative_text: str,
+        prompt: Dict[str, Any],
+        *,
+        positive_text: str,
+        negative_text: str,
 ) -> Dict[str, int]:
     if not isinstance(prompt, dict) or not prompt:
         raise ValueError("Workflow prompt dict is empty/invalid.")
@@ -746,7 +816,6 @@ class MainWindow(QtWidgets.QMainWindow):
         info.setWordWrap(True)
         l.addWidget(info)
 
-
         # Generator settings (ComfyUI / Cloudflare Flux / HF Endpoint)
         cfg_box = self._group_box("Generator settings")
         fl = QtWidgets.QFormLayout(cfg_box)
@@ -1028,8 +1097,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cfg.voice_zh = self.combo_voice_zh.currentText().strip()
         save_config(self.cfg_path, self.cfg)
 
-    
-
     def _backend_key_from_ui(self, txt: str) -> str:
         t = (txt or "").strip().lower()
         if "cloudflare" in t or "flux" in t:
@@ -1089,15 +1156,15 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self, "spin_img_conc"):
                 self.cfg.img_concurrency = int(self.spin_img_conc.value())
             if hasattr(self, "edit_cf_account"):
-                self.cfg.cf_account_id = self.edit_cf_account.text().strip()
+                self.cfg.cf_account_id = _clean_env_value(self.edit_cf_account.text())
             if hasattr(self, "edit_cf_model"):
-                self.cfg.cf_model = self.edit_cf_model.text().strip() or self.cfg.cf_model
+                self.cfg.cf_model = _clean_env_value(self.edit_cf_model.text()) or self.cfg.cf_model
             if hasattr(self, "edit_cf_token"):
-                self.cfg.cf_api_token = self.edit_cf_token.text().strip()
+                self.cfg.cf_api_token = _clean_env_value(self.edit_cf_token.text())
             if hasattr(self, "edit_hf_url"):
-                self.cfg.hf_image_endpoint_url = self.edit_hf_url.text().strip()
+                self.cfg.hf_image_endpoint_url = _clean_env_value(self.edit_hf_url.text())
             if hasattr(self, "edit_hf_token"):
-                self.cfg.hf_token = self.edit_hf_token.text().strip()
+                self.cfg.hf_token = _clean_env_value(self.edit_hf_token.text())
             if hasattr(self, "spin_hf_guidance"):
                 self.cfg.hf_guidance = float(self.spin_hf_guidance.value())
         except Exception:
@@ -1226,12 +1293,12 @@ class MainWindow(QtWidgets.QMainWindow):
         env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
         env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
 
-        env["CF_ACCOUNT_ID"] = str(self.cfg.cf_account_id)
-        env["CF_API_TOKEN"] = str(self.cfg.cf_api_token)
-        env["CF_MODEL"] = str(self.cfg.cf_model)
+        _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
+        _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
+        _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
 
-        env["HF_IMAGE_ENDPOINT_URL"] = str(self.cfg.hf_image_endpoint_url or "")
-        env["HF_TOKEN"] = str(self.cfg.hf_token)
+        _set_env_if_nonempty(env, "HF_IMAGE_ENDPOINT_URL", self.cfg.hf_image_endpoint_url or "")
+        _set_env_if_nonempty(env, "HF_TOKEN", self.cfg.hf_token)
         env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
 
         # Keep backward-compatible key
@@ -1299,6 +1366,8 @@ class MainWindow(QtWidgets.QMainWindow):
             args.append("--publish")
         elif mode == "publish_only":
             args.append("--publish-only")
+            # Backward-compatible: older pipeline versions require --publish to actually publish.
+            args.append("--publish")
 
         env = os.environ.copy()
         env["HF_ENDPOINT"] = self.cfg.hf_endpoint
@@ -1322,12 +1391,12 @@ class MainWindow(QtWidgets.QMainWindow):
         env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
         env["IMG_MAX_RETRIES"] = str(int(os.getenv("IMG_MAX_RETRIES", "2")))
 
-        env["CF_ACCOUNT_ID"] = str(self.cfg.cf_account_id)
-        env["CF_API_TOKEN"] = str(self.cfg.cf_api_token)
-        env["CF_MODEL"] = str(self.cfg.cf_model)
+        _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
+        _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
+        _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
 
-        env["HF_IMAGE_ENDPOINT_URL"] = str(self.cfg.hf_image_endpoint_url or "")
-        env["HF_TOKEN"] = str(self.cfg.hf_token)
+        _set_env_if_nonempty(env, "HF_IMAGE_ENDPOINT_URL", self.cfg.hf_image_endpoint_url or "")
+        _set_env_if_nonempty(env, "HF_TOKEN", self.cfg.hf_token)
         env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
 
         # ensure pipeline uses same workflow path
@@ -1350,6 +1419,10 @@ class MainWindow(QtWidgets.QMainWindow):
 def main() -> None:
     root_dir = Path(__file__).resolve().parent
     os.chdir(root_dir)
+
+    # Load .env for the GUI process so env-based autofill works.
+    load_dotenv(dotenv_path=str(root_dir / ".env"), override=False)
+
     cfg_path = root_dir / CONFIG_NAME
 
     # Robust load (repairs config if needed)

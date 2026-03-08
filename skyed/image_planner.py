@@ -246,9 +246,14 @@ def plan_item(en: str, zh: str, pos: str, *, vocab_words: List[str], pos_map: Di
         has_opp_in_vocab = bool(opp and any(_norm_word(x) == _norm_word(opp) for x in vocab_words))
 
         if has_opp_in_vocab:
-            # Use a stable anchor noun for contrast
+            # Force stronger visual contrast for classroom adjectives like big/small.
             anchor = "ball" if lw in ("big", "small") else _default_anchor_noun(vocab_words, pos_map)
-            subj_phrase = f"two {anchor}s side by side: one {lw}, one {opp}"
+            if lw == "big":
+                subj_phrase = f"two {anchor}s side by side with dramatic size contrast: one very large {anchor} and one clearly much smaller {anchor}"
+            elif lw == "small":
+                subj_phrase = f"two {anchor}s side by side with dramatic size contrast: one tiny {anchor} and one clearly much larger {anchor}"
+            else:
+                subj_phrase = f"two {anchor}s side by side with clear contrast: one {lw}, one {opp}"
             return PlannedItem(
                 en=w,
                 zh=zh,

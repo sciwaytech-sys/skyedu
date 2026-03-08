@@ -209,3 +209,48 @@
   .skyed-choice__inner{flex-direction:column;align-items:flex-start;}
   .skyed-choice__inner img{width:100%;height:auto;aspect-ratio:4/3;}
 }
+
+
+/* batch2: stronger title suppression and more compact hero */
+body.skyed-lesson-page .entry-header,
+body.skyed-lesson-page .page-header,
+body.skyed-lesson-page .article-header,
+body.skyed-lesson-page header.entry-header,
+body.skyed-lesson-page .page .entry-header,
+body.skyed-lesson-page .post .entry-header,
+body.skyed-lesson-page .site-main .entry-header,
+body.skyed-lesson-page .entry-title,
+body.skyed-lesson-page .page-title,
+body.skyed-lesson-page .elementor-page-title,
+body.skyed-lesson-page .learn-press-breadcrumb,
+body.skyed-lesson-page .breadcrumbs,
+body.skyed-lesson-page .breadcrumb,
+body.skyed-lesson-page .site-footer,
+body.skyed-lesson-page footer.site-footer,
+body.skyed-lesson-page #colophon { display:none !important; }
+
+body.skyed-lesson-page .skyed-hero {
+  padding: .8rem .95rem !important;
+  border-radius: 16px !important;
+  gap: .7rem !important;
+}
+body.skyed-lesson-page .skyed-kicker {
+  font-size: .66rem !important;
+  margin-bottom: .2rem !important;
+}
+body.skyed-lesson-page .skyed-title {
+  font-size: 1.16rem !important;
+  line-height: 1.12 !important;
+  letter-spacing: -.01em;
+  margin: 0 !important;
+  max-width: 22ch;
+}
+body.skyed-lesson-page .skyed-subtitle {
+  font-size: .82rem !important;
+  margin-top: .15rem !important;
+  opacity: .9 !important;
+}
+body.skyed-lesson-page .skyed-chip {
+  padding: .34rem .56rem !important;
+  font-size: .72rem !important;
+}

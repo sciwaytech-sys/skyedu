@@ -298,7 +298,7 @@ def main() -> None:
     else:
         lesson_root = ensure_dir(lesson_root)
         # Clean previous run
-        for name in ("cards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json"):
+        for name in ("cards", "flashcards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json"):
             p = lesson_root / name
             if p.exists():
                 if p.is_dir():
@@ -311,6 +311,7 @@ def main() -> None:
 
         # Re-write debug spec after cleanup
         try:
+            ensure_dir(lesson_root)
             (lesson_root / "spec_debug.json").write_text(
                 json.dumps(spec, ensure_ascii=False, indent=2),
                 encoding="utf-8",
@@ -322,6 +323,9 @@ def main() -> None:
         audio_dir = ensure_dir(lesson_root / "audio")
 
         vocab_list = spec.get("vocab", []) or []
+        missing_zh = [v.get("en", "") for v in vocab_list if not (v.get("zh") or "").strip()]
+        if missing_zh:
+            print("[WARN] Missing Chinese for vocab:", ", ".join(missing_zh))
         if len(vocab_list) == 0:
             raise RuntimeError(
                 "Parser produced 0 vocab items. Check output/<slug>/spec_debug.json.\n"

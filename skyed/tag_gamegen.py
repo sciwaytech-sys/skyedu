@@ -7,8 +7,7 @@ from typing import Any, Dict, List
 
 
 def _safe_tag(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = s.replace(" ", "-")
+    s = (s or "").strip().lower().replace(" ", "-")
     return "".join(ch for ch in s if ch.isalnum() or ch in "-_").strip("-_")
 
 
@@ -20,17 +19,6 @@ def export_tag_s_matching_pairs(
     game_id: str = "matching_pairs_v1",
     title: str = "",
 ) -> Path:
-    """
-    Exports a tag_s game folder:
-      out_dir/<tag>/<game_id>/
-        index.html
-        runtime.js
-        styles.css
-        renderers/matching_pairs.js
-        game.json
-
-    The first renderer is EN<->ZH matching pairs from vocab.
-    """
     tag_norm = _safe_tag(tag)
     if not tag_norm:
         raise ValueError("tag is empty")
@@ -38,14 +26,15 @@ def export_tag_s_matching_pairs(
     game_root = Path(out_dir) / tag_norm / game_id
     game_root.mkdir(parents=True, exist_ok=True)
 
-    # Copy runtime pack
-    runtime_src = Path("templates") / "tag_runtime"
+    project_root = Path(__file__).resolve().parent.parent
+    runtime_src = project_root / "templates" / "tag_runtime"
     if not runtime_src.exists():
-        raise RuntimeError("Missing templates/tag_runtime/. Create runtime files first.")
+        raise RuntimeError(f"Missing runtime template folder: {runtime_src}")
 
-    # copytree into existing folder safely
     for item in runtime_src.rglob("*"):
         rel = item.relative_to(runtime_src)
+        if rel.name == "styes.css":
+            rel = rel.with_name("styles.css")
         dst = game_root / rel
         if item.is_dir():
             dst.mkdir(parents=True, exist_ok=True)
@@ -53,7 +42,6 @@ def export_tag_s_matching_pairs(
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item, dst)
 
-    # Build pairs from vocab
     items = []
     for i, v in enumerate(vocab):
         en = str(v.get("en") or "").strip()
@@ -63,7 +51,6 @@ def export_tag_s_matching_pairs(
         items.append({"id": f"p{i+1}", "a": en, "b": zh})
 
     if not items:
-        # minimal fallback
         items = [{"id": "p1", "a": "apple", "b": "苹果"}]
 
     game = {

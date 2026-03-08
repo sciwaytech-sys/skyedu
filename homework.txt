@@ -1,15 +1,17 @@
-#Name Day 2 Homework — Theme Words + Sentence Pattern (Describe/Identify)
+#Title: Day X Homework — Theme + Sentence Pattern
 
-#Vocabulary（词汇）：table, chair, lamp, box, picture, big, small
+#Tags: classroom, furniture
 
-#Sentences（A）
+#Vocabulary:
+noun: table-桌子, noun: chair-椅子, noun: lamp-台灯, noun: box-盒子, noun: picture-图片, adjective: big-大的, adjective: small-小的， verb: to sleep.
 
+#Sentences:
 This is a table.
 这是一个桌子。
 This is a chair.
 这是一把椅子。
 I see a lamp.
-我看到一盏灯。
+我看到一盏台灯。
 This is a box.
 这是一个盒子。
 This is a picture.
@@ -19,8 +21,7 @@ It’s big.
 It’s small.
 它很小。
 
-#Questions and answers（B）
-
+#Questions and answers:
 Q1: What’s this?
 A1: It’s a table/chair/lamp/box/picture.
 

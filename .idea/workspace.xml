@@ -4,20 +4,38 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="2.2.1   minor modification">
-      <change afterPath="$PROJECT_DIR$/scripts/build_tag_s_once.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/deploy_sftp.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/skyed/tag_gamegen.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tag_s/game.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/index.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/renderers/matching_pairs.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/runtime.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/tag_runtime/styes.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/homework.txt" beforeDir="false" afterPath="$PROJECT_DIR$/homework.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/big.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/big.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/box.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/box.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/chair.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/chair.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/lamp.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/lamp.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/picture.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/picture.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_i_see_a_lamp_04515652cb.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_i_see_a_lamp_04515652cb.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_big_b43f78b717.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_big_b43f78b717.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_small_c9b7ab8d8b.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_small_c9b7ab8d8b.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_box_3861b60043.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_box_3861b60043.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_chair_69888f733c.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_chair_69888f733c.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_picture_dffdf25fab.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_picture_dffdf25fab.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_table_9606543649.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_table_9606543649.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/small.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/small.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/table.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/big.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/big.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/box.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/box.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/chair.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/chair.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/lamp.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/lamp.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/picture.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/picture.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_i_see_a_lamp_04515652cb.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_i_see_a_lamp_04515652cb.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_big_b43f78b717.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_big_b43f78b717.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_small_c9b7ab8d8b.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_small_c9b7ab8d8b.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_box_3861b60043.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_box_3861b60043.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_chair_69888f733c.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_chair_69888f733c.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_picture_dffdf25fab.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_picture_dffdf25fab.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_table_9606543649.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_table_9606543649.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/small.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/small.mp3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/table.mp3" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/table.mp3" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/big.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/big.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/box.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/box.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/chair.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/chair.png" afterDir="false" />
@@ -32,11 +50,19 @@
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/picture.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/picture.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/small.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/small.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/table.png" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/table.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/lesson.html" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/lesson.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/quiz.json" beforeDir="false" afterPath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/quiz.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/build_tag_s_once.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/build_tag_s_once.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizgen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizgen.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/image_planner.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_planner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/tag_gamegen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tag_gamegen.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/tag_runtime/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/styes.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,25 +111,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.55.executor&quot;: &quot;Run&quot;,
-    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
-    &quot;Python.comfy_client.executor&quot;: &quot;Run&quot;,
-    &quot;Python.pyside_gui.executor&quot;: &quot;Run&quot;,
-    &quot;Python.tts_edge.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/user/PycharmProjects/skyed_automation&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "DefaultHtmlFileTemplate": "HTML File",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.55.executor": "Run",
+    "Python.app_gui.executor": "Run",
+    "Python.comfy_client.executor": "Run",
+    "Python.pyside_gui.executor": "Run",
+    "Python.tts_edge.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "C:/Users/user/PycharmProjects/skyed_automation",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "settings.editor.selected.configurable": "advanced.settings"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\user\PycharmProjects\skyedu\.venv" />
@@ -239,7 +266,23 @@
       <option name="project" value="LOCAL" />
       <updated>1772023450476</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged">
+      <option name="closed" value="true" />
+      <created>1772915454806</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1772915454806</updated>
+    </task>
+    <task id="LOCAL-00012" summary="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged">
+      <option name="closed" value="true" />
+      <created>1772915475606</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1772915475606</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -252,9 +295,10 @@
     <MESSAGE value="2.2 QG,FlUX support added.Quiz_server modified" />
     <MESSAGE value="2.2.1   QG,FlUX support added.Quiz_server modified" />
     <MESSAGE value="2.2.1   minor modification" />
-    <option name="LAST_COMMIT_MESSAGE" value="2.2.1   minor modification" />
+    <MESSAGE value="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged" />
+    <option name="LAST_COMMIT_MESSAGE" value="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1772911991230" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1772964016984" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

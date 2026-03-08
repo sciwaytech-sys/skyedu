@@ -16,6 +16,7 @@ class SkyEd_Lesson_Renderer {
     public static function init() : void {
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
         add_shortcode(self::SHORTCODE, [__CLASS__, 'shortcode']);
+        add_filter('body_class', [__CLASS__, 'body_class']);
 
         // Allow payload uploads from the automation pipeline.
         add_filter('upload_mimes', [__CLASS__, 'allow_payload_mimes'], 10, 2);
@@ -48,6 +49,17 @@ class SkyEd_Lesson_Renderer {
             ];
         }
         return $data;
+    }
+
+    public static function body_class($classes) {
+        if (!is_singular()) {
+            return $classes;
+        }
+        global $post;
+        if ($post && isset($post->post_content) && has_shortcode((string)$post->post_content, self::SHORTCODE)) {
+            $classes[] = 'skyed-lesson-page';
+        }
+        return $classes;
     }
 
     public static function enqueue_assets() : void {
@@ -155,7 +167,7 @@ class SkyEd_Lesson_Renderer {
               <div class="skyed-hero shadow-sm">
                 <div class="skyed-hero__main">
                   <div class="skyed-kicker">Sky Education</div>
-                  <h1 class="skyed-title"><?php echo self::esc($title); ?></h1>
+                  <h2 class="skyed-title"><?php echo self::esc($title); ?></h2>
                   <p class="skyed-subtitle mb-0">Vocabulary → Sentences → Practice</p>
                 </div>
                 <div class="skyed-hero__meta">

@@ -226,16 +226,52 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+
+def _contain_fit(img: Image.Image, target_w: int, target_h: int, *, bg=(238, 244, 252)) -> Image.Image:
+    im = img.convert("RGB")
+    sw, sh = im.size
+    if sw <= 0 or sh <= 0:
+        return Image.new("RGB", (target_w, target_h), bg)
+    scale = min(target_w / sw, target_h / sh)
+    nw, nh = max(1, int(sw * scale)), max(1, int(sh * scale))
+    im2 = im.resize((nw, nh), Image.LANCZOS)
+    canvas = Image.new("RGB", (target_w, target_h), bg)
+    left = (target_w - nw) // 2
+    top = (target_h - nh) // 2
+    canvas.paste(im2, (left, top))
+    return canvas
+
+
+def make_website_illustration(en: str, font_path: Optional[str], out_path: Path, *, ai_image: Optional[Image.Image] = None) -> None:
+    W, H = 1024, 768
+    canvas = Image.new("RGB", (W, H), (245, 248, 252))
+    d = ImageDraw.Draw(canvas)
+    d.rounded_rectangle((20, 20, W - 20, H - 20), radius=32, fill=(245, 248, 252), outline=(220, 229, 241), width=3)
+    art = ai_image if ai_image is not None else _make_placeholder_panel(en, W - 80, H - 120, font_path)
+    fitted = _contain_fit(art, W - 80, H - 120, bg=(245, 248, 252))
+    canvas.paste(fitted, (40, 40))
+    label_font = _load_font(26, font_path)
+    text = (en or "").strip()
+    if text:
+        bbox = d.textbbox((0, 0), text, font=label_font)
+        tw = bbox[2] - bbox[0]
+        d.rounded_rectangle((W - tw - 64, 24, W - 24, 64), radius=18, fill=(255, 255, 255))
+        d.text((W - tw - 44, 32), text, fill=(51, 65, 85), font=label_font)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(out_path, format="PNG")
+
+
 def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir: Path) -> List[Path]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    flashcards_dir = out_dir.parent / "flashcards"
+    flashcards_dir.mkdir(parents=True, exist_ok=True)
 
     picture_type = os.environ.get("PICTURE_CARDS_TYPE", "Cartoon")
     style = normalize_style(picture_type)
 
     backend, backend_name = backend_from_env()
 
-    # defaults per backend
     if backend_name == "cloudflare_flux":
         default_steps = 4
         default_timeout = 180
@@ -255,7 +291,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     timeout_s = _int_env("IMG_TIMEOUT_S", default_timeout)
     concurrency = _int_env("IMG_CONCURRENCY", default_concurrency)
 
-    # backend-specific env (used by backend_from_env)
     comfy_url = os.environ.get("COMFY_URL", "http://127.0.0.1:8188")
     workflow_path = Path(os.environ.get("COMFY_WORKFLOW", "assets/comfy/workflow_api.json"))
 
@@ -265,7 +300,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     vocab = _normalize_vocab(spec)
     plans: List[PlannedItem] = build_image_plans(spec)
 
-    # Debug dump: how each vocab item was planned (POS + render_mode + subject phrase)
     try:
         (out_dir / "image_plans.json").write_text(
             __import__("json").dumps(
@@ -289,7 +323,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         pass
     results: List[Path] = []
 
-    # Status marker for debugging
     status_path = out_dir / "ai_status.txt"
     lines: List[str] = []
     lines.append(f"AI IMAGE GEN: ENABLED")
@@ -309,16 +342,9 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         lines.append(f"HF_GUIDANCE={os.environ.get('HF_GUIDANCE','')}")
     status_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # Generate AI images first (possibly concurrently)
     def _looks_blank(png_bytes: bytes) -> bool:
-        """Heuristic blank/gray detection.
-
-        Note: flashcard-style images can have large flat backgrounds.
-        We only treat as blank if variance is extremely low.
-        """
         try:
             im = Image.open(BytesIO(png_bytes)).convert("L")
-            # downscale for speed
             im = im.resize((128, 128))
             hist = im.histogram()
             total = sum(hist)
@@ -326,7 +352,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 return True
             mean = sum(i * c for i, c in enumerate(hist)) / float(total)
             var = sum(((i - mean) ** 2) * c for i, c in enumerate(hist)) / float(total)
-            return var < 1.0  # extremely flat
+            return var < 1.0
         except Exception:
             return False
 
@@ -337,7 +363,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
             return default
 
     max_retries = _int_env2("IMG_MAX_RETRIES", 2)
-
     plan_by_word = {p.en.strip().lower(): p for p in plans}
 
     def _gen_one(en_word: str) -> Tuple[str, Optional[str]]:
@@ -379,7 +404,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 last_err = f"{type(e).__name__}: {e}"
                 continue
 
-        # Final fallback attempt: try icon_card prompt once (often succeeds when object prompt fails).
         try:
             req_fb = ImageGenRequest(
                 subject=f"{en_word} simple icon",
@@ -412,12 +436,12 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 for _f in as_completed(futs):
                     pass
 
-    # Build flashcards
     for it in vocab:
         en = it.get("en", "")
         zh = it.get("zh", "")
         slug = slugify(en)
-        out_path = out_dir / f"{slug}.png"
+        website_img = out_dir / f"{slug}.png"
+        flashcard_img = flashcards_dir / f"{slug}.png"
 
         ai_png = ai_dir / f"{slug}.png"
         fail_marker = ai_dir / f"{slug}.fail.txt"
@@ -429,7 +453,8 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         except Exception:
             ai_img = None
 
-        make_flashcard(en, zh, font_path, out_path, ai_image=ai_img)
-        results.append(out_path)
+        make_website_illustration(en, font_path, website_img, ai_image=ai_img)
+        make_flashcard(en, zh, font_path, flashcard_img, ai_image=ai_img)
+        results.append(website_img)
 
     return results
