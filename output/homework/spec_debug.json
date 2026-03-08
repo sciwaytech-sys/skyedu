@@ -1,6 +1,33 @@
 {
   "title": "Homework",
-  "vocab": [],
+  "tags": [
+    "home",
+    "actions",
+    "objects",
+    "describe"
+  ],
+  "vocab": [
+    {
+      "en": "Title: Day 1 Homework",
+      "zh": "",
+      "pos": "noun"
+    },
+    {
+      "en": "day-1-homework-home-actions-and-objects",
+      "zh": "",
+      "pos": "noun"
+    },
+    {
+      "en": "Home Actions and Objects",
+      "zh": "",
+      "pos": "noun"
+    },
+    {
+      "en": "Beginner",
+      "zh": "",
+      "pos": "noun"
+    }
+  ],
   "sentences": [],
   "qa": []
 }

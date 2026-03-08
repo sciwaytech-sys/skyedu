@@ -1,32 +1,38 @@
-#Title: Day X Homework — Theme + Sentence Pattern
+#Title: Day 4 Homework — Daily Routine + Feelings
 
-#Tags: classroom, furniture
+#Tags: daily-routine, school, feelings
 
 #Vocabulary:
-noun: table-桌子, noun: chair-椅子, noun: lamp-台灯, noun: box-盒子, noun: picture-图片, adjective: big-大的, adjective: small-小的， verb: to sleep.
+verb: finish-完成, verb: carry-背；拿, verb: visit-拜访, noun: homework-家庭作业, noun: bag-书包, noun: weekend-周末, adjective: tired-累的, adjective: busy-忙的, adjective: happy-开心的
 
 #Sentences:
-This is a table.
-这是一个桌子。
-This is a chair.
-这是一把椅子。
-I see a lamp.
-我看到一盏台灯。
-This is a box.
-这是一个盒子。
-This is a picture.
-这是一张图片。
-It’s big.
-它很大。
-It’s small.
-它很小。
+I finish my homework after dinner.
+我在晚饭后完成家庭作业。
+I carry my bag to school every day.
+我每天背着书包去学校。
+We visit our grandparents on the weekend.
+我们在周末去看望爷爷奶奶。
+My bag is heavy today.
+我的书包今天很重。
+I feel tired after school.
+放学后我觉得很累。
+My mother is busy in the evening.
+我妈妈在晚上很忙。
+I am happy on the weekend.
+我在周末很开心。
 
 #Questions and answers:
-Q1: What’s this?
-A1: It’s a table/chair/lamp/box/picture.
+Q1: What do you finish after dinner?
+A1: I finish my homework after dinner.
 
-Q2: What can you see?
-A2: I can see a ____.
+Q2: What do you carry to school?
+A2: I carry my bag to school.
 
-Q3: Is it big or small?
-A3: It’s big. / It’s small.
+Q3: When do you visit your grandparents?
+A3: We visit our grandparents on the weekend.
+
+Q4: How do you feel after school?
+A4: I feel tired after school.
+
+Q5: Are you happy on the weekend?
+A5: Yes, I am happy on the weekend.

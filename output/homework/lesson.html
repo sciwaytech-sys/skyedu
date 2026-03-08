@@ -1,62 +1,64 @@
 
     <style>
       :root{
-        --max:1100px; --r:18px; --stroke:rgba(0,0,0,.08);
-        --shadow:0 10px 25px rgba(0,0,0,.08);
+        --max:1100px; --r:16px; --stroke:rgba(0,0,0,.10);
+        --shadow:0 10px 25px rgba(0,0,0,.10);
         --bg:#f6f7fb; --card:#fff; --muted:#6b7280;
+        --brand1:#2563eb; --brand2:#38bdf8;
       }
-      .skyed-wrap{max-width:var(--max);margin:0 auto;padding:18px 14px 60px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
-      .skyed-hero{background:linear-gradient(90deg,#2563eb,#38bdf8);color:#fff;border-radius:20px;padding:16px 16px 12px;margin-bottom:14px;}
-      .skyed-hero h2{margin:0;font-size:20px;}
-      .skyed-hero .sub{opacity:.9;margin-top:6px;font-size:13px;}
-      .skyed-h3{font-size:14px;margin:16px 0 10px;color:#0f172a;font-weight:800;}
-      .skyed-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
-      @media (max-width:980px){.skyed-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-      @media (max-width:620px){.skyed-grid{grid-template-columns:1fr;}}
-      .skyed-card{background:var(--card);border:1px solid var(--stroke);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;}
-      .skyed-media{aspect-ratio:4/3;background:#eef2ff;}
-      .skyed-media img{width:100%;height:100%;object-fit:contain;display:block;} /* contain fixes “cut” images */
-      .skyed-bd{padding:12px 12px 14px;display:flex;flex-direction:column;gap:10px;}
-      .skyed-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}
-      .skyed-en{font-weight:900;font-size:18px;}
-      .skyed-zh{font-weight:650;color:var(--muted);}
+      body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#111827;}
+      .wrap{max-width:var(--max);margin:0 auto;padding:18px 14px 60px;}
+      .hero{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff;border-radius:18px;padding:16px 16px 12px;margin-bottom:14px;box-shadow:var(--shadow);}
+      .hero h2{margin:0;font-size:20px;}
+      .hero .sub{opacity:.9;margin-top:6px;font-size:13px;}
+      .h3{font-size:14px;margin:16px 0 10px;color:#0f172a;}
+      .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+      @media (max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+      @media (max-width:620px){.grid{grid-template-columns:1fr;}}
+      .card{background:var(--card);border:1px solid var(--stroke);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;}
+      .media{aspect-ratio:4/3;background:#eef2ff;display:flex;align-items:center;justify-content:center;}
+      /* IMPORTANT: contain -> prevents “cut” look */
+      .media img{width:100%;height:100%;object-fit:contain;display:block;background:#eef2ff;}
+      .bd{padding:12px 12px 14px;display:flex;flex-direction:column;gap:10px;}
+      .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+      .en{font-weight:800;font-size:18px;}
+      .zh{font-weight:650;color:var(--muted);}
       audio{width:100%;}
-      .skyed-box{background:#fff;border:1px solid var(--stroke);border-radius:18px;box-shadow:var(--shadow);padding:14px;margin-top:10px;}
-      .skyed-sent{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-bottom:1px dashed rgba(0,0,0,.08);}
-      .skyed-sent:last-child{border-bottom:0;}
-      .skyed-sent .txt{font-weight:800;color:#0f172a;flex:1;min-width:260px;}
-      .skyed-sent .aud{flex:1;min-width:260px;}
-      .skyed-qa{padding:10px 0;border-bottom:1px dashed rgba(0,0,0,.08);}
-      .skyed-qa:last-child{border-bottom:0;}
-      .skyed-q{font-weight:900;}
-      .skyed-a{color:#111827;margin-top:6px;}
-      iframe{width:100%;height:900px;border:0;border-radius:16px;box-shadow:var(--shadow);}
-      .skyed-note{font-size:12px;color:var(--muted);margin-top:6px;}
+      .note{font-size:12px;color:var(--muted);margin-top:6px;}
+
+      .sentwrap{display:flex;flex-direction:column;gap:10px;}
+      .skyed-sent{background:var(--card);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:12px;}
+      .skyed-sent .txt{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+      .skyed-sent .txt b{color:#0f172a;}
+      .skyed-sent .aud{display:flex;flex-direction:column;gap:8px;}
+
+      .quizbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 12px;}
+      .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:999px;
+           text-decoration:none;font-weight:800;border:1px solid rgba(255,255,255,.25);}
+      .btn-primary{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff;}
+      .btn-ghost{background:#fff;color:#0f172a;border:1px solid var(--stroke);}
+      .warn{background:#fff7ed;border:1px solid rgba(249,115,22,.25);color:#9a3412;border-radius:14px;padding:10px 12px;}
+      iframe{width:100%;height:900px;border:0;border-radius:16px;box-shadow:var(--shadow);background:#fff;}
     </style>
     
-    <div class="skyed-wrap">
-      <div class="skyed-hero">
+    <div class="wrap">
+      <div class="hero">
         <h2>Homework</h2>
-        <div class="sub">Vocabulary → Sentence Practice → Quiz</div>
+        <div class="sub">Vocabulary → Sentences → Practice</div>
       </div>
 
-      <div class="skyed-h3">Vocabulary（词汇）</div>
-      <div class="skyed-grid">
+      <div class="h3">Vocabulary Cards</div>
+      <div class="grid">
+        <div class="card"><div class="media"><img src="cards/title_day_1_homework.png" alt="Title: Day 1 Homework" loading="lazy"></div><div class="bd"><div class="row"><div class="en">Title: Day 1 Homework</div><div class="zh"></div></div><audio controls src="audio/en/title_day_1_homework.mp3"></audio><audio controls src="audio/zh/title_day_1_homework.mp3"></audio></div></div><div class="card"><div class="media"><img src="cards/day-1-homework-home-actions-and-objects.png" alt="day-1-homework-home-actions-and-objects" loading="lazy"></div><div class="bd"><div class="row"><div class="en">day-1-homework-home-actions-and-objects</div><div class="zh"></div></div><audio controls src="audio/en/day-1-homework-home-actions-and-objects.mp3"></audio><audio controls src="audio/zh/day-1-homework-home-actions-and-objects.mp3"></audio></div></div><div class="card"><div class="media"><img src="cards/home_actions_and_objects.png" alt="Home Actions and Objects" loading="lazy"></div><div class="bd"><div class="row"><div class="en">Home Actions and Objects</div><div class="zh"></div></div><audio controls src="audio/en/home_actions_and_objects.mp3"></audio><audio controls src="audio/zh/home_actions_and_objects.mp3"></audio></div></div><div class="card"><div class="media"><img src="cards/beginner.png" alt="Beginner" loading="lazy"></div><div class="bd"><div class="row"><div class="en">Beginner</div><div class="zh"></div></div><audio controls src="audio/en/beginner.mp3"></audio><audio controls src="audio/zh/beginner.mp3"></audio></div></div>
+      </div>
+      <div class="note">Keep practice 5–10 minutes. Audio optional.</div>
+
+      <div class="h3">Sentences</div>
+      <div class="sentwrap">
         
       </div>
-      <div class="skyed-note">Say each word 2 times + make 1 full sentence.</div>
 
-      <div class="skyed-h3">Sentences（A）</div>
-      <div class="skyed-box">
-        <div class="skyed-note">No sentences found.</div>
-      </div>
-
-      <div class="skyed-h3">Questions and answers（B）</div>
-      <div class="skyed-box">
-        <div class="skyed-note">No Q&A found.</div>
-      </div>
-
-      <div class="skyed-h3">Quiz</div>
-      <iframe src="index.html" loading="lazy"></iframe>
+      <div class="h3">Practice</div>
+      <div class="quizbar"><a class="btn btn-primary" href="index.html" target="_blank" rel="noopener">▶ Start Practice</a><a class="btn btn-ghost" href="index.html">Open here</a></div><iframe src="index.html" loading="lazy"></iframe>
     </div>
     

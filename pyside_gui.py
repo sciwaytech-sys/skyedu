@@ -95,6 +95,7 @@ class AppConfig:
     # comfy workflow
     comfy_workflow_path: str = "assets/comfy/workflow_api.json"
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
+    lesson_theme: str = "sky"  # sky | strict | fun | app
 
     # image generation backend
     image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
@@ -134,6 +135,7 @@ def _default_config(root_dir: Path) -> AppConfig:
         voice_zh="zh-CN-XiaoxiaoNeural",
         comfy_workflow_path=str((root_dir / "assets" / "comfy" / "workflow_api.json").resolve()),
         picture_cards_type="Realistic",
+        lesson_theme="sky",
 
         image_backend="comfyui",
         img_width=768,
@@ -239,6 +241,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         voice_zh=str(data.get("voice_zh", base.voice_zh)),
         comfy_workflow_path=str(data.get("comfy_workflow_path", base.comfy_workflow_path)),
         picture_cards_type=str(data.get("picture_cards_type", base.picture_cards_type)),
+        lesson_theme=str(data.get("lesson_theme", base.lesson_theme)).strip().lower() or base.lesson_theme,
         image_backend=str(data.get("image_backend", base.image_backend)),
         img_width=int(data.get("img_width", base.img_width)),
         img_height=int(data.get("img_height", base.img_height)),
@@ -255,6 +258,8 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
     )
 
     _autofill_cfg_from_env(cfg)
+    if cfg.lesson_theme not in ("sky", "strict", "fun", "app"):
+        cfg.lesson_theme = "sky"
 
     # Write back a repaired normalized config (important)
     save_config(path, cfg)
@@ -277,6 +282,7 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "voice_zh": str(cfg.voice_zh),
         "comfy_workflow_path": str(cfg.comfy_workflow_path),
         "picture_cards_type": str(cfg.picture_cards_type),
+        "lesson_theme": str(cfg.lesson_theme),
         "image_backend": str(cfg.image_backend),
         "img_width": int(cfg.img_width),
         "img_height": int(cfg.img_height),
@@ -365,6 +371,95 @@ def _load_json(path: Path) -> Dict[str, Any]:
 def _save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _maybe_reexec_with_configured_python(cfg: AppConfig, root_dir: Path) -> bool:
+    """
+    Relaunch the GUI with the configured project interpreter if the current process
+    was started from the wrong venv/interpreter.
+    """
+    try:
+        current = Path(sys.executable).resolve()
+    except Exception:
+        current = Path(sys.executable)
+    try:
+        target = Path(cfg.project_python).resolve()
+    except Exception:
+        target = Path(cfg.project_python)
+
+    if not target.exists():
+        return False
+
+    if os.getenv("SKYED_GUI_REEXEC_DONE", "0") == "1":
+        return False
+
+    if str(current).lower() == str(target).lower():
+        return False
+
+    env = os.environ.copy()
+    env["SKYED_GUI_REEXEC_DONE"] = "1"
+    script = str(Path(__file__).resolve())
+    subprocess.Popen([str(target), script, *sys.argv[1:]], cwd=str(root_dir), env=env)
+    return True
+
+
+def _run_python_subprocess(
+    python_exe: str,
+    args: List[str],
+    *,
+    cwd: str,
+    timeout: int = 120,
+    env: Optional[Dict[str, str]] = None,
+) -> subprocess.CompletedProcess:
+    proc_env = os.environ.copy()
+    if env:
+        proc_env.update(env)
+    proc_env["PYTHONIOENCODING"] = "utf-8"
+    return subprocess.run(
+        [python_exe, *args],
+        cwd=cwd,
+        env=proc_env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+
+
+def _list_edge_tts_voices_via_python(python_exe: str, cwd: str, timeout: int = 90) -> Tuple[bool, str]:
+    code = r"""
+import asyncio, json, edge_tts
+async def main():
+    voices = await edge_tts.list_voices()
+    names = sorted({(v.get("ShortName") or "") for v in voices if (v.get("ShortName") or "")})
+    print(json.dumps(names, ensure_ascii=False))
+asyncio.run(main())
+"""
+    cp = _run_python_subprocess(python_exe, ["-c", code], cwd=cwd, timeout=timeout)
+    if cp.returncode != 0:
+        return False, (cp.stderr or cp.stdout or f"edge_tts voice load failed with code {cp.returncode}").strip()
+    return True, cp.stdout.strip()
+
+
+def _run_edge_tts_cli(
+    python_exe: str,
+    *,
+    text: str,
+    out_path: Path,
+    voice: str,
+    cwd: str,
+    timeout: int = 180,
+) -> Tuple[bool, str]:
+    cp = _run_python_subprocess(
+        python_exe,
+        ["-m", "edge_tts", "--text", text, "--write-media", str(out_path), "--voice", voice],
+        cwd=cwd,
+        timeout=timeout,
+    )
+    if cp.returncode != 0:
+        return False, (cp.stderr or cp.stdout or f"edge_tts failed with code {cp.returncode}").strip()
+    return True, cp.stdout.strip()
 
 
 def _is_node_map(d: Dict[str, Any]) -> bool:
@@ -708,7 +803,8 @@ class MainWindow(QtWidgets.QMainWindow):
         wf = self.resolve_workflow_path()
         self.append_log(
             f"GUI ready.\n"
-            f"[ENV] Python={sys.executable}\n"
+            f"[ENV] Python(current)={sys.executable}\n"
+            f"[ENV] Python(configured)={self.cfg.project_python}\n"
             f"[CFG] loaded from: {self.cfg_path}\n"
             f"[CFG] workflow(raw)={self.cfg.comfy_workflow_path}\n"
             f"[CFG] workflow(resolved)={wf} exists={wf.exists()}\n"
@@ -922,10 +1018,30 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_tab_publish(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
+
         g = self._group_box("WordPress")
-        l = QtWidgets.QVBoxLayout(g)
-        l.addWidget(QtWidgets.QLabel("Base URL: https://course.skyedu.fun"))
-        l.addWidget(QtWidgets.QLabel("Tip: use Generate + Publish or Publish Only."))
+        fl = QtWidgets.QFormLayout(g)
+
+        lbl_base = QtWidgets.QLabel("Base URL: https://course.skyedu.fun")
+        lbl_base.setWordWrap(True)
+        fl.addRow(lbl_base)
+
+        self.combo_lesson_theme = QtWidgets.QComboBox()
+        self.combo_lesson_theme.addItems(["sky", "strict", "fun", "app"])
+        if self.cfg.lesson_theme in ("sky", "strict", "fun", "app"):
+            self.combo_lesson_theme.setCurrentText(self.cfg.lesson_theme)
+        else:
+            self.combo_lesson_theme.setCurrentText("sky")
+        self.combo_lesson_theme.currentTextChanged.connect(self.on_lesson_theme_changed)
+        fl.addRow("Lesson Theme:", self.combo_lesson_theme)
+
+        tip = QtWidgets.QLabel(
+            "Choose the shortcode renderer theme used when publishing. "
+            "Generate + Publish and Publish Only will pass this theme into run_pipeline.py."
+        )
+        tip.setWordWrap(True)
+        fl.addRow(tip)
+
         lay.addWidget(g)
         lay.addStretch(1)
         return w
@@ -1174,21 +1290,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self._capture_image_tab_settings()
         save_config(self.cfg_path, self.cfg)
 
+    def on_lesson_theme_changed(self, _txt: str) -> None:
+        if hasattr(self, "combo_lesson_theme"):
+            value = self.combo_lesson_theme.currentText().strip().lower()
+            self.cfg.lesson_theme = value if value in ("sky", "strict", "fun", "app") else "sky"
+            save_config(self.cfg_path, self.cfg)
+            self.append_log(f"[Publish] lesson theme set to {self.cfg.lesson_theme}\n")
+
     def load_voices_background(self) -> None:
-        self.append_log("[Audio] loading voice list…\n")
+        self.append_log(f"[Audio] loading voice list via: {self.cfg.project_python}\n")
 
         def worker():
             try:
-                import edge_tts  # type: ignore
-
-                async def fetch():
-                    return await edge_tts.list_voices()
-
-                voices = asyncio.run(fetch())
-                names = sorted({(v.get("ShortName") or "") for v in voices if (v.get("ShortName") or "")})
+                ok, payload = _list_edge_tts_voices_via_python(
+                    self.cfg.project_python,
+                    self.cfg.project_workdir,
+                    timeout=90,
+                )
+                if not ok:
+                    self.voices_failed.emit(f"{payload}\nPython={self.cfg.project_python}")
+                    return
+                names = json.loads(payload)
+                if not isinstance(names, list):
+                    raise ValueError("voice list payload is not a list")
                 self.voices_loaded.emit(names, names)
             except Exception as e:
-                self.voices_failed.emit(f"{e}\nPython={sys.executable}")
+                self.voices_failed.emit(f"{e}\nPython={self.cfg.project_python}")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1361,7 +1488,12 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         input_path = str(self.default_editor_path())
-        args: List[str] = [str(script), "--input", input_path]
+        if hasattr(self, "combo_lesson_theme"):
+            value = self.combo_lesson_theme.currentText().strip().lower()
+            self.cfg.lesson_theme = value if value in ("sky", "strict", "fun", "app") else "sky"
+            save_config(self.cfg_path, self.cfg)
+
+        args: List[str] = [str(script), "--input", input_path, "--theme", self.cfg.lesson_theme]
         if mode == "generate_publish":
             args.append("--publish")
         elif mode == "publish_only":
@@ -1410,6 +1542,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"W={self.cfg.img_width} H={self.cfg.img_height} STEPS={self.cfg.img_steps} "
             f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency}\n"
         )
+        self.append_log(f"[Publish] THEME={self.cfg.lesson_theme}\n")
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
     def stop_pipeline(self) -> None:
@@ -1432,6 +1565,10 @@ def main() -> None:
     if not Path(cfg.project_python).exists():
         cfg.project_python = str((root_dir / ".venv" / "Scripts" / "python.exe").resolve())
     save_config(cfg_path, cfg)
+
+    if _maybe_reexec_with_configured_python(cfg, root_dir):
+        return
+
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     win = MainWindow(root_dir, cfg, cfg_path)

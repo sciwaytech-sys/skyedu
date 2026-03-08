@@ -248,6 +248,12 @@ def main() -> None:
     ap.add_argument("--publish", action="store_true", help="If set, upload to WordPress and create post/page")
     ap.add_argument("--publish-only", action="store_true", help="Publish from existing output folder (no generation)")
     ap.add_argument("--dry-run", action="store_true", help="Skip image+audio generation (debug/validation)")
+    ap.add_argument(
+        "--theme",
+        default=None,
+        choices=["sky", "strict", "fun", "app"],
+        help="Lesson renderer theme for WordPress shortcode publishing.",
+    )
     args = ap.parse_args()
 
     # Support both WP_BASE_URL and WP_BASE (older runs/configs).
@@ -256,7 +262,9 @@ def main() -> None:
     wp_pass = os.getenv("WP_APP_PASSWORD", "").strip()
     wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # page works normally in your setup
     wp_render_mode = (os.getenv("WP_RENDER_MODE", "shortcode") or "shortcode").strip().lower()
-    lesson_theme = (os.getenv("WP_LESSON_THEME", "sky") or "sky").strip().lower()
+    lesson_theme = (args.theme or os.getenv("WP_LESSON_THEME", "sky") or "sky").strip().lower()
+    if lesson_theme not in ("sky", "strict", "fun", "app"):
+        lesson_theme = "sky"
 
     output_dir = Path(os.getenv("OUTPUT_DIR", "output"))
     font_path = os.getenv("FONT_PATH", "").strip() or None
@@ -264,6 +272,9 @@ def main() -> None:
     # Quiz hosting base (NOT WordPress permalinks). If not set, we still generate local quiz files.
     quiz_public_base = os.getenv("QUIZ_PUBLIC_BASE", "").rstrip("/")
     quiz_embed_mode = (os.getenv("QUIZ_EMBED_MODE", "embed") or "embed").strip().lower()
+
+    print(f"[ENV] PYTHON={os.sys.executable}")
+    print(f"[PUBLISH] THEME={lesson_theme}")
 
     hw_text = Path(args.input).read_text(encoding="utf-8", errors="ignore")
     spec = parse_homework_text(hw_text)
