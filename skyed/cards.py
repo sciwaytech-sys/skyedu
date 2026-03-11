@@ -10,9 +10,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+import json
+
 from .image_backends import ImageGenRequest, backend_from_env
 from .prompt_templates import normalize_style
-from .image_planner import build_image_plans, PlannedItem
+from .image_specs import ImageSpec, build_specs_from_parsed_spec
+from .image_validation import ImageValidator
+from .fallback_cards import make_fallback_card
 
 
 def slugify(s: str) -> str:
@@ -261,6 +265,53 @@ def make_website_illustration(en: str, font_path: Optional[str], out_path: Path,
     canvas.save(out_path, format="PNG")
 
 
+def _render_mode_for_image_spec(spec: ImageSpec) -> str:
+    pos = (spec.pos or "").strip().lower()
+    if pos == "verb":
+        return "action_scene"
+    if pos in ("adjective", "time", "phrase", "preposition"):
+        return "attribute_scene"
+    return "single_object"
+
+
+def _retry_positive_prompt(img_spec: ImageSpec, attempt: int) -> str:
+    base = (img_spec.positive_prompt or "").strip()
+    if attempt <= 0:
+        return base
+    extras = [
+        "literal child-friendly ESL card illustration",
+        "show the target meaning directly",
+        "avoid decorative substitutions",
+        "make the main concept immediately recognizable",
+    ]
+    if attempt >= 2:
+        extras.extend([
+            "simple composition",
+            "one main scene only",
+            "obvious school or home context",
+        ])
+    return ", ".join([x for x in [base] + extras if x])
+
+
+def _retry_negative_prompt(img_spec: ImageSpec, attempt: int) -> str:
+    negatives = list(img_spec.must_exclude or [])
+    if attempt >= 1:
+        negatives.extend([
+            "symbolic substitution",
+            "decorative still life",
+            "random object",
+            "ambiguous scene",
+        ])
+    if attempt >= 2:
+        negatives.extend([
+            "fashion item",
+            "camera",
+            "vase",
+            "stationery only",
+        ])
+    return ", ".join(dict.fromkeys(x.strip() for x in negatives if x and x.strip()))
+
+
 def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir: Path) -> List[Path]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -298,36 +349,30 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     ai_dir.mkdir(parents=True, exist_ok=True)
 
     vocab = _normalize_vocab(spec)
-    plans: List[PlannedItem] = build_image_plans(spec)
+    image_specs = build_specs_from_parsed_spec(spec)
+    spec_by_word = {s.word.strip().lower(): s for s in image_specs}
+    validator = ImageValidator()
+
+    image_specs_path = out_dir / "image_specs.json"
+    image_report_path = out_dir / "image_report.json"
+    status_path = out_dir / "ai_status.txt"
 
     try:
-        (out_dir / "image_plans.json").write_text(
-            __import__("json").dumps(
-                [
-                    {
-                        "en": p.en,
-                        "zh": p.zh,
-                        "pos": p.pos,
-                        "render_mode": p.render_mode,
-                        "subject": p.subject,
-                        "fallback_mode": p.fallback_mode,
-                    }
-                    for p in plans
-                ],
-                ensure_ascii=False,
-                indent=2,
-            ),
+        image_specs_path.write_text(
+            json.dumps([s.to_dict() for s in image_specs], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
     except Exception:
         pass
-    results: List[Path] = []
 
-    status_path = out_dir / "ai_status.txt"
+    results: List[Path] = []
+    report_rows: List[Dict[str, Any]] = []
+
     lines: List[str] = []
-    lines.append(f"AI IMAGE GEN: ENABLED")
+    lines.append("AI IMAGE GEN: ENABLED")
     lines.append(f"BACKEND={backend_name}")
     lines.append(f"STYLE={style}")
+    lines.append("SOURCE_OF_TRUTH=image_specs")
     lines.append(f"IMG_WIDTH={width} IMG_HEIGHT={height} IMG_STEPS={steps} IMG_TIMEOUT_S={timeout_s} IMG_CONCURRENCY={concurrency}")
     if backend_name == "comfyui":
         lines.append(f"COMFY_URL={comfy_url}")
@@ -363,78 +408,117 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
             return default
 
     max_retries = _int_env2("IMG_MAX_RETRIES", 2)
-    plan_by_word = {p.en.strip().lower(): p for p in plans}
 
-    def _gen_one(en_word: str) -> Tuple[str, Optional[str]]:
+    def _gen_one(entry: Dict[str, str]) -> Dict[str, Any]:
+        en_word = str(entry.get("en") or "").strip()
         slug = slugify(en_word)
         ai_png = ai_dir / f"{slug}.png"
         fail_marker = ai_dir / f"{slug}.fail.txt"
+        fallback_marker = ai_dir / f"{slug}.fallback.txt"
+        img_spec = spec_by_word.get(en_word.strip().lower())
 
-        if ai_png.exists() and ai_png.stat().st_size > 0 and not fail_marker.exists():
-            return en_word, None
+        if img_spec is None:
+            img_spec = ImageSpec(
+                word=en_word,
+                pos=str(entry.get("pos") or "noun"),
+                zh=str(entry.get("zh") or ""),
+                positive_prompt=f"ESL lesson illustration for children, clear literal meaning of {en_word}, school or home context",
+                negative_prompt="abstract, symbolic substitution, random object",
+                fallback_label=en_word,
+            )
 
-        planned = plan_by_word.get(en_word.strip().lower())
-        subj = planned.subject if planned else en_word
-        mode = planned.render_mode if planned else "single_object"
+        row: Dict[str, Any] = {
+            "word": en_word,
+            "slug": slug,
+            "status": "pending",
+            "backend": backend_name,
+            "attempts": [],
+            "ai_path": str(ai_png),
+            "image_spec": img_spec.to_dict(),
+        }
 
-        last_err: Optional[str] = None
         import hashlib
-        base_seed = int(hashlib.sha256((subj or en_word).encode("utf-8")).hexdigest()[:8], 16)
+        seed_base = int(hashlib.sha256((img_spec.positive_prompt or en_word).encode("utf-8")).hexdigest()[:8], 16)
+        accepted = False
+        last_err: Optional[str] = None
 
         for attempt in range(0, max(0, max_retries) + 1):
+            positive = _retry_positive_prompt(img_spec, attempt)
+            negative = _retry_negative_prompt(img_spec, attempt)
+            req = ImageGenRequest(
+                subject=img_spec.word,
+                style=style,
+                render_mode=_render_mode_for_image_spec(img_spec),
+                width=width,
+                height=height,
+                steps=steps,
+                seed=seed_base + attempt,
+                positive_prompt=positive,
+                negative_prompt=negative,
+            )
+            attempt_row: Dict[str, Any] = {
+                "attempt": attempt,
+                "render_mode": req.render_mode,
+                "positive_prompt": positive,
+                "negative_prompt": negative,
+            }
             try:
-                req = ImageGenRequest(
-                    subject=subj,
-                    style=style,
-                    render_mode=mode,
-                    width=width,
-                    height=height,
-                    steps=steps,
-                    seed=None if attempt == 0 else (base_seed + attempt),
-                )
                 png_bytes = backend.generate_png(req, timeout_s=timeout_s)
                 if _looks_blank(png_bytes):
+                    attempt_row["accepted"] = False
+                    attempt_row["error"] = "Blank/near-blank output detected"
+                    row["attempts"].append(attempt_row)
                     last_err = "Blank/near-blank output detected"
                     continue
                 ai_png.write_bytes(png_bytes)
-                if fail_marker.exists():
-                    fail_marker.unlink(missing_ok=True)
-                return en_word, None
+                validation = validator.validate(ai_png, img_spec, used_prompt=positive)
+                attempt_row["validation"] = {
+                    "accepted": validation.accepted,
+                    "score": validation.score,
+                    "reasons": list(validation.reasons),
+                }
+                row["attempts"].append(attempt_row)
+                if validation.accepted:
+                    accepted = True
+                    row["status"] = "accepted"
+                    row["final_prompt"] = positive
+                    row["final_negative_prompt"] = negative
+                    if fail_marker.exists():
+                        fail_marker.unlink(missing_ok=True)
+                    if fallback_marker.exists():
+                        fallback_marker.unlink(missing_ok=True)
+                    break
+                last_err = "; ".join(validation.reasons) or "Validation rejected image"
             except Exception as e:
+                attempt_row["accepted"] = False
+                attempt_row["error"] = f"{type(e).__name__}: {e}"
+                row["attempts"].append(attempt_row)
                 last_err = f"{type(e).__name__}: {e}"
-                continue
 
-        try:
-            req_fb = ImageGenRequest(
-                subject=f"{en_word} simple icon",
-                style=style,
-                render_mode="icon_card",
-                width=width,
-                height=height,
-                steps=max(1, min(steps, 6)),
-                seed=base_seed + 99,
-            )
-            png_bytes = backend.generate_png(req_fb, timeout_s=timeout_s)
-            if not _looks_blank(png_bytes):
-                ai_png.write_bytes(png_bytes)
-                if fail_marker.exists():
-                    fail_marker.unlink(missing_ok=True)
-                return en_word, None
-        except Exception:
-            pass
+        if not accepted:
+            subtitle = img_spec.scene_type or img_spec.fallback_label or img_spec.word
+            make_fallback_card(img_spec, ai_png, subtitle=subtitle)
+            fallback_marker.write_text(last_err or "Fallback created", encoding="utf-8")
+            fail_marker.write_text(last_err or "Fallback created", encoding="utf-8")
+            row["status"] = "fallback"
+            row["fallback_reason"] = last_err or "AI image rejected"
 
-        fail_marker.write_text(str(last_err or "Unknown error"), encoding="utf-8")
-        return en_word, str(last_err or "Unknown error")
+        return row
 
     if vocab:
         if concurrency <= 1:
             for it in vocab:
-                _gen_one(it["en"])
+                report_rows.append(_gen_one(it))
         else:
             with ThreadPoolExecutor(max_workers=concurrency) as ex:
-                futs = [ex.submit(_gen_one, it["en"]) for it in vocab]
-                for _f in as_completed(futs):
-                    pass
+                futs = [ex.submit(_gen_one, it) for it in vocab]
+                for f in as_completed(futs):
+                    report_rows.append(f.result())
+
+    try:
+        image_report_path.write_text(json.dumps(report_rows, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
     for it in vocab:
         en = it.get("en", "")
@@ -444,11 +528,9 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         flashcard_img = flashcards_dir / f"{slug}.png"
 
         ai_png = ai_dir / f"{slug}.png"
-        fail_marker = ai_dir / f"{slug}.fail.txt"
-
         ai_img: Optional[Image.Image] = None
         try:
-            if ai_png.exists() and ai_png.stat().st_size > 0 and not fail_marker.exists():
+            if ai_png.exists() and ai_png.stat().st_size > 0:
                 ai_img = Image.open(ai_png).convert("RGB")
         except Exception:
             ai_img = None
@@ -458,3 +540,4 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         results.append(website_img)
 
     return results
+

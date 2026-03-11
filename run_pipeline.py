@@ -309,7 +309,7 @@ def main() -> None:
     else:
         lesson_root = ensure_dir(lesson_root)
         # Clean previous run
-        for name in ("cards", "flashcards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json"):
+        for name in ("cards", "flashcards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json", "image_specs.json", "image_report.json", "image_plans.json", "ai_status.txt"):
             p = lesson_root / name
             if p.exists():
                 if p.is_dir():
@@ -426,6 +426,10 @@ def main() -> None:
     print(f"Generated: {lesson_root}")
     print(f"Lesson local path: {(lesson_root / 'lesson.html')}")
     print(f"Quiz local path: {(lesson_root / 'index.html')}")
+    if (lesson_root / 'cards' / 'image_specs.json').exists():
+        print(f"Image specs path: {(lesson_root / 'cards' / 'image_specs.json')}")
+    if (lesson_root / 'cards' / 'image_report.json').exists():
+        print(f"Image report path: {(lesson_root / 'cards' / 'image_report.json')}")
 
     do_publish = bool(args.publish or args.publish_only)
     if not do_publish:

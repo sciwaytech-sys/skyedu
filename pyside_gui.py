@@ -989,12 +989,21 @@ class MainWindow(QtWidgets.QMainWindow):
         row = QtWidgets.QHBoxLayout()
         btn_refresh = QtWidgets.QPushButton("Refresh Preview")
         btn_open = QtWidgets.QPushButton("Open Latest Output Folder")
-        btn_refresh.setMinimumHeight(34)
-        btn_open.setMinimumHeight(34)
+        btn_specs = QtWidgets.QPushButton("Open Latest Image Specs")
+        btn_report = QtWidgets.QPushButton("Open Latest Image Report")
+        btn_clear = QtWidgets.QPushButton("Clear Latest Image Cache")
+        for b in (btn_refresh, btn_open, btn_specs, btn_report, btn_clear):
+            b.setMinimumHeight(34)
         btn_refresh.clicked.connect(self.refresh_image_preview)
         btn_open.clicked.connect(self.open_latest_output_folder)
+        btn_specs.clicked.connect(self.open_latest_image_specs)
+        btn_report.clicked.connect(self.open_latest_image_report)
+        btn_clear.clicked.connect(self.clear_latest_image_cache)
         row.addWidget(btn_refresh)
         row.addWidget(btn_open)
+        row.addWidget(btn_specs)
+        row.addWidget(btn_report)
+        row.addWidget(btn_clear)
         row.addStretch(1)
         l.addLayout(row)
 
@@ -1068,6 +1077,59 @@ class MainWindow(QtWidgets.QMainWindow):
             os.startfile(str(p))  # type: ignore[attr-defined]
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "Open failed", str(e))
+
+    def _open_latest_artifact(self, relative_path: str, label: str) -> None:
+        lesson_dir = self._find_latest_lesson_dir()
+        if not lesson_dir:
+            QtWidgets.QMessageBox.information(self, "No output", "No output lesson folder found under ./output")
+            return
+        target = lesson_dir / relative_path
+        if not target.exists():
+            QtWidgets.QMessageBox.information(self, label, f"File not found:\n{target}")
+            return
+        try:
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, label, str(e))
+
+    def open_latest_image_specs(self) -> None:
+        self._open_latest_artifact("cards/image_specs.json", "Image Specs")
+
+    def open_latest_image_report(self) -> None:
+        self._open_latest_artifact("cards/image_report.json", "Image Report")
+
+    def clear_latest_image_cache(self) -> None:
+        lesson_dir = self._find_latest_lesson_dir()
+        if not lesson_dir:
+            QtWidgets.QMessageBox.information(self, "No output", "No output lesson folder found under ./output")
+            return
+
+        removed: List[str] = []
+        targets = [
+            lesson_dir / "cards" / "ai",
+            lesson_dir / "cards" / "image_specs.json",
+            lesson_dir / "cards" / "image_report.json",
+            lesson_dir / "cards" / "image_plans.json",
+            lesson_dir / "cards" / "ai_status.txt",
+        ]
+        for target in targets:
+            if not target.exists():
+                continue
+            try:
+                if target.is_dir():
+                    import shutil
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink()
+                removed.append(str(target))
+            except Exception as e:
+                self.append_log(f"[Images] Failed to remove {target}: {e}\n")
+
+        if removed:
+            self.append_log("[Images] Cleared latest image cache:\n" + "\n".join(removed) + "\n")
+            QtWidgets.QMessageBox.information(self, "Image cache cleared", "Removed latest image AI cache/spec/report files.")
+        else:
+            QtWidgets.QMessageBox.information(self, "Image cache", "No image cache/spec/report files found in the latest lesson folder.")
 
     def _clear_images_grid(self) -> None:
         if not hasattr(self, "images_grid"):

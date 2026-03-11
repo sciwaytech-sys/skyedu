@@ -52,6 +52,7 @@ class ImageGenRequest:
     height: int = 768
     steps: int = 20
     seed: Optional[int] = None
+    positive_prompt: Optional[str] = None
     negative_prompt: Optional[str] = None
 
 
@@ -84,9 +85,12 @@ class CloudflareFluxBackend(BaseImageBackend):
         if steps > 8:
             steps = 8
 
-        seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
+        seed_basis = req.positive_prompt or req.subject
+        seed = req.seed if req.seed is not None else _stable_seed_for_text(seed_basis)
 
         pos, _neg = render_prompts(req.style, req.subject, req.render_mode)
+        if req.positive_prompt:
+            pos = req.positive_prompt
         # Flux API does not document negative_prompt/size params; keep prompt compact.
         payload: Dict[str, Any] = {
             "prompt": pos,
@@ -118,6 +122,8 @@ class HuggingFaceEndpointBackend(BaseImageBackend):
             raise ValueError("HF_TOKEN missing")
 
         pos, neg = render_prompts(req.style, req.subject, req.render_mode)
+        if req.positive_prompt:
+            pos = req.positive_prompt
         if req.negative_prompt:
             neg = req.negative_prompt
 
@@ -175,7 +181,12 @@ class ComfyUIBackend(BaseImageBackend):
     def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 600) -> bytes:
         from .comfy_client import generate_image_bytes  # local import to avoid cycles
         pos, neg = render_prompts(req.style, req.subject, req.render_mode)
-        seed = req.seed if req.seed is not None else _stable_seed_for_text(req.subject)
+        if req.positive_prompt:
+            pos = req.positive_prompt
+        if req.negative_prompt:
+            neg = req.negative_prompt
+        seed_basis = req.positive_prompt or req.subject
+        seed = req.seed if req.seed is not None else _stable_seed_for_text(seed_basis)
         return generate_image_bytes(
             comfy_url=self.base_url,
             workflow_path=self.workflow_path,

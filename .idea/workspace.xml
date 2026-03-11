@@ -4,8 +4,76 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.0.2 changes in structure and pipeline logic">
-      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.0.1 Final">
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/_tts_preview/tts_test_en_1771038366.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/_tts_preview/tts_test_en_1771038383.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/_tts_preview/tts_test_en_1771038401.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/_tts_preview/tts_test_en_1772023512.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/_tts_preview/tts_test_en_1772023535.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/en/table.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/audio/zh/table.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/ai/table.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/cards/table.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/lesson.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-1-homework/quiz.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/big.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/box.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/chair.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/lamp.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/picture.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_i_see_a_lamp_04515652cb.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_big_b43f78b717.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_its_small_c9b7ab8d8b.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_box_3861b60043.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_chair_69888f733c.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_picture_dffdf25fab.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/sent_this_is_a_table_9606543649.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/small.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/en/table.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/big.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/box.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/chair.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/lamp.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/picture.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_i_see_a_lamp_04515652cb.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_big_b43f78b717.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_its_small_c9b7ab8d8b.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_box_3861b60043.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_chair_69888f733c.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_picture_dffdf25fab.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/sent_this_is_a_table_9606543649.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/small.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/audio/zh/table.mp3" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/big.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/box.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/chair.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/lamp.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/picture.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai/small.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/ai_status.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/big.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/box.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/chair.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/lamp.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/picture.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/small.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/cards/table.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/lesson.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/day-2-homework-theme-words-sentence-pattern-describeidentify/quiz.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/homework/index.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/homework/lesson.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/homework/quiz.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/homework/spec_debug.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/image_backends.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_backends.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/README.txt" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/README.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -54,33 +122,33 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.55.executor": "Run",
-    "Python.app_gui.executor": "Run",
-    "Python.comfy_client.executor": "Run",
-    "Python.pyside_gui.executor": "Run",
-    "Python.tts_edge.executor": "Run",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "C:/Users/user/PycharmProjects/skyed_automation",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.55.executor&quot;: &quot;Run&quot;,
+    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.comfy_client.executor&quot;: &quot;Run&quot;,
+    &quot;Python.pyside_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tts_edge.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/user/PycharmProjects/skyed_automation&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\user\PycharmProjects\skyedu\.venv" />
@@ -136,7 +204,9 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1769777297131</updated>
-      <workItem from="1772992417293" duration="2958000" />
+      <workItem from="1772992417293" duration="1430000" />
+      <workItem from="1773241215195" duration="379000" />
+      <workItem from="1773250742878" duration="3423000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -242,15 +312,7 @@
       <option name="project" value="LOCAL" />
       <updated>1772976827453</updated>
     </task>
-    <task id="LOCAL-00014" summary="3.0.2 changes in structure and pipeline logic">
-      <option name="closed" value="true" />
-      <created>1772997046875</created>
-      <option name="number" value="00014" />
-      <option name="presentableId" value="LOCAL-00014" />
-      <option name="project" value="LOCAL" />
-      <updated>1772997046875</updated>
-    </task>
-    <option name="localTasksCounter" value="15" />
+    <option name="localTasksCounter" value="14" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -268,10 +330,9 @@
     <MESSAGE value="2.2.1   minor modification" />
     <MESSAGE value="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged" />
     <MESSAGE value="3.0.1 Final" />
-    <MESSAGE value="3.0.2 changes in structure and pipeline logic" />
-    <option name="LAST_COMMIT_MESSAGE" value="3.0.2 changes in structure and pipeline logic" />
+    <option name="LAST_COMMIT_MESSAGE" value="3.0.1 Final" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1772994835871" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1773262788588" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

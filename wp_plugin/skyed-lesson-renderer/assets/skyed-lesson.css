@@ -353,3 +353,28 @@ body.skyed-lesson-page .skyed-sent .card-body {
     padding: 0.8rem !important;
   }
 }
+
+
+/* v0.1.2-footerfix — hide only the unrelated theme footer on lesson shortcode pages */
+body.skyed-lesson-page .site-footer,
+body.skyed-lesson-page footer.site-footer,
+body.skyed-lesson-page #colophon,
+body.skyed-lesson-page .thim-ekits-footer,
+body.skyed-lesson-page .footer,
+body.skyed-lesson-page .footer-bottom,
+body.skyed-lesson-page .footer-top,
+body.skyed-lesson-page .footer-widgets,
+body.skyed-lesson-page .footer-widget-area,
+body.skyed-lesson-page .site-info {
+  display: none !important;
+}
+
+/* remove leftover bottom spacing if the theme reserves footer space */
+body.skyed-lesson-page .site-content,
+body.skyed-lesson-page .content-area,
+body.skyed-lesson-page .entry-content,
+body.skyed-lesson-page .site-main,
+body.skyed-lesson-page .lp-content-area {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}

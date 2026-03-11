@@ -1,12 +1,13 @@
-SkyEd Lesson Renderer v0.1.2
+SkyEd Lesson Renderer — footer-only fix
 
-Shortcode:
-  [skyed_lesson data_url="https://.../lesson_payload.txt" theme="sky"]
+Change:
+- Hides only the outer theme/footer area on lesson shortcode pages.
+- Does not hide header or page title.
+- Keeps lesson block unchanged.
 
-Themes:
-  sky | strict | fun
-
-Notes:
-- Allows .txt and .json payload uploads through WordPress media handling.
-- Renders vocab cards, sentence practice, and in-page practice.
-- Uses Bootstrap 5 plus plugin-scoped CSS.
+Install:
+1. Deactivate old plugin if WordPress blocks overwrite
+2. Upload this ZIP
+3. Activate
+4. Purge cache
+5. Hard refresh the lesson page
