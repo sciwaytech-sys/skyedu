@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
+import random
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import edge_tts  # type: ignore
@@ -23,24 +25,66 @@ def _rate_string(rate_percent: int) -> str:
     return f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
 
 
-async def _synth_to_mp3(text: str, voice: str, rate: str, out_path: Path) -> None:
+async def _synth_to_mp3(
+    text: str,
+    voice: str,
+    rate: str,
+    out_path: Path,
+    *,
+    max_retries: int = 5,
+    base_sleep: float = 1.25,
+    semaphore: Optional[asyncio.Semaphore] = None,
+) -> Tuple[bool, str]:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if edge_tts is None:
-        raise RuntimeError(
-            "edge-tts is not installed in this Python environment. "
-            "Install it with: pip install edge-tts"
-        )
-    comm = edge_tts.Communicate(text, voice=voice, rate=rate)
-    await comm.save(str(out_path))
+        return False, "edge-tts is not installed"
+    if out_path.exists() and out_path.stat().st_size > 1024:
+        return True, ""
+
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(3)
+
+    last_err = ""
+    async with semaphore:
+        for attempt in range(1, max_retries + 1):
+            try:
+                comm = edge_tts.Communicate(text, voice=voice, rate=rate)
+                await comm.save(str(out_path))
+                if out_path.exists() and out_path.stat().st_size > 1024:
+                    return True, ""
+                last_err = "file_not_written_or_too_small"
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+
+            try:
+                if out_path.exists() and out_path.stat().st_size < 1024:
+                    out_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            if attempt < max_retries:
+                sleep_s = base_sleep * (2 ** (attempt - 1)) + random.uniform(0.0, 0.6)
+                await asyncio.sleep(sleep_s)
+
+    return False, last_err
 
 
 def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
     """
-    Generate EN+ZH audio for:
-      - vocab: audio/en/<stem>.mp3 and audio/zh/<stem>.mp3
-      - sentences: audio/en/sent_<stem>.mp3 and audio/zh/sent_<stem>.mp3 (only if text exists)
+    Robust EN+ZH audio generation.
 
-    Returns list of output Paths (both languages).
+    Output layout:
+      audio/en/<stem>.mp3
+      audio/zh/<stem>.mp3
+      audio/en/sent_<stem>.mp3
+      audio/zh/sent_<stem>.mp3
+
+    Key behavior:
+      - bounded concurrency
+      - retries for transient 503/network failures
+      - skips already existing files
+      - does not abort the whole run on one failed file
+      - raises only if too many files fail
     """
     out_dir = Path(out_dir)
     en_dir = out_dir / "en"
@@ -60,10 +104,12 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
         except Exception:
             rate = "-10%"
 
-    outputs: List[Path] = []
-    coros: List[asyncio.Future] = []
+    concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
+    max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
 
-    # ---- Vocab audio ----
+    outputs: List[Path] = []
+    jobs: List[Dict[str, Any]] = []
+
     vocab = spec.get("vocab", []) or []
     for v in vocab:
         en = (v.get("en") or "").strip()
@@ -75,39 +121,20 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
 
         p_en = en_dir / f"{stem}.mp3"
         outputs.append(p_en)
-        coros.append(_synth_to_mp3(en, voice_en, rate, p_en))
+        jobs.append({"text": en, "voice": voice_en, "rate": rate, "out": p_en, "label": f"vocab_en:{en}"})
 
-        # Always generate a ZH track too; if zh missing, fallback to EN spoken with ZH voice
         zh_text = zh if zh else en
         p_zh = zh_dir / f"{stem}.mp3"
         outputs.append(p_zh)
-        coros.append(_synth_to_mp3(zh_text, voice_zh, rate, p_zh))
+        jobs.append({"text": zh_text, "voice": voice_zh, "rate": rate, "out": p_zh, "label": f"vocab_zh:{en}"})
 
-    # ---- Sentence audio (paired EN/ZH) ----
     sentences = spec.get("sentences", []) or []
     for s in sentences:
         en_s = (s.get("en") or "").strip()
         zh_s = (s.get("zh") or "").strip()
-
         base = en_s or zh_s
         if not base:
             continue
-
-        # IMPORTANT: run_pipeline.py expects sent_<stem>.mp3 where stem is derived there.
-        # Here we do NOT hash; we slugify base text. run_pipeline.py uses hashed stems,
-        # so it will still upload correctly because upload_media uses f.stem as key.
-        # To keep stable mapping, run_pipeline.py already calculates the stem and then
-        # looks for sent_<stem>.mp3 under audio/en and audio/zh.
-        #
-        # Therefore: we must generate stems the SAME WAY as run_pipeline.py.
-        # We read the stem from env if provided by pipeline; otherwise slugify(base).
-        #
-        # Pipeline sets only SKYED_TTS_* env; it doesn't pass stems per sentence.
-        # So we must mirror pipeline stem logic here to match it:
-        #   sent_<slug60>_<sha1_10>.mp3
-        #
-        # We'll implement the same: slug(base[:60]) + sha1(base)[:10]
-        import hashlib
 
         short = _slugify(base[:60] if len(base) > 60 else base)
         h = hashlib.sha1(base.encode("utf-8")).hexdigest()[:10]
@@ -116,19 +143,44 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
         if en_s:
             p_en = en_dir / f"sent_{stem}.mp3"
             outputs.append(p_en)
-            coros.append(_synth_to_mp3(en_s, voice_en, rate, p_en))
+            jobs.append({"text": en_s, "voice": voice_en, "rate": rate, "out": p_en, "label": f"sent_en:{en_s[:50]}"})
 
         if zh_s:
             p_zh = zh_dir / f"sent_{stem}.mp3"
             outputs.append(p_zh)
-            coros.append(_synth_to_mp3(zh_s, voice_zh, rate, p_zh))
+            jobs.append({"text": zh_s, "voice": voice_zh, "rate": rate, "out": p_zh, "label": f"sent_zh:{zh_s[:50]}"})
+
+    failures: List[Tuple[str, str]] = []
 
     async def _runner() -> None:
-        if coros:
-            # gather accepts coroutines directly
-            await asyncio.gather(*coros)
+        semaphore = asyncio.Semaphore(concurrency)
 
-    # Run once; this creates and manages the event loop correctly
-    asyncio.run(_runner())
+        async def _one(job: Dict[str, Any]) -> None:
+            ok, err = await _synth_to_mp3(
+                job["text"],
+                job["voice"],
+                job["rate"],
+                job["out"],
+                max_retries=max_retries,
+                semaphore=semaphore,
+            )
+            if not ok:
+                failures.append((str(job.get("label") or "item"), err))
+
+        await asyncio.gather(*[_one(job) for job in jobs], return_exceptions=False)
+
+    if jobs:
+        asyncio.run(_runner())
+
+    if failures:
+        report = out_dir / "tts_failures.txt"
+        report.write_text(
+            "\n".join(f"{label} :: {err}" for label, err in failures),
+            encoding="utf-8",
+        )
+        if len(failures) >= max(3, len(jobs) // 3):
+            raise RuntimeError(
+                f"TTS failed for {len(failures)} item(s). See: {report}"
+            )
 
     return outputs

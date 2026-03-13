@@ -246,6 +246,204 @@ def upload_media(
     )
 
 
+def _title_from_slug(slug: str) -> str:
+    s = str(slug or "").strip().strip("/")
+    if not s:
+        return "Lesson"
+    parts = [p for p in re.split(r"[-_]+", s) if p]
+    if not parts:
+        return s
+    return " ".join(p.capitalize() for p in parts)
+
+
+def _get_items(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    post_type: str = "pages",
+    params: Optional[Dict[str, Any]] = None,
+    timeout: int = 30,
+) -> List[Dict[str, Any]]:
+    base = _normalize_base_url(wp_base_url)
+    _probe_rest_index(base, timeout=20)
+    post_type = _normalize_post_type(post_type)
+    endpoints = _content_endpoints(base, post_type)
+    auth = _auth(wp_user, wp_app_password)
+    sess = _session()
+    last_error = None
+    for url in endpoints:
+        try:
+            r = _request("GET", url, auth=auth, params=params or {}, timeout=timeout, session=sess)
+        except Exception as e:
+            last_error = f"{url} -> EXC {e}"
+            continue
+        if r.status_code < 400:
+            try:
+                data = r.json()
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict):
+                    return [data]
+                return []
+            except Exception as e:
+                last_error = f"{url} -> non-JSON response ({e})"
+                continue
+        last_error = f"{url} -> {r.status_code}. Body: {r.text[:800]}"
+    if last_error:
+        raise WPError(f"Unable to query WordPress REST.\n{last_error}")
+    return []
+
+
+def list_pages(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    parent: Optional[int] = None,
+    slug: Optional[str] = None,
+    post_type: str = "pages",
+) -> List[Dict[str, Any]]:
+    page = 1
+    out: List[Dict[str, Any]] = []
+    while True:
+        params: Dict[str, Any] = {"per_page": 100, "page": page, "orderby": "menu_order", "order": "asc"}
+        if parent is not None:
+            params["parent"] = int(parent)
+        if slug:
+            params["slug"] = str(slug).strip()
+        batch = _get_items(
+            wp_base_url,
+            wp_user,
+            wp_app_password,
+            post_type=post_type,
+            params=params,
+        )
+        if not batch:
+            break
+        out.extend([x for x in batch if isinstance(x, dict)])
+        if len(batch) < 100:
+            break
+        page += 1
+    return out
+
+
+def find_page_by_slug(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    slug: str,
+    parent: Optional[int] = None,
+    post_type: str = "pages",
+) -> Optional[Dict[str, Any]]:
+    items = list_pages(
+        wp_base_url,
+        wp_user,
+        wp_app_password,
+        parent=parent,
+        slug=slug,
+        post_type=post_type,
+    )
+    if not items:
+        return None
+    for item in items:
+        if str(item.get("slug") or "").strip() == str(slug).strip():
+            return item
+    return items[0]
+
+
+def ensure_page_path(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    path: str,
+    status: str = "publish",
+) -> Optional[int]:
+    raw = str(path or "").strip().strip("/")
+    if not raw:
+        return None
+    parent_id: Optional[int] = 0
+    for segment in [s.strip() for s in raw.split("/") if s.strip()]:
+        page = find_page_by_slug(
+            wp_base_url,
+            wp_user,
+            wp_app_password,
+            slug=segment,
+            parent=parent_id,
+            post_type="pages",
+        )
+        if page is None:
+            page = create_post(
+                wp_base_url,
+                wp_user,
+                wp_app_password,
+                title=_title_from_slug(segment),
+                html="",
+                post_type="pages",
+                status=status,
+                content_mode="raw",
+                slug=segment,
+                parent=parent_id,
+            )
+        parent_id = int(page.get("id")) if isinstance(page, dict) and page.get("id") is not None else None
+    return parent_id
+
+
+def next_sequential_slug(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    parent: Optional[int] = None,
+    prefix: str = "lesson",
+    post_type: str = "pages",
+) -> str:
+    items = list_pages(
+        wp_base_url,
+        wp_user,
+        wp_app_password,
+        parent=parent,
+        slug=None,
+        post_type=post_type,
+    )
+    rx = re.compile(rf"^{re.escape(prefix)}(\d+)$", flags=re.IGNORECASE)
+    max_n = 0
+    for item in items:
+        slug = str(item.get("slug") or "").strip()
+        m = rx.match(slug)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"{prefix}{max_n + 1}"
+
+
+def assert_slug_available(
+    wp_base_url: str,
+    wp_user: str,
+    wp_app_password: str,
+    *,
+    slug: str,
+    parent: Optional[int] = None,
+    post_type: str = "pages",
+) -> None:
+    existing = find_page_by_slug(
+        wp_base_url,
+        wp_user,
+        wp_app_password,
+        slug=slug,
+        parent=parent,
+        post_type=post_type,
+    )
+    if existing is not None:
+        link = str(existing.get("link") or "")
+        raise WPError(
+            f"Slug already exists under this parent: {slug}\n"
+            f"Existing URL: {link or '[unknown]'}\n"
+            "Choose another slug, or leave it blank to auto-generate the next lessonN."
+        )
+
+
 def create_post(
     wp_base_url: str,
     wp_user: str,
@@ -256,6 +454,8 @@ def create_post(
     post_type: str = "posts",
     status: str = "publish",
     content_mode: str = "html_block",  # html_block | shortcode_block | raw
+    slug: Optional[str] = None,
+    parent: Optional[int] = None,
     timeout: int = 60,
 ) -> Dict[str, Any]:
     base = _normalize_base_url(wp_base_url)
@@ -279,6 +479,11 @@ def create_post(
         "comment_status": "closed",
         "ping_status": "closed",
     }
+
+    if str(slug or "").strip():
+        payload["slug"] = str(slug).strip()
+    if parent is not None:
+        payload["parent"] = int(parent)
 
     sess = _session()
     auth = _auth(wp_user, wp_app_password)

@@ -242,18 +242,30 @@ def _build_sentence_cloze(entries: List[Entry], spec: Dict[str, Any], rng: rando
     adjs = [e for e in entries if e.pos == "adjective"]
     verbs = [e for e in entries if e.pos == "verb"]
     out: List[Dict[str, Any]] = []
+    used_words = set()
 
+    ranked = []
     for s in sentences:
         en = s.get("en", "")
         if not en:
             continue
+        hits = [e for e in entries if re.search(rf"\b{re.escape(e.en)}\b", en, flags=re.IGNORECASE)]
+        if not hits:
+            continue
+        ranked.append((0 if len(hits) == 1 else len(hits), en, hits))
+
+    ranked.sort(key=lambda x: (x[0], len(x[1])))
+
+    for _, en, hits in ranked:
         matched: Optional[Entry] = None
-        for e in entries:
-            if re.search(rf"\b{re.escape(e.en)}\b", en, flags=re.IGNORECASE):
+        for e in hits:
+            key = _norm_word(e.en)
+            if key not in used_words:
                 matched = e
+                used_words.add(key)
                 break
         if not matched:
-            continue
+            matched = hits[0]
 
         blanked = _blank_word(en, matched.en)
         if not blanked:

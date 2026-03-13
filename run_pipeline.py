@@ -16,7 +16,7 @@ from skyed.utils import slugify, ensure_dir
 from skyed.cards import generate_vocab_cards, slugify as card_slugify
 from skyed.tts_edge import generate_audio
 from skyed.quizgen import generate_quiz
-from skyed.wp import upload_media, create_post
+from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
 
 
 def _sentence_audio_stem(base_text: str) -> str:
@@ -211,6 +211,79 @@ def _audio_rel_key(audio_root: Path, f: Path) -> str:
         return f.name
 
 
+def _extract_day_number(title: str) -> str:
+    m = __import__("re").search(r"\bday\s*(\d+)\b", title or "", flags=__import__("re").IGNORECASE)
+    return m.group(1) if m else ""
+
+
+def _build_publish_slug(title: str, tags: List[str], style: str = "auto") -> str:
+    style = (style or "auto").strip().lower()
+    day = _extract_day_number(title)
+    clean_tags = [slugify(str(t or "")) for t in (tags or []) if str(t or "").strip()]
+    first_tag = clean_tags[0] if clean_tags else ""
+    topic = first_tag or slugify(title.replace("Homework", "").replace("homework", ""))
+    topic = __import__("re").sub(r"(^day-\d+-?|^day\d+-?|^-+)", "", topic).strip("-")
+    topic = "-".join([x for x in topic.split("-")[:2] if x])
+    if style == "shortcode" and day:
+        return f"hw-{int(day):03d}"
+    if style == "topic" and topic:
+        return topic
+    if style == "topic_day" and topic and day:
+        return f"{topic}-{day}"
+    if style == "day_topic" and day and topic:
+        return f"d{int(day)}-{topic}"
+    if day and topic:
+        return f"d{int(day)}-{topic}"
+    if topic:
+        return topic
+    if day:
+        return f"hw-{int(day):03d}"
+    return slugify(title)
+
+
+def _normalize_publish_slug_mode(mode: str) -> str:
+    m = (mode or "auto_lesson").strip().lower()
+    if m in ("auto_lesson", "title", "custom"):
+        return m
+    return "auto_lesson"
+
+
+def _clean_publish_group_path(path: str) -> str:
+    raw = str(path or "").strip().strip("/")
+    if not raw:
+        return ""
+    parts = [slugify(seg) for seg in raw.split("/") if slugify(seg)]
+    return "/".join(parts)
+
+
+def _sanitize_publish_slug(value: str) -> str:
+    return slugify(str(value or "").strip())
+
+
+def _build_consistency_report(spec: Dict[str, List[Dict[str, str]]]) -> Dict[str, object]:
+    import re
+    vocab = spec.get("vocab", []) or []
+    sentences = spec.get("sentences", []) or []
+    vocab_words = [str(v.get("en") or "").strip() for v in vocab if str(v.get("en") or "").strip()]
+    sent_texts = [str(s.get("en") or "").strip() for s in sentences if str(s.get("en") or "").strip()]
+    used = []
+    for w in vocab_words:
+        if any(re.search(rf"\b{re.escape(w)}\b", s, flags=re.IGNORECASE) for s in sent_texts):
+            used.append(w)
+    unused = [w for w in vocab_words if w not in used]
+    missing_zh = [str(v.get("en") or "").strip() for v in vocab if not str(v.get("zh") or "").strip()]
+    missing_pos = [str(v.get("en") or "").strip() for v in vocab if not str(v.get("pos") or "").strip()]
+    return {
+        "vocab_count": len(vocab_words),
+        "sentence_count": len(sent_texts),
+        "vocab_seen_in_sentences": used,
+        "vocab_not_seen_in_sentences": unused,
+        "missing_zh": missing_zh,
+        "missing_pos": missing_pos,
+        "coverage_ratio": round((len(used) / max(1, len(vocab_words))), 3),
+    }
+
+
 def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str]) -> Dict:
     """Map local cards/<stem>.png references inside practice JSON to uploaded WP media URLs."""
     if not isinstance(practice, dict):
@@ -248,6 +321,11 @@ def main() -> None:
     ap.add_argument("--publish", action="store_true", help="If set, upload to WordPress and create post/page")
     ap.add_argument("--publish-only", action="store_true", help="Publish from existing output folder (no generation)")
     ap.add_argument("--dry-run", action="store_true", help="Skip image+audio generation (debug/validation)")
+    ap.add_argument("--publish_slug", default=None, help="Custom short permalink slug for WordPress publishing")
+    ap.add_argument("--publish-slug-mode", default=os.getenv("WP_PUBLISH_SLUG_MODE", "auto_lesson"), choices=["auto_lesson", "title", "custom"], help="How to build the public lesson slug.")
+    ap.add_argument("--publish-slug-prefix", default=os.getenv("WP_PUBLISH_SLUG_PREFIX", "lesson"), help="Prefix used in auto_lesson mode, e.g. lesson -> lesson1, lesson2")
+    ap.add_argument("--wp-group-path", default=os.getenv("WP_GROUP_PATH", ""), help="Optional hierarchical page path such as beginners or beginners/a1")
+    ap.add_argument("--publish_slug_style", default=os.getenv("WP_PUBLISH_SLUG_STYLE", "auto"), choices=["auto","day_topic","topic_day","topic","shortcode"], help="Rule for generating a short publish slug when using title mode")
     ap.add_argument(
         "--theme",
         default=None,
@@ -283,6 +361,11 @@ def main() -> None:
 
     title = args.lesson_title or spec.get("title", "Homework")
     slug = slugify(title)
+    publish_slug = ""
+    wp_group_path = _clean_publish_group_path(args.wp_group_path or os.getenv("WP_GROUP_PATH", ""))
+    publish_slug_mode = _normalize_publish_slug_mode(args.publish_slug_mode or os.getenv("WP_PUBLISH_SLUG_MODE", "auto_lesson"))
+    publish_slug_prefix = _sanitize_publish_slug(args.publish_slug_prefix or os.getenv("WP_PUBLISH_SLUG_PREFIX", "lesson") or "lesson") or "lesson"
+    custom_publish_slug = _sanitize_publish_slug(args.publish_slug or os.getenv("WP_PUBLISH_SLUG", "").strip())
     # NOTE: do not create output folder eagerly in --publish-only mode.
     lesson_root = (output_dir / slug)
 
@@ -309,7 +392,7 @@ def main() -> None:
     else:
         lesson_root = ensure_dir(lesson_root)
         # Clean previous run
-        for name in ("cards", "flashcards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json", "image_specs.json", "image_report.json", "image_plans.json", "ai_status.txt"):
+        for name in ("cards", "flashcards", "audio", "index.html", "quiz.json", "lesson.html", "spec_debug.json", "image_specs.json", "image_report.json", "image_plans.json", "ai_status.txt", "lesson_payload.txt", "consistency_report.json"):
             p = lesson_root / name
             if p.exists():
                 if p.is_dir():
@@ -439,6 +522,54 @@ def main() -> None:
     if not (wp_base and wp_user and wp_pass):
         raise RuntimeError("Missing WP_BASE_URL / WP_USER / WP_APP_PASSWORD in .env")
 
+    is_page_publish = (wp_post_type or "page").strip().lower() in ("page", "pages")
+    if wp_group_path and not is_page_publish:
+        raise RuntimeError("Hierarchical website folders require WP_POST_TYPE=page.")
+
+    parent_page_id = ensure_page_path(
+        wp_base,
+        wp_user,
+        wp_pass,
+        path=wp_group_path,
+        status="publish",
+    ) if wp_group_path else None
+
+    if publish_slug_mode == "custom" and custom_publish_slug:
+        publish_slug = custom_publish_slug
+        assert_slug_available(
+            wp_base,
+            wp_user,
+            wp_pass,
+            slug=publish_slug,
+            parent=parent_page_id,
+            post_type=wp_post_type,
+        )
+    elif publish_slug_mode == "title":
+        publish_slug = custom_publish_slug or _build_publish_slug(title, spec.get("tags", []) or [], args.publish_slug_style)
+        assert_slug_available(
+            wp_base,
+            wp_user,
+            wp_pass,
+            slug=publish_slug,
+            parent=parent_page_id,
+            post_type=wp_post_type,
+        )
+    else:
+        publish_slug = next_sequential_slug(
+            wp_base,
+            wp_user,
+            wp_pass,
+            parent=parent_page_id,
+            prefix=publish_slug_prefix,
+            post_type=wp_post_type,
+        )
+
+    publish_rel_path = "/".join([p for p in [wp_group_path, publish_slug] if p])
+    print(f"[PUBLISH] GROUP={wp_group_path or '[root]'}")
+    print(f"[PUBLISH] SLUG_MODE={publish_slug_mode}")
+    print(f"[PUBLISH] SLUG={publish_slug}")
+    print(f"[PUBLISH] ROUTE=/{publish_rel_path}")
+
     # Upload media (cards + audio). NOTE: we upload the rendered cards (cards/*.png), not raw ai images.
     card_url_by_stem: Dict[str, str] = {}
     cards_dir = lesson_root / "cards"
@@ -459,6 +590,12 @@ def main() -> None:
             if url:
                 audio_url_by_rel[_audio_rel_key(audio_dir, f)] = url
 
+    consistency_report = _build_consistency_report(spec)
+    try:
+        (lesson_root / "consistency_report.json").write_text(json.dumps(consistency_report, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
     # Build REMOTE items using WP URLs
     items_remote: List[Dict[str, str]] = []
     for v in vocab_list:
@@ -472,6 +609,7 @@ def main() -> None:
                 "img": card_url_by_stem.get(s, ""),
                 "audio_en": audio_url_by_rel.get(f"en/{s}.mp3", ""),
                 "audio_zh": audio_url_by_rel.get(f"zh/{s}.mp3", ""),
+                "pos": (v.get("pos") or ""),
             }
         )
 
@@ -497,7 +635,7 @@ def main() -> None:
     # Otherwise shortcode mode will render in-page practice from payload.
     quiz_note = ""
     if quiz_public_base:
-        quiz_url = f"{quiz_public_base}/{slug}/index.html"
+        quiz_url = f"{quiz_public_base}/{publish_rel_path}/index.html"
     else:
         quiz_url = ""
         quiz_note = "In-page practice is enabled. Static practice hosting is not configured."
@@ -523,6 +661,8 @@ def main() -> None:
             post_type=wp_post_type,
             status="publish",
             content_mode="html_block",
+            slug=publish_slug,
+            parent=parent_page_id if is_page_publish else None,
         )
     else:
         # Recommended mode: publish a shortcode block that renders the lesson via a WP plugin.
@@ -539,16 +679,22 @@ def main() -> None:
 
         payload = {
             "title": title,
-            "slug": slug,
+            "slug": publish_slug,
+            "tags": spec.get("tags", []) or [],
             "vocab": items_remote,
             "sentences": sent_remote,
             "quiz": quiz_dict,
             "practice": quiz_dict,
+            "consistency": consistency_report,
             "meta": {
                 "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
                 "quiz_public_base": quiz_public_base,
                 "quiz_embed_mode": quiz_embed_mode,
                 "theme_variant": lesson_theme,
+                "wp_group_path": wp_group_path,
+                "publish_slug": publish_slug,
+                "publish_slug_mode": publish_slug_mode,
+                "publish_rel_path": publish_rel_path,
             },
         }
 
@@ -571,7 +717,10 @@ def main() -> None:
             post_type=wp_post_type,
             status="publish",
             content_mode="shortcode_block",
+            slug=publish_slug,
+            parent=parent_page_id if is_page_publish else None,
         )
+    print(f"Publish slug: {publish_slug}")
     print("Published post:")
     if isinstance(post, dict):
         print(post.get("link") or post)
