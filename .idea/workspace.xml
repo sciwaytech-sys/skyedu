@@ -4,18 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.1 Last working version with everything updated and patched. Comfy UI autostart is off. Junk folders and duplicate files were removed. Slight GUI updates">
-      <change afterPath="$PROJECT_DIR$/skyed/lesson_profiles.py" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="3.2 Updates with themes">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/homework.txt" beforeDir="false" afterPath="$PROJECT_DIR$/homework.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/parser.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/skyed/quizgen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/quizgen.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/tts_edge.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tts_edge.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/quiz_index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/quiz_index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
     </list>
@@ -155,7 +148,7 @@
       <workItem from="1773415801172" duration="499000" />
       <workItem from="1773416343200" duration="12917000" />
       <workItem from="1773578811209" duration="2198000" />
-      <workItem from="1773592508789" duration="2312000" />
+      <workItem from="1773592508789" duration="4235000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -293,7 +286,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773420224057</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="3.2 Updates with themes">
+      <option name="closed" value="true" />
+      <created>1773596480145</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1773596480145</updated>
+    </task>
+    <option name="localTasksCounter" value="19" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -312,9 +313,10 @@
     <MESSAGE value="Version 3.0 Quiz logic is fixed. tag_s added,non local generation is added. Wordpress plugin is added and debuged" />
     <MESSAGE value="3.0.1 Final" />
     <MESSAGE value="3.1 Last working version with everything updated and patched. Comfy UI autostart is off. Junk folders and duplicate files were removed. Slight GUI updates" />
-    <option name="LAST_COMMIT_MESSAGE" value="3.1 Last working version with everything updated and patched. Comfy UI autostart is off. Junk folders and duplicate files were removed. Slight GUI updates" />
+    <MESSAGE value="3.2 Updates with themes" />
+    <option name="LAST_COMMIT_MESSAGE" value="3.2 Updates with themes" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1773594589176" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1773596943728" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

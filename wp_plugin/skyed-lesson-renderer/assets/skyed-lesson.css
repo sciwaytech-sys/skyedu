@@ -293,162 +293,289 @@ body.skyed-lesson-page .site-header .menu,
 body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; }
 
 
-/* stronger theme separation */
-.skyed-lesson[data-theme="sky"] .skyed-section{
-  background:linear-gradient(180deg,#ffffff,#f7fbff);
+/* --- Sky Tiles deep remake --- */
+.skyed-lesson[data-theme="sky_tiles"] .skyed-hero{
+  background:linear-gradient(135deg,#2563eb,#22d3ee);
 }
-.skyed-lesson[data-theme="sky"] .skyed-hero{
-  background:radial-gradient(circle at top right, rgba(255,255,255,.28), transparent 28%), linear-gradient(135deg,#0e7490,#22d3ee);
+.skyed-lesson[data-theme="sky_tiles"] .skyed-section{
+  border-radius:30px;
 }
-
-.skyed-lesson[data-theme="fun_mission"] .skyed-hero{
-  background:
-    radial-gradient(circle at 12% 20%, rgba(255,255,255,.26), transparent 22%),
-    radial-gradient(circle at 86% 22%, rgba(255,255,255,.18), transparent 18%),
-    linear-gradient(135deg,#f08c00,#ffbf69);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-section{
-  background:linear-gradient(180deg,#fffdf7,#fff5e6);
-  border:2px dashed rgba(240,140,0,.28);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-section__head{
-  border-bottom:1px dashed rgba(240,140,0,.24);
-  padding-bottom:.75rem;
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-card,
-.skyed-lesson[data-theme="fun_mission"] .skyed-sent,
-.skyed-lesson[data-theme="fun_mission"] .skyed-practice{
-  box-shadow:0 16px 34px rgba(202,120,27,.12);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-card--mission .skyed-card__media{
-  background:linear-gradient(180deg,#fff3d4,#fff9ef);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-step-badge{
-  color:#8b5200;
-  background:#fff7e8;
-  border:1px solid rgba(240,140,0,.22);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-sent__marker{
-  background:#fff1d9;
-  color:#8b5200;
-  border:1px solid rgba(240,140,0,.18);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-qcard{
-  background:linear-gradient(180deg,#fffdf9,#fff5e9);
-  border:1px solid rgba(240,140,0,.18);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-qcard__num,
-.skyed-lesson[data-theme="fun_mission"] .skyed-q__label{
-  background:rgba(240,140,0,.12);
-  color:#c97700;
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-btn--primary{
-  background:linear-gradient(135deg,#f08c00,#ffbf69);
-}
-.skyed-lesson[data-theme="fun_mission"] .skyed-progress__bar{
-  background:linear-gradient(90deg,#f08c00,#ffbf69);
-}
-
-/* sky tiles: hide reading dependency and center image/audio */
 .skyed-lesson[data-theme="sky_tiles"] .skyed-grid--cards{
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:1.1rem;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile{
-  border-radius:28px;
+.skyed-card--tile{
   overflow:hidden;
-  background:linear-gradient(180deg,#ffffff,#f6fcff);
+  border-radius:28px;
+  background:linear-gradient(180deg,#ffffff,#f5fbff);
 }
-.skyed-card__body--tile{
+.skyed-tile-media{
+  appearance:none;
+  border:0;
+  width:100%;
+  aspect-ratio:1/1;
+  background:linear-gradient(180deg,#eef7ff,#ffffff);
+  padding:0;
+  display:block;
+  position:relative;
+  cursor:pointer;
+}
+.skyed-tile-media img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  padding:18px;
+}
+.skyed-play-badge{
+  position:absolute;
+  right:14px;
+  bottom:14px;
+  width:52px;
+  height:52px;
+  border-radius:999px;
+  display:flex;
   align-items:center;
   justify-content:center;
-  text-align:center;
+  background:rgba(16,32,51,.86);
+  color:#fff;
+  font-weight:900;
+  font-size:1.05rem;
+  box-shadow:0 10px 20px rgba(16,32,51,.18);
 }
-.skyed-card__tile-hint{
+.skyed-card__body--tile{
+  padding:.9rem 1rem 1rem;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:.8rem;
+  align-items:center;
+}
+.skyed-tile-caption{
   font-size:.92rem;
   font-weight:800;
   color:var(--accent);
 }
-.skyed-mini-play--icon{
-  min-width:54px;
-  min-height:44px;
-  font-size:1rem;
-}
-.skyed-tile-parent-meta{
+.skyed-tile-meta{
   display:none;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-card__en,
-.skyed-lesson[data-theme="sky_tiles"] .skyed-card__zh,
-.skyed-lesson[data-theme="sky_tiles"] .skyed-card__badge{
-  display:none;
+.skyed-mini-play--hint{
+  background:#fff4d6;
+  border-color:rgba(123,75,4,.16);
+  color:#7b4b04;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-sent--tile{
+.skyed-card--tile.is-playing{
+  transform:translateY(-2px) scale(1.01);
+}
+.skyed-card--tile.is-playing .skyed-tile-media{
+  box-shadow:inset 0 0 0 5px rgba(37,99,235,.18);
+}
+
+.skyed-sent--tile{
   grid-template-columns:1fr;
-  text-align:center;
+  background:linear-gradient(180deg,#fffef8,#fff7ea);
 }
-.skyed-sent__text--tile{
-  align-items:center;
-}
-.skyed-sayit-pill{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:999px;
-  padding:.4rem .9rem;
-  background:#e6f4ff;
-  color:#1b69b4;
-  font-size:.82rem;
+.skyed-sent__oral-title{
+  font-size:1.05rem;
   font-weight:800;
+  color:var(--ink);
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard{
-  background:linear-gradient(180deg,#ffffff,#f6fcff);
+.skyed-sent__oral-note{
+  font-size:.9rem;
+  color:var(--muted);
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-q__label{
-  background:#e6f4ff;
-  color:#1b69b4;
+.skyed-sent__hint{
+  border:1px dashed var(--line);
+  border-radius:14px;
+  padding:.55rem .7rem;
+  background:#fff;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-q__audio{
-  display:flex;
-  justify-content:center;
+.skyed-sent__hint summary{
+  cursor:pointer;
+  font-weight:800;
+  color:var(--accent);
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-prompt-play{
-  min-height:46px;
-  padding:.72rem 1.05rem;
+.skyed-sent__hint-line{
+  margin-top:.45rem;
+  padding:.5rem .65rem;
+  border-radius:12px;
+  background:var(--surface-2);
+}
+.skyed-sent__hint-line--zh{ color:var(--muted); }
+
+.skyed-lesson[data-theme="sky_tiles"] .skyed-practice{
+  background:linear-gradient(180deg,#ffffff,#f9fcff);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-practice__actions .skyed-btn--primary{
+  background:linear-gradient(135deg,#f59e0b,#fb7185);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-practice__actions .skyed-btn--ghost{
+  background:#fff7ed;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid{
+  padding:1.1rem;
+  background:linear-gradient(180deg,#ffffff,#f8fbff);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-qcard__head{
+  flex-direction:column;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-qcard__num{
+  width:48px;
+  height:48px;
+  flex-basis:48px;
+  border-radius:16px;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-q__label{
+  display:none;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-q{
+  font-size:1.1rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-q__helper{
   font-size:.95rem;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-choice{
-  padding:.75rem;
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-q__audio{
+  margin:.4rem 0 .8rem;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-choice__inner{
-  justify-content:center;
-}
-.skyed-lesson[data-theme="sky_tiles"] .skyed-choice__inner img{
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-prompt-play{
   width:100%;
-  max-width:320px;
-  height:auto;
-  aspect-ratio:4/3;
+  justify-content:center;
+  padding:.9rem 1rem;
+  font-size:1rem;
+  background:linear-gradient(135deg,#2563eb,#22d3ee);
+  color:#fff;
+  border:0;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-choice__text,
-.skyed-lesson[data-theme="sky_tiles"] .skyed-choice__play{
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choices{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:.9rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choice{
+  padding:.45rem;
+  min-height:unset;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choice__inner{
+  display:block;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choice__inner img{
+  width:100%;
+  max-width:none;
+  height:auto;
+  aspect-ratio:1/1;
+  background:#eef7ff;
+  padding:10px;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choice__text,
+.skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choice__play{
   display:none !important;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-practice__footer{
-  align-items:center;
+.skyed-alert--stars{
+  text-align:center;
 }
-.skyed-lesson[data-theme="sky_tiles"] .skyed-practice__actions{
-  justify-content:center;
-}
-
-/* stricter dark remains dark and separate */
-.skyed-lesson[data-theme="strict_dark"] .skyed-section__head{
-  border-bottom:1px solid rgba(255,255,255,.08);
-  padding-bottom:.75rem;
-}
-.skyed-lesson[data-theme="strict_dark"] .skyed-practice__sub,
-.skyed-lesson[data-theme="strict_dark"] .skyed-nav-meta,
-.skyed-lesson[data-theme="strict_dark"] .skyed-section__note{
-  color:#b3bfd3;
+.skyed-stars{
+  margin-top:.4rem;
+  font-size:1.4rem;
+  letter-spacing:.12rem;
 }
 
-@media (max-width: 820px){
-  .skyed-lesson[data-theme="sky_tiles"] .skyed-grid--cards{grid-template-columns:1fr;}
+/* Stronger Fun Mission separation */
+.skyed-lesson[data-theme="fun_mission"] .skyed-section{
+  border-style:dashed;
+}
+.skyed-lesson[data-theme="fun_mission"] .skyed-practice__title::before{
+  content:"Checkpoint ";
+  color:var(--accent);
+}
+.skyed-lesson[data-theme="fun_mission"] .skyed-card--mission .skyed-card__body{
+  background:linear-gradient(180deg,#fffdf7,#fffaf0);
+}
+
+@media (max-width: 991.98px){
+  .skyed-lesson[data-theme="sky_tiles"] .skyed-grid--cards{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+@media (max-width: 640px){
+  .skyed-lesson[data-theme="sky_tiles"] .skyed-grid--cards,
+  .skyed-lesson[data-theme="sky_tiles"] .skyed-qcard--kid .skyed-choices{
+    grid-template-columns:1fr;
+  }
+  .skyed-play-badge{
+    width:46px;
+    height:46px;
+  }
+}
+
+
+/* --- Tiles fix pack v3 --- */
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile{
+  border-radius: 28px;
+  overflow: hidden;
+  background: linear-gradient(180deg,#ffffff,#f6fbff);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile .skyed-tile-media{
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  outline: 0;
+  width: 100%;
+  padding: 0 !important;
+  margin: 0;
+  background: transparent;
+  display: block;
+  position: relative;
+  cursor: pointer;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile .skyed-tile-media__frame{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 220px;
+  background: linear-gradient(180deg,#eef7ff,#ffffff);
+  overflow: hidden;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile .skyed-tile-media img{
+  display: block !important;
+  width: calc(100% - 24px) !important;
+  height: calc(100% - 24px) !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 12px auto !important;
+  padding: 0 !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  transform: none !important;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card--tile .skyed-card__missing{
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card__body--tile{
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-tile-caption{
+  font-size: .95rem;
+  line-height: 1.2;
+}
+
+/* --- Mission auto advance --- */
+.skyed-lesson[data-theme="fun_mission"] .skyed-practice__nav{
+  align-items: center;
+}
+.skyed-lesson[data-theme="fun_mission"] .skyed-nav-meta{
+  padding: .45rem .75rem;
+  border-radius: 999px;
+  background: rgba(124,58,237,.10);
+  color: #7c3aed;
+  font-weight: 800;
+}
+.skyed-lesson[data-theme="fun_mission"] .skyed-practice__actions .skyed-btn--primary{
+  display: none;
+}
+.skyed-lesson[data-theme="fun_mission"] .skyed-qcard--single{
+  scroll-margin-top: 16px;
 }

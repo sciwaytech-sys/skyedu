@@ -487,11 +487,10 @@ def _build_theme_quiz(entries: List[Entry], spec: Dict[str, Any], rng: random.Ra
     target = max(1, int(n_questions or QUESTION_LIMIT_DEFAULT))
 
     if theme_variant == "sky_tiles":
-        # Pre-reader mode: audio first, picture choice only.
-        questions = _pick_from_bucket(listen_pic, min(5, target))
+        questions = _pick_from_bucket(listen_pic, 5)
         return {
             "title": title,
-            "section_title": "Listen & Tap",
+            "section_title": "Picture Quiz",
             "subtitle": f"{len(questions)} rounds · listen and tap the picture",
             "practice_family": "kid_tiles",
             "renderer_mode": "kid_single",
@@ -518,7 +517,7 @@ def _build_theme_quiz(entries: List[Entry], spec: Dict[str, Any], rng: random.Ra
             "section_title": "Mission Check",
             "subtitle": f"{len(questions)} checkpoints · earn your stars",
             "practice_family": "fun_mission",
-            "renderer_mode": "single",
+            "renderer_mode": "mission_auto",
             "questions": questions,
         }
 

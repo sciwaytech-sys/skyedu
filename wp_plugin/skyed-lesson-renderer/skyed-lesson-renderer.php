@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: SkyEd Lesson Renderer
+ * Plugin Name: SkyEd Lesson Renderer Next
  * Description: Renders SkyEd-generated lesson payload data (cards + audio + practice) via shortcode.
- * Version: 0.2.1
+ * Version: 0.3.0
  * Author: Sky Education
  */
 
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) { exit; }
 
 class SkyEd_Lesson_Renderer {
     const SHORTCODE = 'skyed_lesson';
-    const CSS_HANDLE = 'skyed-lesson-renderer';
+    const CSS_HANDLE = 'skyed-lesson-renderer-next';
 
     public static function init() : void {
         add_action('wp_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
@@ -56,7 +56,7 @@ class SkyEd_Lesson_Renderer {
             self::CSS_HANDLE,
             plugins_url('assets/skyed-lesson.css', __FILE__),
             [],
-            '0.2.0'
+            '0.3.0'
         );
         wp_enqueue_style(self::CSS_HANDLE);
     }
@@ -124,69 +124,33 @@ class SkyEd_Lesson_Renderer {
                 return [
                     'kicker' => 'Sky Tiles',
                     'subtitle' => 'Tap → listen → say',
-                    'vocab_eyebrow' => 'Tap and hear',
-                    'vocab_title' => 'Picture Tiles',
                     'vocab_note' => 'Big picture tiles for pre-readers. Tap a tile to hear the word.',
-                    'sent_eyebrow' => 'Say it',
-                    'sent_title' => 'Oral Practice',
                     'sent_note' => 'Listen and say it aloud. No reading is required here.',
-                    'practice_eyebrow' => 'Listen and tap',
-                    'practice_title' => 'Picture Quiz',
                     'practice_note' => 'Listen carefully and tap the matching picture only.',
-                    'submit_label' => 'Show stars',
-                    'retry_label' => 'Start again',
-                    'time_chip' => '3–5 min',
                 ];
             case 'strict_dark':
                 return [
                     'kicker' => 'Study Mode',
                     'subtitle' => 'Words → usage → study check',
-                    'vocab_eyebrow' => 'Core terms',
-                    'vocab_title' => 'Vocabulary',
                     'vocab_note' => 'Read the word, hear it once, then use it carefully.',
-                    'sent_eyebrow' => 'Usage lines',
-                    'sent_title' => 'Sentence Practice',
                     'sent_note' => 'Focus on sentence meaning and correct usage.',
-                    'practice_eyebrow' => 'Study check',
-                    'practice_title' => 'Study Check',
                     'practice_note' => 'Text-first checks with a calmer study rhythm.',
-                    'submit_label' => 'Check answers',
-                    'retry_label' => 'Retry',
-                    'time_chip' => '10–20 min',
                 ];
             case 'fun_mission':
                 return [
                     'kicker' => 'Mission Mode',
-                    'subtitle' => 'Mission Briefing → Word Mission → Sentence Mission → Checkpoint',
-                    'vocab_eyebrow' => 'Mission words',
-                    'vocab_title' => 'Word Mission',
-                    'vocab_note' => 'Clear the word mission before moving to the checkpoint line.',
-                    'sent_eyebrow' => 'Mission lines',
-                    'sent_title' => 'Sentence Mission',
-                    'sent_note' => 'Say each line, then move to the next checkpoint.',
-                    'practice_eyebrow' => 'Checkpoint',
-                    'practice_title' => 'Mission Check',
-                    'practice_note' => 'One checkpoint at a time with stronger progress guidance.',
-                    'submit_label' => 'Complete mission',
-                    'retry_label' => 'Restart mission',
-                    'time_chip' => '5–10 min',
+                    'subtitle' => 'Warm-up → checkpoints → mission check',
+                    'vocab_note' => 'Take one small step at a time and clear each checkpoint.',
+                    'sent_note' => 'Say each sentence, then move to the next mission step.',
+                    'practice_note' => 'One question at a time with clear actions and progress.',
                 ];
             default:
                 return [
                     'kicker' => 'Sky Education',
                     'subtitle' => 'Vocabulary → sentence practice → practice',
-                    'vocab_eyebrow' => 'Core words',
-                    'vocab_title' => 'Vocabulary',
                     'vocab_note' => 'Listen, repeat, then use the word in one full sentence.',
-                    'sent_eyebrow' => 'Use it',
-                    'sent_title' => 'Sentence Practice',
                     'sent_note' => 'Short, clear sentence practice for today’s lesson.',
-                    'practice_eyebrow' => 'Practice',
-                    'practice_title' => 'Practice',
                     'practice_note' => 'Short, logical checks based on today’s lesson only.',
-                    'submit_label' => 'Check answers',
-                    'retry_label' => 'Retry',
-                    'time_chip' => '5–10 min',
                 ];
         }
     }
@@ -203,23 +167,18 @@ class SkyEd_Lesson_Renderer {
         if ($theme === 'sky_tiles'): ?>
             <article class="skyed-card skyed-card--tile" data-audio-en="<?php echo esc_attr($a_en); ?>" data-audio-zh="<?php echo esc_attr($a_zh); ?>">
               <button class="skyed-tile-media" type="button" <?php echo $a_en ? 'data-play="en"' : ''; ?> aria-label="Play <?php echo esc_attr($en); ?>">
+                <span class="skyed-tile-media__frame">
                 <?php if ($img !== ''): ?>
                   <img src="<?php echo self::escu($img); ?>" alt="<?php echo esc_attr($en); ?>" loading="lazy">
                 <?php else: ?>
-                  <div class="skyed-card__missing"><span>No image</span></div>
+                  <span class="skyed-card__missing"><span>No image</span></span>
                 <?php endif; ?>
+                </span>
                 <span class="skyed-play-badge">▶</span>
               </button>
               <div class="skyed-card__body skyed-card__body--tile">
-                <div class="skyed-card__tile-hint">Tap to hear</div>
-                <div class="skyed-tile-actions">
-                  <?php if ($a_en): ?><button class="skyed-mini-play skyed-mini-play--icon" type="button" data-audio="<?php echo esc_attr($a_en); ?>" aria-label="Play word">🔊</button><?php endif; ?>
-                  <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--icon" type="button" data-audio="<?php echo esc_attr($a_zh); ?>" aria-label="Play meaning">中</button><?php endif; ?>
-                </div>
-                <div class="skyed-tile-parent-meta" aria-hidden="true">
-                  <div class="skyed-card__en"><?php echo self::esc($en); ?></div>
-                  <?php if ($zh !== ''): ?><div class="skyed-card__zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
-                </div>
+                <div class="skyed-tile-caption">Tap to hear</div>
+                <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">Hint</button><?php endif; ?>
               </div>
             </article>
         <?php elseif ($theme === 'strict_dark'): ?>
@@ -291,13 +250,10 @@ class SkyEd_Lesson_Renderer {
         ob_start(); ?>
         <article class="skyed-sent <?php echo $theme === 'strict_dark' ? 'skyed-sent--strict' : ($theme === 'fun_mission' ? 'skyed-sent--mission' : ($theme === 'sky_tiles' ? 'skyed-sent--tile' : '')); ?>">
           <?php if ($theme === 'fun_mission'): ?><div class="skyed-sent__marker"><?php echo intval($idx + 1); ?></div><?php endif; ?>
-          <div class="skyed-sent__text <?php echo $theme === 'sky_tiles' ? 'skyed-sent__text--tile' : ''; ?>">
+          <div class="skyed-sent__text">
             <?php if ($theme === 'sky_tiles'): ?>
-              <div class="skyed-sayit-pill">Listen and say it</div>
-              <div class="skyed-tile-parent-meta" aria-hidden="true">
-                <?php if ($en !== ''): ?><div class="skyed-sent__line skyed-sent__line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
-                <?php if ($zh !== ''): ?><div class="skyed-sent__line skyed-sent__line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
-              </div>
+              <div class="skyed-sent__oral-title">Listen and say it</div>
+              <div class="skyed-sent__oral-note">No reading needed on the child view.</div>
             <?php else: ?>
               <?php if ($en !== ''): ?><div class="skyed-sent__line skyed-sent__line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
               <?php if ($zh !== ''): ?><div class="skyed-sent__line skyed-sent__line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
@@ -305,8 +261,13 @@ class SkyEd_Lesson_Renderer {
           </div>
           <div class="skyed-sent__audio <?php echo $theme === 'sky_tiles' ? 'skyed-sent__audio--tile' : ''; ?>">
             <?php if ($theme === 'sky_tiles'): ?>
-              <?php if ($a_en): ?><button class="skyed-mini-play" type="button" data-audio="<?php echo esc_attr($a_en); ?>">🔊 Sentence</button><?php endif; ?>
-              <?php if ($a_zh): ?><button class="skyed-mini-play" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">中 Hint</button><?php endif; ?>
+              <?php if ($a_en): ?><button class="skyed-mini-play" type="button" data-audio="<?php echo esc_attr($a_en); ?>">Listen and say it</button><?php endif; ?>
+              <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">中</button><?php endif; ?>
+              <details class="skyed-sent__hint">
+                <summary>Hint</summary>
+                <?php if ($en !== ''): ?><div class="skyed-sent__hint-line skyed-sent__hint-line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
+                <?php if ($zh !== ''): ?><div class="skyed-sent__hint-line skyed-sent__hint-line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
+              </details>
             <?php else: ?>
               <?php if ($a_en): ?>
                 <div class="skyed-audio-box">
@@ -386,7 +347,7 @@ class SkyEd_Lesson_Renderer {
                 <?php echo self::stat_chip($count_vocab . ' words'); ?>
                 <?php echo self::stat_chip($count_sent . ' sentences'); ?>
                 <?php echo self::stat_chip($count_q . ' practice'); ?>
-                <?php echo self::stat_chip((string)$copy['time_chip']); ?>
+                <?php echo self::stat_chip('5–10 min'); ?>
               </div>
             </section>
 
@@ -399,8 +360,8 @@ class SkyEd_Lesson_Renderer {
             <section class="skyed-section skyed-section--vocab">
               <div class="skyed-section__head">
                 <div>
-                  <div class="skyed-section__eyebrow"><?php echo self::esc($copy['vocab_eyebrow']); ?></div>
-                  <h2 class="skyed-section__title"><?php echo self::esc($copy['vocab_title']); ?></h2>
+                  <div class="skyed-section__eyebrow"><?php echo $theme === 'sky_tiles' ? 'Tap and hear' : ($theme === 'fun_mission' ? 'Warm-up words' : 'Core words'); ?></div>
+                  <h2 class="skyed-section__title"><?php echo $theme === 'sky_tiles' ? 'Picture Tiles' : 'Vocabulary'; ?></h2>
                 </div>
                 <div class="skyed-section__note"><?php echo self::esc($copy['vocab_note']); ?></div>
               </div>
@@ -412,8 +373,8 @@ class SkyEd_Lesson_Renderer {
             <section class="skyed-section skyed-section--sentences">
               <div class="skyed-section__head">
                 <div>
-                  <div class="skyed-section__eyebrow"><?php echo self::esc($copy['sent_eyebrow']); ?></div>
-                  <h2 class="skyed-section__title"><?php echo self::esc($copy['sent_title']); ?></h2>
+                  <div class="skyed-section__eyebrow"><?php echo $theme === 'sky_tiles' ? 'Say it' : ($theme === 'strict_dark' ? 'Usage lines' : 'Use it'); ?></div>
+                  <h2 class="skyed-section__title"><?php echo $theme === 'sky_tiles' ? 'Oral Practice' : 'Sentence Practice'; ?></h2>
                 </div>
                 <div class="skyed-section__note"><?php echo self::esc($copy['sent_note']); ?></div>
               </div>
@@ -425,8 +386,8 @@ class SkyEd_Lesson_Renderer {
             <section class="skyed-section skyed-section--practice">
               <div class="skyed-section__head">
                 <div>
-                  <div class="skyed-section__eyebrow"><?php echo self::esc($copy['practice_eyebrow']); ?></div>
-                  <h2 class="skyed-section__title"><?php echo self::esc($copy['practice_title']); ?></h2>
+                  <div class="skyed-section__eyebrow"><?php echo $theme === 'sky_tiles' ? 'Listen and tap' : self::esc($practice_family); ?></div>
+                  <h2 class="skyed-section__title"><?php echo $theme === 'sky_tiles' ? 'Picture Quiz' : self::esc($practice_title); ?></h2>
                 </div>
                 <div class="skyed-section__note"><?php echo self::esc($copy['practice_note']); ?></div>
               </div>
@@ -445,8 +406,8 @@ class SkyEd_Lesson_Renderer {
                   <div id="<?php echo esc_attr($uid); ?>_app"></div>
                   <div class="skyed-practice__footer">
                     <div class="skyed-practice__actions">
-                      <button class="skyed-btn skyed-btn--ghost" type="button" id="<?php echo esc_attr($uid); ?>_reset"><?php echo self::esc($copy['retry_label']); ?></button>
-                      <button class="skyed-btn skyed-btn--primary" type="button" id="<?php echo esc_attr($uid); ?>_submit"><?php echo self::esc($copy['submit_label']); ?></button>
+                      <button class="skyed-btn skyed-btn--ghost" type="button" id="<?php echo esc_attr($uid); ?>_reset"><?php echo $theme === 'sky_tiles' ? 'Start again' : 'Retry'; ?></button>
+                      <button class="skyed-btn skyed-btn--primary" type="button" id="<?php echo esc_attr($uid); ?>_submit"><?php echo $theme === 'sky_tiles' ? 'Show stars' : 'Check answers'; ?></button>
                     </div>
                     <div class="skyed-result" id="<?php echo esc_attr($uid); ?>_result"></div>
                   </div>
@@ -471,7 +432,7 @@ class SkyEd_Lesson_Renderer {
                   const questions = practice.questions || [];
                   const answers = {};
                   let currentIndex = 0;
-                  const rendererMode = practice.renderer_mode || (theme === 'sky_tiles' ? 'kid_single' : ((theme === 'strict_dark' || theme === 'fun_mission') ? 'single' : 'list'));
+                  const rendererMode = practice.renderer_mode || (theme === 'sky_tiles' ? 'kid_single' : ((theme === 'strict_dark') ? 'single' : ((theme === 'fun_mission') ? 'mission_auto' : 'list')));
 
                   function normalizeChoice(c){
                     if (typeof c === 'string') return { text: c, img: '', subtext: '', audio: '' };
@@ -519,17 +480,15 @@ class SkyEd_Lesson_Renderer {
                     body.className = 'skyed-qcard__body';
                     const label = document.createElement('div');
                     label.className = 'skyed-q__label';
-                    label.textContent = rendererMode === 'kid_single' ? 'Listen and tap' : (theme === 'fun_mission' ? ('Checkpoint ' + (idx + 1)) : (q.action_label || (q.kind || 'Question').replace(/_/g, ' ')));
+                    label.textContent = q.action_label || (q.kind || 'Question').replace(/_/g, ' ');
                     body.appendChild(label);
 
-                    if (rendererMode !== 'kid_single') {
-                      const qt = document.createElement('div');
-                      qt.className = 'skyed-q';
-                      qt.textContent = q.q || '';
-                      body.appendChild(qt);
-                    }
+                    const qt = document.createElement('div');
+                    qt.className = 'skyed-q';
+                    qt.textContent = q.q || '';
+                    body.appendChild(qt);
 
-                    if (q.helper && rendererMode !== 'kid_single') {
+                    if (q.helper) {
                       const helper = document.createElement('div');
                       helper.className = 'skyed-q__helper';
                       helper.textContent = q.helper;
@@ -539,7 +498,7 @@ class SkyEd_Lesson_Renderer {
                     if (q.prompt_audio) {
                       const promptAudio = document.createElement('div');
                       promptAudio.className = 'skyed-q__audio';
-                      const btnPlay = makePlayButton(q.prompt_audio, rendererMode === 'kid_single' ? 'Play sound' : 'Listen', 'skyed-prompt-play');
+                      const btnPlay = makePlayButton(q.prompt_audio, rendererMode === 'kid_single' ? 'Listen' : 'Listen', 'skyed-prompt-play');
                       if (btnPlay) promptAudio.appendChild(btnPlay);
                       body.appendChild(promptAudio);
                     }
@@ -571,9 +530,9 @@ class SkyEd_Lesson_Renderer {
                         inner.appendChild(im);
                       }
 
+                      const textWrap = document.createElement('div');
+                      textWrap.className = 'skyed-choice__text';
                       if (rendererMode !== 'kid_single') {
-                        const textWrap = document.createElement('div');
-                        textWrap.className = 'skyed-choice__text';
                         if (ch.text) {
                           const main = document.createElement('div');
                           main.className = 'skyed-choice__main';
@@ -587,31 +546,44 @@ class SkyEd_Lesson_Renderer {
                           textWrap.appendChild(sub);
                         }
                         if (textWrap.children.length) inner.appendChild(textWrap);
-                      }
-
-                      if (ch.audio) {
-                        const audioBtn = makePlayButton(ch.audio, '🔊', 'skyed-choice__play');
-                        if (audioBtn) inner.appendChild(audioBtn);
+                        if (ch.audio) {
+                          const audioBtn = makePlayButton(ch.audio, '🔊', 'skyed-choice__play');
+                          if (audioBtn) inner.appendChild(audioBtn);
+                        }
                       }
 
                       choiceBtn.appendChild(inner);
                       choiceBtn.onclick = () => {
                         answers[idx] = ci;
-                        [...choicesWrap.querySelectorAll('.skyed-choice')].forEach(x => x.classList.remove('active','correct','wrong'));
+                        const expected = Number(q.answer_index);
+                        [...choicesWrap.querySelectorAll('.skyed-choice')].forEach(x => x.classList.remove('active','wrong','correct'));
                         choiceBtn.classList.add('active');
                         updateProgress();
                         if (rendererMode === 'kid_single') {
-                          const expected = Number(q.answer_index);
                           if (ci === expected) {
                             choiceBtn.classList.add('correct');
-                            if (resultEl) resultEl.innerHTML = '<div class="skyed-alert">⭐ Great!</div>';
                             if (currentIndex < questions.length - 1) {
-                              window.setTimeout(() => { currentIndex += 1; render(); }, 650);
+                              window.setTimeout(() => { currentIndex += 1; render(); }, 420);
+                            } else {
+                              window.setTimeout(() => btn.click(), 420);
                             }
                           } else {
                             choiceBtn.classList.add('wrong');
-                            if (resultEl) resultEl.innerHTML = '<div class="skyed-alert skyed-alert--soft">Try again. Listen one more time.</div>';
-                            if (q.prompt_audio) { window.setTimeout(() => playAudio(q.prompt_audio), 260); }
+                            window.setTimeout(() => { choiceBtn.classList.remove('wrong','active'); }, 520);
+                            window.setTimeout(() => { if (q.prompt_audio) playAudio(q.prompt_audio); }, 180);
+                          }
+                        } else if (rendererMode === 'mission_auto') {
+                          if (ci === expected) {
+                            choiceBtn.classList.add('correct');
+                          } else {
+                            choiceBtn.classList.add('wrong');
+                            const correctBtn = choicesWrap.querySelectorAll('.skyed-choice')[expected];
+                            if (correctBtn) correctBtn.classList.add('correct');
+                          }
+                          if (currentIndex < questions.length - 1) {
+                            window.setTimeout(() => { currentIndex += 1; render(); }, 520);
+                          } else {
+                            window.setTimeout(() => btn.click(), 520);
                           }
                         }
                       };
@@ -627,33 +599,24 @@ class SkyEd_Lesson_Renderer {
                   function renderNav(){
                     if (!nav) return;
                     nav.innerHTML = '';
-                    if (!(rendererMode === 'single' || rendererMode === 'kid_single')) return;
+                    if (!(rendererMode === 'single' || rendererMode === 'kid_single' || rendererMode === 'mission_auto')) return;
                     const meta = document.createElement('div');
                     meta.className = 'skyed-nav-meta';
-                    if (rendererMode === 'kid_single') {
-                      meta.textContent = 'Round ' + (currentIndex + 1) + ' of ' + questions.length;
-                      nav.appendChild(meta);
-                      const q = questions[currentIndex] || {};
-                      if (q.prompt_audio) {
-                        const replay = makePlay(q.prompt_audio, 'Listen again', 'skyed-btn skyed-btn--ghost');
-                        if (replay) nav.appendChild(replay);
-                      }
-                      return;
-                    }
-                    meta.textContent = (theme === 'fun_mission' ? 'Checkpoint ' : 'Question ') + (currentIndex + 1) + ' of ' + questions.length;
+                    meta.textContent = (rendererMode === 'kid_single' ? 'Round ' : (rendererMode === 'mission_auto' ? 'Checkpoint ' : 'Question ')) + (currentIndex + 1) + ' of ' + questions.length;
+                    nav.appendChild(meta);
+                    if (rendererMode === 'kid_single' || rendererMode === 'mission_auto') return;
                     const prev = document.createElement('button');
                     prev.type = 'button';
                     prev.className = 'skyed-btn skyed-btn--ghost';
-                    prev.textContent = theme === 'fun_mission' ? 'Previous checkpoint' : 'Previous';
+                    prev.textContent = 'Previous';
                     prev.disabled = currentIndex <= 0;
                     prev.onclick = () => { if (currentIndex > 0) { currentIndex -= 1; render(); } };
                     const next = document.createElement('button');
                     next.type = 'button';
                     next.className = 'skyed-btn skyed-btn--ghost';
-                    next.textContent = currentIndex >= questions.length - 1 ? (theme === 'fun_mission' ? 'Final checkpoint' : 'Last question') : (theme === 'fun_mission' ? 'Next checkpoint' : 'Next');
+                    next.textContent = currentIndex >= questions.length - 1 ? 'Last question' : 'Next';
                     next.disabled = currentIndex >= questions.length - 1;
                     next.onclick = () => { if (currentIndex < questions.length - 1) { currentIndex += 1; render(); } };
-                    nav.appendChild(meta);
                     nav.appendChild(prev);
                     nav.appendChild(next);
                   }
@@ -661,7 +624,7 @@ class SkyEd_Lesson_Renderer {
                   function render(){
                     app.innerHTML = '';
                     renderNav();
-                    if (rendererMode === 'single' || rendererMode === 'kid_single') {
+                    if (rendererMode === 'single' || rendererMode === 'kid_single' || rendererMode === 'mission_auto') {
                       const q = questions[currentIndex];
                       if (q) app.appendChild(buildQuestionCard(q, currentIndex, true));
                     } else {
@@ -687,12 +650,23 @@ class SkyEd_Lesson_Renderer {
                   }
 
                   resetBtn.onclick = resetPractice;
+                  if (rendererMode === 'mission_auto') {
+                    btn.style.display = 'none';
+                    resetBtn.textContent = 'Start mission again';
+                  }
                   btn.onclick = () => {
                     let score = 0;
                     questions.forEach((q, idx) => {
                       if (Number(answers[idx]) === Number(q.answer_index)) score += 1;
                     });
-                    resultEl.innerHTML = '<div class="skyed-alert">Score: <b>' + score + '</b> / ' + questions.length + '</div>';
+                    if (rendererMode === 'kid_single') {
+                      const stars = '⭐'.repeat(score);
+                      resultEl.innerHTML = '<div class="skyed-alert skyed-alert--stars">Stars: <b>' + score + '</b> / ' + questions.length + '<div class="skyed-stars">' + stars + '</div></div>';
+                    } else if (rendererMode === 'mission_auto') {
+                      resultEl.innerHTML = '<div class="skyed-alert"><b>Mission complete</b><br>Score: <b>' + score + '</b> / ' + questions.length + '</div>';
+                    } else {
+                      resultEl.innerHTML = '<div class="skyed-alert">Score: <b>' + score + '</b> / ' + questions.length + '</div>';
+                    }
                     render();
                     [...app.querySelectorAll('.skyed-qcard')].forEach(card => {
                       const idx = Number(card.dataset.index || '-1');
