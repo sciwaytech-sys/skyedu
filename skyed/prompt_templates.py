@@ -16,6 +16,7 @@ We support multiple "render modes" so verbs/adjectives don't get forced into
 Render modes (subset):
 - single_object
 - action_scene
+- relation_scene
 - contrast_pair
 - attribute_scene
 - icon_card
@@ -30,7 +31,7 @@ NEG_ALWAYS = (
     "abstract, surreal, cubism, expressionism, glitch, noise, watercolor, oil painting, sketch, lineart, "
     "lowpoly, 3d render, blurry, low quality, worst quality, messy background, "
     "deformed, disfigured, mutated, extra limbs, bad anatomy, bad hands, "
-    "text, watermark, logo, letters, signature"
+    "text, watermark, logo, letters, numbers, chinese characters, english words, handwriting, caption, label, subtitle, signature, signboard, poster writing"
 )
 
 
@@ -118,6 +119,8 @@ def render_prompts(style: str, subject: str, render_mode: str = "single_object")
         pos = (POS_REALISTIC_SINGLE if is_real else POS_CARTOON_SINGLE).format(subject=subject)
     elif mode in ("action", "action_scene", "scene"):
         pos = (POS_REALISTIC_ACTION if is_real else POS_CARTOON_ACTION).format(subject=subject)
+    elif mode in ("relation", "relation_scene", "position_scene"):
+        pos = (POS_REALISTIC_RELATION if is_real else POS_CARTOON_RELATION).format(subject=subject)
     elif mode in ("contrast", "contrast_pair", "pair"):
         pos = (POS_REALISTIC_CONTRAST if is_real else POS_CARTOON_CONTRAST).format(subject=subject)
     elif mode in ("attribute", "attribute_scene"):

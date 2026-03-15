@@ -19,7 +19,7 @@
   "voice_zh": "zh-CN-XiaoxiaoNeural",
   "comfy_workflow_path": "assets/comfy/workflow_api.json",
   "picture_cards_type": "Realistic",
-  "lesson_theme": "fun_mission",
+  "lesson_theme": "sky_tiles",
   "image_backend": "cloudflare_flux",
   "img_width": 768,
   "img_height": 768,
@@ -31,5 +31,8 @@
   "cf_model": "@cf/black-forest-labs/flux-1-schnell",
   "hf_image_endpoint_url": "",
   "hf_token": "",
-  "hf_guidance": 6.0
+  "hf_guidance": 6.0,
+  "batch_separator": "===NEXT===",
+  "batch_continue_on_error": false,
+  "batch_last_source_dir": "C:\\Users\\user\\Desktop\\homework_batch\\Teddy"
 }

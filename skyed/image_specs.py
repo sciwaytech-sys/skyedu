@@ -4,15 +4,18 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable
+
+from .image_semantics import clean_visual_label, resolve_visual_plan, TEXT_EXCLUSION_TOKENS
 
 ANCHOR_PHRASES = [
     "ESL lesson illustration for children",
     "clear literal meaning",
     "single obvious concept",
-    "school or home context",
+    "school or home context when useful",
     "safe for young learners",
     "clean educational illustration",
+    "plain or uncluttered background",
 ]
 
 POS_ALIASES = {
@@ -37,54 +40,72 @@ SEMANTIC_DEFAULT_NEGATIVES = {
     "adjective": ["isolated stationery", "empty desk", "logo", "typography only", "abstract art"],
     "time": ["isolated object", "logo", "typography only", "abstract symbol"],
     "phrase": ["logo", "typography only", "abstract concept art"],
-    "preposition": ["logo", "typography only", "abstract concept art"],
+    "preposition": ["logo", "typography only", "abstract concept art", "floating text labels"],
 }
 
 WORD_OVERRIDES = {
     "finish": {
-        "scene": "A primary school child finishing homework at a desk, workbook and pencil visible, satisfied expression after completing the task",
+        "scene": "a primary school child finishing homework at a desk, workbook and pencil visible, satisfied expression after completing the task",
         "include": ["child", "desk", "workbook", "pencil", "finished task", "school or home study scene"],
         "exclude": ["crumbs", "random floor mess", "food focus", "still life"],
+        "render_mode": "action_scene",
+        "scene_type": "literal_action_scene",
     },
     "carry": {
-        "scene": "A child carrying a schoolbag and books while walking to school, action clearly visible",
+        "scene": "a child carrying a schoolbag and books while walking to school, action clearly visible",
         "include": ["child", "schoolbag", "books", "walking", "school context"],
         "exclude": ["blanket", "cape", "fashion pose", "unclear object"],
+        "render_mode": "action_scene",
+        "scene_type": "literal_action_scene",
     },
     "visit": {
-        "scene": "A child visiting grandparents or friends at home, greeting scene, warm family context",
+        "scene": "a child visiting grandparents or friends at home, greeting scene, warm family context",
         "include": ["child", "family or friends", "home visit", "greeting action"],
         "exclude": ["child alone at table", "random still life", "no social interaction"],
+        "render_mode": "action_scene",
+        "scene_type": "literal_action_scene",
     },
     "homework": {
-        "scene": "A student doing homework at a desk with notebook, pencil, and schoolbook",
+        "scene": "a student doing homework at a desk with notebook, pencil, and schoolbook",
         "include": ["student", "desk", "notebook", "pencil", "schoolbook"],
         "exclude": ["decorative objects only", "unclear papers", "still life only"],
+        "render_mode": "action_scene",
+        "scene_type": "literal_action_scene",
     },
     "bag": {
-        "scene": "A child's schoolbag or backpack in a school setting, or a child carrying the backpack",
+        "scene": "a child's schoolbag or backpack in a school setting, or a child carrying the backpack",
         "include": ["schoolbag", "backpack", "child or desk", "school context"],
         "exclude": ["handbag", "luxury bag", "fashion bag", "tote bag"],
+        "render_mode": "single_object",
+        "scene_type": "literal_object_scene",
     },
     "weekend": {
-        "scene": "A family spending the weekend together, child-friendly home or park scene",
+        "scene": "a family spending the weekend together, child-friendly home or park scene",
         "include": ["family", "child", "weekend activity", "home or park"],
         "exclude": ["camera", "isolated object", "logo", "calendar icon only"],
+        "render_mode": "attribute_scene",
+        "scene_type": "time_context_scene",
     },
     "tired": {
-        "scene": "A tired child after school, yawning or resting with a schoolbag nearby",
+        "scene": "a tired child after school, yawning or resting with a schoolbag nearby",
         "include": ["child", "tired face", "yawning or resting", "after school context"],
         "exclude": ["stationery only", "vase", "random desk objects", "still life"],
+        "render_mode": "attribute_scene",
+        "scene_type": "emotion_state_scene",
     },
     "busy": {
-        "scene": "A busy child doing several school tasks at a desk, books and homework visible",
+        "scene": "a busy child doing several school tasks at a desk, books and homework visible",
         "include": ["child", "desk", "books", "homework", "active working"],
         "exclude": ["random crowd", "unclear action", "abstract activity"],
+        "render_mode": "attribute_scene",
+        "scene_type": "emotion_state_scene",
     },
     "happy": {
-        "scene": "A happy smiling child in a school or homework context, clear joyful expression",
+        "scene": "a happy smiling child in a school or homework context, clear joyful expression",
         "include": ["child", "smile", "joyful face", "school or homework context"],
         "exclude": ["stationery only", "objects only", "empty desk", "still life"],
+        "render_mode": "attribute_scene",
+        "scene_type": "emotion_state_scene",
     },
 }
 
@@ -107,6 +128,7 @@ class ImageSpec:
     theme: str = ""
     example_en: str = ""
     scene_type: str = ""
+    render_mode: str = "single_object"
     positive_prompt: str = ""
     negative_prompt: str = ""
     must_include: list[str] = field(default_factory=list)
@@ -132,100 +154,69 @@ def slugify(text: str) -> str:
 
 
 def infer_scene_type(pos: str, word: str) -> str:
-    pos = normalize_pos(pos)
-    if word in WORD_OVERRIDES:
-        if pos == "verb":
-            return "literal action scene"
-        if pos == "adjective":
-            return "emotion/state scene"
-        if pos == "time":
-            return "time-context family scene"
-    return {
-        "noun": "literal object or school scene",
-        "verb": "literal action scene",
-        "adjective": "emotion/state scene",
-        "time": "time-context scene",
-        "phrase": "literal phrase scene",
-        "preposition": "position scene",
-    }.get(pos, "literal educational scene")
+    item = VocabItem(word=word, pos=pos)
+    return build_image_spec(item).scene_type
 
 
-def build_prompt_parts(item: VocabItem) -> tuple[list[str], list[str], list[str], str]:
-    word = slugify(item.word).replace("-", " ")
+def _context_hint(example_en: str, clean_word: str) -> str:
+    ex = (example_en or "").strip()
+    if not ex:
+        return ""
+    # keep context usable but not text-heavy; remove punctuation noise
+    ex = re.sub(r"\s+", " ", ex)
+    if len(ex) > 90:
+        ex = ex[:90].rsplit(" ", 1)[0]
+    ex = ex.replace("'", "").replace('"', "")
+    if clean_word and clean_word.lower() in ex.lower():
+        return f"context hint from lesson sentence: {ex}"
+    return ""
+
+
+def build_prompt_parts(item: VocabItem) -> tuple[list[str], list[str], list[str], str, str, str]:
+    clean = clean_visual_label(item.word)
     pos = normalize_pos(item.pos)
-    include = []
-    exclude = list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))
 
-    if word in WORD_OVERRIDES:
-        override = WORD_OVERRIDES[word]
-        scene = override["scene"]
-        include.extend(override.get("include", []))
-        exclude.extend(override.get("exclude", []))
-        return ANCHOR_PHRASES.copy(), include, exclude, scene
+    override = WORD_OVERRIDES.get(clean.lower())
+    if override:
+        include = list(dict.fromkeys(list(override.get("include", [])) + [clean]))
+        exclude = list(dict.fromkeys(list(override.get("exclude", [])) + list(TEXT_EXCLUSION_TOKENS) + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))))
+        return ANCHOR_PHRASES.copy(), include, exclude, override["scene"], override.get("render_mode", "single_object"), override.get("scene_type", "literal_educational_scene")
 
-    if pos == "noun":
-        scene = (
-            f"A clear educational illustration showing the noun '{item.word}' in a school or home learning context"
-        )
-        include.extend([item.word, "clear focus", "child-friendly context"])
-    elif pos == "verb":
-        scene = (
-            f"A child clearly performing the action '{item.word}' in a school or home context, with the action easy to understand"
-        )
-        include.extend(["child", item.word, "clear action", "school or home context"])
-    elif pos == "adjective":
-        scene = (
-            f"A child clearly showing the feeling or state '{item.word}' through facial expression or body language"
-        )
-        include.extend(["child", item.word, "clear expression", "easy to understand"])
-    elif pos == "time":
-        scene = (
-            f"A child-friendly scene that clearly represents '{item.word}' as a daily life time expression"
-        )
-        include.extend([item.word, "daily life scene", "child-friendly"])
-    elif pos == "preposition":
-        scene = (
-            f"Objects arranged to clearly demonstrate the preposition '{item.word}' in a simple ESL learning scene"
-        )
-        include.extend(["clear position", item.word, "simple objects"])
-    else:
-        scene = (
-            f"A child-friendly educational illustration showing the meaning of '{item.word}' clearly and literally"
-        )
-        include.extend([item.word, "clear literal meaning"])
-
-    if item.example_en:
-        include.append(f"example context: {item.example_en}")
-    if item.theme:
-        include.append(f"lesson theme: {item.theme}")
-    if item.zh:
-        include.append(f"Chinese meaning: {item.zh}")
-
-    return ANCHOR_PHRASES.copy(), include, exclude, scene
+    plan = resolve_visual_plan(clean, pos, item.zh, item.example_en)
+    include = list(dict.fromkeys(plan.include + [clean]))
+    exclude = list(dict.fromkeys(plan.exclude + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))))
+    return ANCHOR_PHRASES.copy(), include, exclude, plan.scene, plan.render_mode, plan.scene_type
 
 
 def build_image_spec(item: VocabItem) -> ImageSpec:
-    anchors, include, exclude, scene = build_prompt_parts(item)
-    parts = [scene]
+    clean = clean_visual_label(item.word)
+    normalized_pos = normalize_pos(item.pos)
+    anchors, include, exclude, scene, render_mode, scene_type = build_prompt_parts(item)
+
+    parts = [
+        scene,
+        "do not use symbolic or decorative substitutions",
+        "no text, no letters, no numbers, no chinese characters, no english words, no labels, no signboards, no watermark",
+    ]
+    context_hint = _context_hint(item.example_en, clean)
+    if context_hint:
+        parts.append(context_hint)
     if item.theme:
-        parts.append(f"Theme anchor: {item.theme}")
-    if item.example_en:
-        parts.append(f"Sentence anchor: {item.example_en}")
-    if item.zh:
-        parts.append(f"Chinese target meaning: {item.zh}")
+        parts.append(f"soft lesson context only: {item.theme}")
     parts.extend(anchors)
-    parts.append("Do not use symbolic or decorative substitutions")
-    positive_prompt = ", ".join(parts)
-    negative_prompt = ", ".join(dict.fromkeys(exclude))
-    fallback_label = f"{item.word} · {item.zh}" if item.zh else item.word
+
+    positive_prompt = ", ".join([p for p in parts if p])
+    negative_prompt = ", ".join(dict.fromkeys([x for x in exclude if x]))
+    fallback_label = f"{clean} · {item.zh}" if item.zh else clean
 
     return ImageSpec(
-        word=item.word,
-        pos=normalize_pos(item.pos),
+        word=clean,
+        pos=normalized_pos,
         zh=item.zh,
         theme=item.theme,
         example_en=item.example_en,
-        scene_type=infer_scene_type(normalize_pos(item.pos), slugify(item.word)),
+        scene_type=scene_type,
+        render_mode=render_mode,
         positive_prompt=positive_prompt,
         negative_prompt=negative_prompt,
         must_include=list(dict.fromkeys(include)),
@@ -294,7 +285,7 @@ def parse_homework_vocabulary(homework_text: str) -> list[VocabItem]:
                 word=word,
                 pos=pos,
                 zh=zh,
-                example_en=example_map.get(word.lower(), ""),
+                example_en=example_map.get(clean_visual_label(word).lower(), ""),
                 theme=tags,
                 title=title,
             )
@@ -332,17 +323,17 @@ def build_specs_from_parsed_spec(spec: dict) -> list[ImageSpec]:
         word = str(raw.get("en") or "").strip()
         if not word:
             continue
+        clean = clean_visual_label(word)
         item = VocabItem(
-            word=word,
+            word=clean,
             pos=normalize_pos(str(raw.get("pos") or "")) or "noun",
             zh=str(raw.get("zh") or "").strip(),
-            example_en=example_map.get(word.lower(), ""),
+            example_en=example_map.get(clean.lower(), ""),
             theme=theme,
             title=title,
         )
         out.append(build_image_spec(item))
     return out
-
 
 
 def save_specs_json(specs: Iterable[ImageSpec], out_path: str | Path) -> Path:

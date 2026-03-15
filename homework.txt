@@ -1,38 +1,44 @@
-#Title:  Homework — Daily Routine + Feelings
+#Title: Lesson 5-7 Homework - Feelings + Are you
 
-#Tags: daily-routine, school, feelings
+#Tags: feelings, questions, speaking
 
 #Vocabulary:
-verb: finish-完成, verb: carry-背；拿, verb: visit-拜访, noun: homework-家庭作业, noun: bag-书包, noun: weekend-周末, adjective: tired-累的, adjective: busy-忙的, adjective: happy-开心的
+adjective: happy-开心的, adjective: sad-伤心的, adjective: angry-生气的, adjective: tired-累的, adjective: sick-生病的, adjective: scared-害怕的
 
 #Sentences:
-I finish my homework after dinner.
-我在晚饭后完成家庭作业。
-I carry my bag to school every day.
-我每天背着书包去学校。
-We visit our grandparents on the weekend.
-我们在周末去看望爷爷奶奶。
-My bag is heavy today.
-我的书包今天很重。
-I feel tired after school.
-放学后我觉得很累。
-My mother is busy in the evening.
-我妈妈在晚上很忙。
-I am happy on the weekend.
-我在周末很开心。
+Are you happy?
+你开心吗？
+Yes, I am.
+是的，我开心。
+Are you angry?
+你生气吗？
+Yes, I am.
+是的，我生气。
+Are you tired?
+你累吗？
+No, I am not.
+不，我不累。
+Are you sad?
+你伤心吗？
+No, I am not.
+不，我不伤心。
+I am scared.
+我害怕。
+I am sick.
+我生病了。
 
 #Questions and answers:
-Q1: What do you finish after dinner?
-A1: I finish my homework after dinner.
+Q1: Are you happy?
+A1: Yes, I am. / No, I am not.
 
-Q2: What do you carry to school?
-A2: I carry my bag to school.
+Q2: Are you angry?
+A2: Yes, I am. / No, I am not.
 
-Q3: When do you visit your grandparents?
-A3: We visit our grandparents on the weekend.
+Q3: Are you tired?
+A3: Yes, I am. / No, I am not.
 
-Q4: How do you feel after school?
-A4: I feel tired after school.
+Q4: Are you sad?
+A4: Yes, I am. / No, I am not.
 
-Q5: Are you happy on the weekend?
-A5: Yes, I am happy on the weekend.
+Q5: Are you scared?
+A5: Yes, I am. / No, I am not.

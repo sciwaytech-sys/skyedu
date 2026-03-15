@@ -266,10 +266,15 @@ def make_website_illustration(en: str, font_path: Optional[str], out_path: Path,
 
 
 def _render_mode_for_image_spec(spec: ImageSpec) -> str:
+    mode = str(getattr(spec, "render_mode", "") or "").strip().lower()
+    if mode:
+        return mode
     pos = (spec.pos or "").strip().lower()
     if pos == "verb":
         return "action_scene"
-    if pos in ("adjective", "time", "phrase", "preposition"):
+    if pos == "preposition":
+        return "relation_scene"
+    if pos in ("adjective", "time", "phrase"):
         return "attribute_scene"
     return "single_object"
 
@@ -301,6 +306,13 @@ def _retry_negative_prompt(img_spec: ImageSpec, attempt: int) -> str:
             "decorative still life",
             "random object",
             "ambiguous scene",
+            "text",
+            "letters",
+            "numbers",
+            "chinese characters",
+            "english words",
+            "label",
+            "caption",
         ])
     if attempt >= 2:
         negatives.extend([

@@ -102,7 +102,12 @@ class CloudflareFluxBackend(BaseImageBackend):
         headers = {"Authorization": f"Bearer {self.api_token}"}
 
         r = requests.post(url, headers=headers, json=payload, timeout=timeout_s)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            body = r.text[:1200] if hasattr(r, "text") else ""
+            raise requests.HTTPError(
+                f"Cloudflare image request failed: {r.status_code} {r.reason}. Body: {body}",
+                response=r,
+            )
         obj = r.json()
         raw = _decode_cf_image_json(obj)
         return _ensure_png_bytes(raw)

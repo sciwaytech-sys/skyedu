@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from .image_semantics import PREPOSITION_SCENES, clean_visual_label, normalized_visual_key, is_comparative, is_superlative, comparative_base, superlative_base
+
 
 @dataclass(frozen=True)
 class PlannedItem:
@@ -210,9 +212,43 @@ def _to_gerund(v: str) -> str:
 
 def plan_item(en: str, zh: str, pos: str, *, vocab_words: List[str], pos_map: Dict[str, str]) -> PlannedItem:
     """Plan render_mode + subject phrase."""
-    w = (en or "").strip()
-    lw = _norm_word(w)
+    w = clean_visual_label(en)
+    lw = normalized_visual_key(w)
     pos = (pos or "noun").strip().lower()
+
+    if pos == "preposition" or lw in PREPOSITION_SCENES:
+        return PlannedItem(
+            en=w,
+            zh=zh,
+            pos="preposition",
+            render_mode="relation_scene",
+            subject=PREPOSITION_SCENES.get(lw, f"objects arranged to clearly show the relation {w}"),
+            fallback_mode="icon_card",
+        )
+
+    # comparative / superlative adjectives need forced contrast scenes
+    if is_superlative(w):
+        base = superlative_base(w)
+        anchor = "ball" if base in ("big", "small") else _default_anchor_noun(vocab_words, pos_map)
+        return PlannedItem(
+            en=w,
+            zh=zh,
+            pos="adjective",
+            render_mode="contrast_pair",
+            subject=f"three {anchor}s side by side, one clearly the {w}",
+            fallback_mode="icon_card",
+        )
+    if is_comparative(w):
+        base = comparative_base(w)
+        anchor = "ball" if base in ("big", "small") else _default_anchor_noun(vocab_words, pos_map)
+        return PlannedItem(
+            en=w,
+            zh=zh,
+            pos="adjective",
+            render_mode="contrast_pair",
+            subject=f"two {anchor}s side by side, one clearly {w} than the other",
+            fallback_mode="icon_card",
+        )
 
     # ---------- NOUN ----------
     if pos == "noun":
