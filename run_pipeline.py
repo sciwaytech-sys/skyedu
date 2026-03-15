@@ -6,6 +6,7 @@ import html
 import json
 import os
 import shutil
+from time import perf_counter
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -14,8 +15,8 @@ from dotenv import load_dotenv
 from skyed.parser import parse_homework_text
 from skyed.utils import slugify, ensure_dir
 from skyed.cards import generate_vocab_cards, slugify as card_slugify
-from skyed.tts_edge import generate_audio
-from skyed.quizgen import generate_quiz
+from skyed.tts_edge import generate_audio, generate_long_audio_variants
+from skyed.quizgen import generate_quiz, normalize_theme_variant
 from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
 
 
@@ -260,6 +261,15 @@ def _sanitize_publish_slug(value: str) -> str:
     return slugify(str(value or "").strip())
 
 
+def infer_mode_surface_from_theme(theme: str) -> tuple[str, str]:
+    theme = normalize_theme_variant((theme or "sky").strip().lower())
+    if theme == "sky_tiles":
+        return "kid_homework", "tiles"
+    if theme == "strict_dark":
+        return "reading_listening", "strict_dark"
+    return "standard_homework", "classic"
+
+
 def _build_consistency_report(spec: Dict[str, List[Dict[str, str]]]) -> Dict[str, object]:
     import re
     vocab = spec.get("vocab", []) or []
@@ -284,8 +294,8 @@ def _build_consistency_report(spec: Dict[str, List[Dict[str, str]]]) -> Dict[str
     }
 
 
-def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str]) -> Dict:
-    """Map local cards/<stem>.png references inside practice JSON to uploaded WP media URLs."""
+def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str], audio_url_by_rel: Dict[str, str]) -> Dict:
+    """Map local cards/audio references inside practice JSON to uploaded WP media URLs."""
     if not isinstance(practice, dict):
         return practice
 
@@ -301,14 +311,31 @@ def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str
             return card_url_by_stem.get(stem, raw)
         return raw
 
+    def map_audio(value: str) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return raw
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        path = Path(raw)
+        if path.parts and path.parts[0] == "audio":
+            rel = Path(*path.parts[1:]).as_posix()
+            return audio_url_by_rel.get(rel, raw)
+        return raw
+
     for q in practice.get("questions", []) or []:
         if not isinstance(q, dict):
             continue
         if "prompt_image" in q:
             q["prompt_image"] = map_img(q.get("prompt_image", ""))
+        if "prompt_audio" in q:
+            q["prompt_audio"] = map_audio(q.get("prompt_audio", ""))
         for choice in q.get("choices", []) or []:
-            if isinstance(choice, dict) and "img" in choice:
-                choice["img"] = map_img(choice.get("img", ""))
+            if isinstance(choice, dict):
+                if "img" in choice:
+                    choice["img"] = map_img(choice.get("img", ""))
+                if "audio" in choice:
+                    choice["audio"] = map_audio(choice.get("audio", ""))
     return practice
 
 
@@ -329,8 +356,20 @@ def main() -> None:
     ap.add_argument(
         "--theme",
         default=None,
-        choices=["sky", "strict", "fun", "app"],
+        choices=["sky", "sky_tiles", "strict_dark", "fun_mission", "strict", "fun", "app"],
         help="Lesson renderer theme for WordPress shortcode publishing.",
+    )
+    ap.add_argument(
+        "--lesson-mode",
+        default=None,
+        choices=["standard_homework", "kid_homework", "reading_listening"],
+        help="Optional explicit workflow profile. If omitted, inferred from theme.",
+    )
+    ap.add_argument(
+        "--surface-variant",
+        default=None,
+        choices=["classic", "tiles", "strict_dark"],
+        help="Optional explicit renderer surface. If omitted, inferred from theme.",
     )
     args = ap.parse_args()
 
@@ -340,9 +379,10 @@ def main() -> None:
     wp_pass = os.getenv("WP_APP_PASSWORD", "").strip()
     wp_post_type = os.getenv("WP_POST_TYPE", "page").strip()  # page works normally in your setup
     wp_render_mode = (os.getenv("WP_RENDER_MODE", "shortcode") or "shortcode").strip().lower()
-    lesson_theme = (args.theme or os.getenv("WP_LESSON_THEME", "sky") or "sky").strip().lower()
-    if lesson_theme not in ("sky", "strict", "fun", "app"):
-        lesson_theme = "sky"
+    lesson_theme = normalize_theme_variant((args.theme or os.getenv("WP_LESSON_THEME", "sky") or "sky").strip().lower())
+    inferred_lesson_mode, inferred_surface_variant = infer_mode_surface_from_theme(lesson_theme)
+    lesson_mode = (args.lesson_mode or inferred_lesson_mode).strip().lower()
+    surface_variant = (args.surface_variant or inferred_surface_variant).strip().lower()
 
     output_dir = Path(os.getenv("OUTPUT_DIR", "output"))
     font_path = os.getenv("FONT_PATH", "").strip() or None
@@ -352,7 +392,7 @@ def main() -> None:
     quiz_embed_mode = (os.getenv("QUIZ_EMBED_MODE", "embed") or "embed").strip().lower()
 
     print(f"[ENV] PYTHON={os.sys.executable}")
-    print(f"[PUBLISH] THEME={lesson_theme}")
+    print(f"[PUBLISH] THEME={lesson_theme} MODE={lesson_mode} SURFACE={surface_variant}")
 
     hw_text = Path(args.input).read_text(encoding="utf-8", errors="ignore")
     spec = parse_homework_text(hw_text)
@@ -420,7 +460,7 @@ def main() -> None:
         missing_zh = [v.get("en", "") for v in vocab_list if not (v.get("zh") or "").strip()]
         if missing_zh:
             print("[WARN] Missing Chinese for vocab:", ", ".join(missing_zh))
-        if len(vocab_list) == 0:
+        if len(vocab_list) == 0 and lesson_mode != "reading_listening":
             raise RuntimeError(
                 "Parser produced 0 vocab items. Check output/<slug>/spec_debug.json.\n"
                 "Your homework.txt MUST include:\n"
@@ -433,14 +473,30 @@ def main() -> None:
             audio_files = []
         else:
             # Generate cards + audio (EN + ZH for vocab + sentences)
+            t_cards = perf_counter()
             card_files = generate_vocab_cards(spec, font_path, cards_dir)
+            print(f"[TIME] cards={perf_counter() - t_cards:.2f}s")
+
+            t_audio = perf_counter()
             audio_files = generate_audio(spec, audio_dir)
+            print(f"[TIME] audio={perf_counter() - t_audio:.2f}s")
+
+            if lesson_mode == "reading_listening":
+                t_long_audio = perf_counter()
+                spec = generate_long_audio_variants(spec, lesson_root)
+                print(f"[TIME] long_audio={perf_counter() - t_long_audio:.2f}s")
+                try:
+                    (lesson_root / "spec_debug.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
 
         # Keep variables referenced so linters don't complain in stricter configs
         _ = (card_files, audio_files)
 
         # Generate quiz into lesson_root
-        quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8)
+        t_quiz = perf_counter()
+        quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8, theme_variant=lesson_theme)
+        print(f"[TIME] quiz={perf_counter() - t_quiz:.2f}s")
 
         template_html_path = Path("templates/quiz_index.html")
         if template_html_path.exists():
@@ -496,6 +552,7 @@ def main() -> None:
         sent_local.append({"en": en_txt, "zh": zh_txt, "audio_en": a_en_rel, "audio_zh": a_zh_rel})
 
     # Local quiz iframe points to local index.html (works as file)
+    t_lesson_html = perf_counter()
     lesson_html_local = build_lesson_html(
         title,
         items_local,
@@ -504,7 +561,19 @@ def main() -> None:
         quiz_embed_mode="embed",
         quiz_note="",
     )
+    print(f"[TIME] lesson_html={perf_counter() - t_lesson_html:.2f}s")
     (lesson_root / "lesson.html").write_text(lesson_html_local, encoding="utf-8")
+
+    try:
+        (lesson_root / "lesson_manifest.json").write_text(json.dumps({
+            "title": title,
+            "theme": lesson_theme,
+            "lesson_mode": lesson_mode,
+            "surface_variant": surface_variant,
+            "tags": spec.get("tags", []) or [],
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
     print(f"Generated: {lesson_root}")
     print(f"Lesson local path: {(lesson_root / 'lesson.html')}")
@@ -574,21 +643,29 @@ def main() -> None:
     card_url_by_stem: Dict[str, str] = {}
     cards_dir = lesson_root / "cards"
     if cards_dir.exists():
+        t_upload_cards = perf_counter()
+        card_count = 0
         for f in cards_dir.glob("*.png"):
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
                 card_url_by_stem[f.stem] = url
+            card_count += 1
+        print(f"[TIME] upload_cards={perf_counter() - t_upload_cards:.2f}s count={card_count}")
 
     # IMPORTANT: key by relative path (en/apple.mp3 vs zh/apple.mp3) to avoid collisions
     audio_url_by_rel: Dict[str, str] = {}
     audio_dir = lesson_root / "audio"
     if audio_dir.exists():
+        t_upload_audio = perf_counter()
+        audio_count = 0
         for f in audio_dir.rglob("*.mp3"):
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
                 audio_url_by_rel[_audio_rel_key(audio_dir, f)] = url
+            audio_count += 1
+        print(f"[TIME] upload_audio={perf_counter() - t_upload_audio:.2f}s count={audio_count}")
 
     consistency_report = _build_consistency_report(spec)
     try:
@@ -630,6 +707,23 @@ def main() -> None:
             }
         )
 
+    def map_block_audio(block: Dict) -> Dict:
+        if not isinstance(block, dict):
+            return {}
+        out = dict(block)
+        mapped = []
+        for item in block.get("audio_variants", []) or []:
+            if not isinstance(item, dict):
+                continue
+            rel = str(item.get("url") or "").strip()
+            mapped.append({**item, "url": audio_url_by_rel.get(rel, rel)})
+        if mapped:
+            out["audio_variants"] = mapped
+        return out
+
+    reading_remote = map_block_audio(spec.get("reading_block") or {})
+    listening_remote = map_block_audio(spec.get("listening_block") or {})
+
     # Remote practice URL:
     # If QUIZ_PUBLIC_BASE is configured to a real static host, use it.
     # Otherwise shortcode mode will render in-page practice from payload.
@@ -652,6 +746,7 @@ def main() -> None:
             quiz_note=quiz_note,
         )
 
+        t_create_post = perf_counter()
         post = create_post(
             wp_base,
             wp_user,
@@ -664,6 +759,7 @@ def main() -> None:
             slug=publish_slug,
             parent=parent_page_id if is_page_publish else None,
         )
+        print(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
     else:
         # Recommended mode: publish a shortcode block that renders the lesson via a WP plugin.
         # This survives restrictive WP roles (no unfiltered_html) and allows real styling + audio + quiz JS.
@@ -675,7 +771,7 @@ def main() -> None:
         except Exception:
             quiz_dict = {}
 
-        quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem)
+        quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem, audio_url_by_rel)
 
         payload = {
             "title": title,
@@ -683,8 +779,12 @@ def main() -> None:
             "tags": spec.get("tags", []) or [],
             "vocab": items_remote,
             "sentences": sent_remote,
+            "reading_block": reading_remote,
+            "listening_block": listening_remote,
+            "comprehension_questions": spec.get("comprehension_questions", []) or [],
             "quiz": quiz_dict,
             "practice": quiz_dict,
+            "renderer_theme": lesson_theme,
             "consistency": consistency_report,
             "meta": {
                 "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
@@ -701,13 +801,16 @@ def main() -> None:
         payload_path = lesson_root / "lesson_payload.txt"
         payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
+        t_payload_upload = perf_counter()
         payload_media = upload_media(wp_base, wp_user, wp_pass, payload_path)
+        print(f"[TIME] upload_payload={perf_counter() - t_payload_upload:.2f}s")
         data_url = (payload_media or {}).get("source_url") or ""
         if not data_url:
             raise RuntimeError("Failed to upload lesson_payload.txt to WordPress (no source_url).")
 
         shortcode = f'[skyed_lesson data_url="{data_url}" theme="{lesson_theme}"]'
 
+        t_create_post = perf_counter()
         post = create_post(
             wp_base,
             wp_user,
@@ -720,6 +823,7 @@ def main() -> None:
             slug=publish_slug,
             parent=parent_page_id if is_page_publish else None,
         )
+        print(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
     print(f"Publish slug: {publish_slug}")
     print("Published post:")
     if isinstance(post, dict):

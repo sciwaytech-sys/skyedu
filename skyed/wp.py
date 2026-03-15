@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import mimetypes
+import os
 import re
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Tuple
 
@@ -13,6 +18,23 @@ from urllib3.util.retry import Retry
 
 class WPError(RuntimeError):
     pass
+
+
+# -----------------------------------------------------------------------------
+# Shared process-level transport caches
+# -----------------------------------------------------------------------------
+_SESSION_LOCK = threading.Lock()
+_SESSION_CACHE: Dict[str, requests.Session] = {}
+_PROBE_CACHE: Dict[str, bool] = {}
+
+
+def _debug_enabled() -> bool:
+    return str(os.environ.get("SKYED_WP_VERBOSE", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _dbg(msg: str) -> None:
+    if _debug_enabled():
+        print(f"[WP] {msg}")
 
 
 def _auth(wp_user: str, wp_app_password: str) -> HTTPBasicAuth:
@@ -45,10 +67,17 @@ def _normalize_base_url(raw: str) -> str:
     return s
 
 
-def _session() -> requests.Session:
+def _session_key(base_url: str) -> str:
+    return hashlib.sha1(base_url.encode("utf-8")).hexdigest()
+
+
+def _new_session() -> requests.Session:
     """
-    Small retry budget for transient connect/read failures.
-    We avoid probing with OPTIONS because some hosts/WAFs drop it or break TLS.
+    Shared session with retry + keep-alive.
+    Important change:
+      - do NOT force 'Connection: close'
+      - use a larger pool
+      - keep retries for transient failures
     """
     s = requests.Session()
     retry = Retry(
@@ -60,18 +89,44 @@ def _session() -> requests.Session:
         allowed_methods=frozenset({"GET", "HEAD", "POST"}),
         raise_on_status=False,
     )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=8)
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=16, pool_maxsize=32)
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     s.headers.update(
         {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SkyEdAutomation/1.1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SkyEdAutomation/1.2",
             "Accept": "application/json",
-            "Connection": "close",
             "Expect": "",
         }
     )
     return s
+
+
+def _session(base_url: Optional[str] = None) -> requests.Session:
+    """
+    Reuse a shared session per normalized WordPress base URL.
+    """
+    if not base_url:
+        return _new_session()
+
+    key = _session_key(base_url)
+    with _SESSION_LOCK:
+        sess = _SESSION_CACHE.get(key)
+        if sess is None:
+            sess = _new_session()
+            _SESSION_CACHE[key] = sess
+    return sess
+
+
+def reset_wp_connection_cache() -> None:
+    with _SESSION_LOCK:
+        for sess in _SESSION_CACHE.values():
+            try:
+                sess.close()
+            except Exception:
+                pass
+        _SESSION_CACHE.clear()
+        _PROBE_CACHE.clear()
 
 
 def _request(
@@ -83,23 +138,33 @@ def _request(
     session: Optional[requests.Session] = None,
     **kwargs,
 ) -> requests.Response:
-    sess = session or _session()
+    sess = session or _new_session()
+    t0 = time.perf_counter()
     try:
-        return sess.request(method, url, auth=auth, timeout=timeout, **kwargs)
+        r = sess.request(method, url, auth=auth, timeout=timeout, **kwargs)
+        _dbg(f"{method} {url} -> {r.status_code} in {time.perf_counter() - t0:.2f}s")
+        return r
     except Exception as e:
         raise WPError(f"Request failed: {method} {url}\n{e}") from e
 
 
 def _probe_rest_index(wp_base_url: str, timeout: int = 20) -> None:
+    """
+    Probe once per base URL per process.
+    Huge improvement over probing before every upload/post call.
+    """
     base = _normalize_base_url(wp_base_url)
-    sess = _session()
+    if _PROBE_CACHE.get(base):
+        return
 
+    sess = _session(base)
     tried: List[Tuple[str, str]] = []
     for url in (f"{base}/wp-json/", f"{base}/?rest_route=/"):
         try:
             r = _request("GET", url, timeout=timeout, session=sess)
             tried.append((url, f"{r.status_code}"))
             if r.status_code < 400:
+                _PROBE_CACHE[base] = True
                 return
         except Exception as e:
             tried.append((url, f"ERR {e}"))
@@ -178,11 +243,11 @@ def upload_media(
     """
     Upload media via REST.
 
-    Important changes:
-    - no OPTIONS probe
-    - try canonical and fallback rest_route endpoints directly
-    - try raw-binary upload first (WordPress-native media upload style)
-    - then try multipart upload
+    Performance changes:
+    - shared keep-alive session per base URL
+    - REST probe is cached per process
+    - still tries canonical + fallback endpoints
+    - still tries raw first then multipart
     """
     file_path = Path(file_path)
     if not file_path.exists():
@@ -196,20 +261,20 @@ def upload_media(
         mime = "application/octet-stream"
 
     auth = _auth(wp_user, wp_app_password)
-    sess = _session()
+    sess = _session(base)
 
     errors: List[str] = []
     for url in _media_endpoints(base):
-        # Try raw-binary POST first
         for mode_name, uploader in (("raw", _upload_media_raw), ("multipart", _upload_media_multipart)):
+            t0 = time.perf_counter()
             try:
                 r = uploader(url, auth, file_path, mime, timeout, sess)
             except Exception as e:
                 errors.append(f"{mode_name} {url} -> EXC {e}")
                 continue
 
-            ct = (r.headers.get("content-type") or "").lower()
             body_head = r.text[:800] if hasattr(r, "text") else ""
+            _dbg(f"upload {file_path.name} via {mode_name} {url} -> {r.status_code} in {time.perf_counter() - t0:.2f}s")
 
             if r.status_code == 401:
                 errors.append(
@@ -236,7 +301,7 @@ def upload_media(
             except Exception:
                 errors.append(
                     f"{mode_name} {url} -> non-JSON response "
-                    f"(content-type={ct}). Body: {body_head}"
+                    f"(content-type={(r.headers.get('content-type') or '').lower()}). Body: {body_head}"
                 )
                 continue
 
@@ -270,14 +335,16 @@ def _get_items(
     post_type = _normalize_post_type(post_type)
     endpoints = _content_endpoints(base, post_type)
     auth = _auth(wp_user, wp_app_password)
-    sess = _session()
+    sess = _session(base)
     last_error = None
+
     for url in endpoints:
         try:
             r = _request("GET", url, auth=auth, params=params or {}, timeout=timeout, session=sess)
         except Exception as e:
             last_error = f"{url} -> EXC {e}"
             continue
+
         if r.status_code < 400:
             try:
                 data = r.json()
@@ -289,7 +356,9 @@ def _get_items(
             except Exception as e:
                 last_error = f"{url} -> non-JSON response ({e})"
                 continue
+
         last_error = f"{url} -> {r.status_code}. Body: {r.text[:800]}"
+
     if last_error:
         raise WPError(f"Unable to query WordPress REST.\n{last_error}")
     return []
@@ -485,16 +554,19 @@ def create_post(
     if parent is not None:
         payload["parent"] = int(parent)
 
-    sess = _session()
+    sess = _session(base)
     auth = _auth(wp_user, wp_app_password)
     errors: List[str] = []
 
     for url in endpoints:
+        t0 = time.perf_counter()
         try:
             r = _request("POST", url, auth=auth, json=payload, timeout=timeout, session=sess)
         except Exception as e:
             errors.append(f"{url} -> EXC {e}")
             continue
+
+        _dbg(f"create_post {url} -> {r.status_code} in {time.perf_counter() - t0:.2f}s")
 
         if r.status_code < 400:
             try:

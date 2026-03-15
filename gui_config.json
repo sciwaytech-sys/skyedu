@@ -19,7 +19,7 @@
   "voice_zh": "zh-CN-XiaoxiaoNeural",
   "comfy_workflow_path": "assets/comfy/workflow_api.json",
   "picture_cards_type": "Realistic",
-  "lesson_theme": "app",
+  "lesson_theme": "sky_tiles",
   "image_backend": "cloudflare_flux",
   "img_width": 768,
   "img_height": 768,

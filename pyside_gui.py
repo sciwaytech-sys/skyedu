@@ -95,7 +95,7 @@ class AppConfig:
     # comfy workflow
     comfy_workflow_path: str = "assets/comfy/workflow_api.json"
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
-    lesson_theme: str = "sky"  # sky | strict | fun | app
+    lesson_theme: str = "sky"  # sky | sky_tiles | strict_dark | fun_mission (legacy app/strict/fun alias internally)
 
     # image generation backend
     image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
@@ -258,8 +258,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
     )
 
     _autofill_cfg_from_env(cfg)
-    if cfg.lesson_theme not in ("sky", "strict", "fun", "app"):
-        cfg.lesson_theme = "sky"
+    cfg.lesson_theme = _normalize_theme_value(cfg.lesson_theme)
 
     # Write back a repaired normalized config (important)
     save_config(path, cfg)
@@ -371,6 +370,82 @@ def _load_json(path: Path) -> Dict[str, Any]:
 def _save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+
+PUBLISH_SURFACES = {
+    "Standard Homework": [("Sky", "sky"), ("Fun Mission", "fun_mission")],
+    "Kid Homework": [("Sky Tiles", "sky_tiles")],
+    "Older Students": [("Strict Dark", "strict_dark")],
+}
+
+THEME_ALIASES = {
+    "app": "sky",
+    "sky": "sky",
+    "sky_tiles": "sky_tiles",
+    "strict": "strict_dark",
+    "strict_dark": "strict_dark",
+    "fun": "fun_mission",
+    "fun_mission": "fun_mission",
+}
+
+def _normalize_theme_value(value: str) -> str:
+    return THEME_ALIASES.get((value or "sky").strip().lower(), "sky")
+
+
+class PublishPresetDialog(QtWidgets.QDialog):
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None, current_theme: str = "sky"):
+        super().__init__(parent)
+        self.setWindowTitle("Publish lesson options")
+        self.setModal(True)
+        self.resize(420, 190)
+        lay = QtWidgets.QVBoxLayout(self)
+
+        intro = QtWidgets.QLabel("Choose the lesson family and publish surface for this publish run.")
+        intro.setWordWrap(True)
+        lay.addWidget(intro)
+
+        form = QtWidgets.QFormLayout()
+        self.combo_family = QtWidgets.QComboBox()
+        self.combo_family.addItems(list(PUBLISH_SURFACES.keys()))
+        form.addRow("Lesson family:", self.combo_family)
+
+        self.combo_surface = QtWidgets.QComboBox()
+        form.addRow("Publish surface:", self.combo_surface)
+        lay.addLayout(form)
+
+        note = QtWidgets.QLabel(
+            "Sky = balanced standard homework. Sky Tiles = kid image/audio-first. "
+            "Strict Dark = older-student, text-first study mode. Fun Mission = guided checkpoint style."
+        )
+        note.setWordWrap(True)
+        lay.addWidget(note)
+
+        btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        lay.addWidget(btns)
+
+        self.combo_family.currentTextChanged.connect(self._refresh_surfaces)
+
+        current = _normalize_theme_value(current_theme)
+        family = "Standard Homework"
+        for fam, items in PUBLISH_SURFACES.items():
+            if any(key == current for _, key in items):
+                family = fam
+                break
+        self.combo_family.setCurrentText(family)
+        self._refresh_surfaces(family)
+        for i in range(self.combo_surface.count()):
+            if self.combo_surface.itemData(i) == current:
+                self.combo_surface.setCurrentIndex(i)
+                break
+
+    def _refresh_surfaces(self, family: str) -> None:
+        self.combo_surface.clear()
+        for label, key in PUBLISH_SURFACES.get(family, []):
+            self.combo_surface.addItem(label, key)
+
+    def selected_theme(self) -> str:
+        return _normalize_theme_value(str(self.combo_surface.currentData() or "sky"))
 
 
 def _maybe_reexec_with_configured_python(cfg: AppConfig, root_dir: Path) -> bool:
@@ -1036,17 +1111,13 @@ class MainWindow(QtWidgets.QMainWindow):
         fl.addRow(lbl_base)
 
         self.combo_lesson_theme = QtWidgets.QComboBox()
-        self.combo_lesson_theme.addItems(["sky", "strict", "fun", "app"])
-        if self.cfg.lesson_theme in ("sky", "strict", "fun", "app"):
-            self.combo_lesson_theme.setCurrentText(self.cfg.lesson_theme)
-        else:
-            self.combo_lesson_theme.setCurrentText("sky")
+        self.combo_lesson_theme.addItems(["sky", "fun_mission", "strict_dark", "sky_tiles"])
+        self.combo_lesson_theme.setCurrentText(_normalize_theme_value(self.cfg.lesson_theme))
         self.combo_lesson_theme.currentTextChanged.connect(self.on_lesson_theme_changed)
-        fl.addRow("Lesson Theme:", self.combo_lesson_theme)
+        fl.addRow("Default publish surface:", self.combo_lesson_theme)
 
         tip = QtWidgets.QLabel(
-            "Choose the shortcode renderer theme used when publishing. "
-            "Generate + Publish and Publish Only will pass this theme into run_pipeline.py."
+            "Default surface used when publishing. Publish actions will also open a popup so you can choose Sky, Sky Tiles, Fun Mission, or Strict Dark for that run."
         )
         tip.setWordWrap(True)
         fl.addRow(tip)
@@ -1379,7 +1450,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_lesson_theme_changed(self, _txt: str) -> None:
         if hasattr(self, "combo_lesson_theme"):
             value = self.combo_lesson_theme.currentText().strip().lower()
-            self.cfg.lesson_theme = value if value in ("sky", "strict", "fun", "app") else "sky"
+            self.cfg.lesson_theme = _normalize_theme_value(value)
             save_config(self.cfg_path, self.cfg)
             self.append_log(f"[Publish] lesson theme set to {self.cfg.lesson_theme}\n")
 
@@ -1583,13 +1654,44 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
             return
 
-        input_path = str(self.default_editor_path())
-        if hasattr(self, "combo_lesson_theme"):
-            value = self.combo_lesson_theme.currentText().strip().lower()
-            self.cfg.lesson_theme = value if value in ("sky", "strict", "fun", "app") else "sky"
-            save_config(self.cfg_path, self.cfg)
+        selected_theme = _normalize_theme_value(self.cfg.lesson_theme)
+        selected_lesson_mode = "standard_homework"
+        selected_surface_variant = "classic"
 
-        args: List[str] = [str(script), "--input", input_path, "--theme", self.cfg.lesson_theme]
+        if mode in ("generate_publish", "publish_only"):
+            dlg = PublishPresetDialog(parent=self, current_theme=selected_theme)
+            if dlg.exec() != int(QtWidgets.QDialog.DialogCode.Accepted):
+                self.append_log("[Publish] cancelled by user\n")
+                return
+            selected_theme = dlg.selected_theme()
+            if selected_theme == "sky_tiles":
+                selected_lesson_mode = "kid_homework"
+                selected_surface_variant = "tiles"
+            elif selected_theme == "strict_dark":
+                selected_lesson_mode = "reading_listening"
+                selected_surface_variant = "strict_dark"
+            else:
+                selected_lesson_mode = "standard_homework"
+                selected_surface_variant = "classic"
+            self.cfg.lesson_theme = selected_theme
+            if hasattr(self, "combo_lesson_theme"):
+                self.combo_lesson_theme.setCurrentText(selected_theme)
+            save_config(self.cfg_path, self.cfg)
+        else:
+            if hasattr(self, "combo_lesson_theme"):
+                value = self.combo_lesson_theme.currentText().strip().lower()
+                selected_theme = _normalize_theme_value(value)
+                self.cfg.lesson_theme = selected_theme
+                save_config(self.cfg_path, self.cfg)
+
+        input_path = str(self.default_editor_path())
+        args: List[str] = [
+            str(script),
+            "--input", input_path,
+            "--theme", selected_theme,
+            "--lesson-mode", selected_lesson_mode,
+            "--surface-variant", selected_surface_variant,
+        ]
         if mode == "generate_publish":
             args.append("--publish")
         elif mode == "publish_only":
@@ -1638,7 +1740,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"W={self.cfg.img_width} H={self.cfg.img_height} STEPS={self.cfg.img_steps} "
             f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency}\n"
         )
-        self.append_log(f"[Publish] THEME={self.cfg.lesson_theme}\n")
+        self.append_log(f"[Publish] THEME={selected_theme} MODE={selected_lesson_mode} SURFACE={selected_surface_variant}\n")
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
     def stop_pipeline(self) -> None:

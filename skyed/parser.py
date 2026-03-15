@@ -19,12 +19,24 @@ class QAItem:
     a: str
 
 
+@dataclass
+class MCQItem:
+    q: str
+    choices: List[str]
+    answer: str
+
+
 SECTION_ALIASES = {
     "title": ["name", "title", "lesson", "homework", "标题", "作业"],
     "vocab": ["vocabulary", "vocab", "words", "word bank", "theme words", "词汇", "单词"],
     "sentences": ["sentences", "sentence pattern", "useful sentences", "句型", "重点句型"],
     "qa": ["questions and answers", "q&a", "qa", "问答"],
     "tags": ["tags", "tag", "标签"],
+    "reading_title": ["reading title", "passage title", "reading heading"],
+    "reading_text": ["reading text", "reading", "passage"],
+    "listening_title": ["listening title", "audio title"],
+    "listening_text": ["listening text", "listening script", "audio script"],
+    "comp_questions": ["comprehension questions", "reading questions", "listening questions", "mcq questions"],
 }
 
 ZH_FALLBACK = {
@@ -47,6 +59,8 @@ ZH_FALLBACK = {
     "read": "读",
     "write": "写",
 }
+
+HEADER_ONLY_RE = re.compile(r"^\s*#\s*(.+?)\s*$")
 
 
 def _norm_line(s: str) -> str:
@@ -156,6 +170,17 @@ def _backfill_vocab(vocab: List[VocabItem], sentences: List[Dict[str, str]]) -> 
             item.zh = ZH_FALLBACK.get(item.en.strip().lower(), "")
 
 
+def _parse_comp_question_line(line: str) -> Optional[MCQItem]:
+    txt = (line or "").strip()
+    if not txt:
+        return None
+    txt = re.sub(r"^\d+[.)]\s*", "", txt)
+    parts = [p.strip() for p in txt.split("/") if p.strip()]
+    if len(parts) < 6:
+        return None
+    return MCQItem(q=parts[0], choices=parts[1:5], answer=parts[-1])
+
+
 def parse_homework_text(text: str) -> Dict:
     raw_lines = (text or "").splitlines()
     lines = [_norm_line(ln) for ln in raw_lines]
@@ -165,10 +190,16 @@ def parse_homework_text(text: str) -> Dict:
     vocab: List[VocabItem] = []
     sentences: List[Dict[str, str]] = []
     qa: List[QAItem] = []
+    reading_title = ""
+    reading_lines: List[str] = []
+    listening_title = ""
+    listening_lines: List[str] = []
+    comp_questions: List[MCQItem] = []
 
     section: Optional[str] = None
     current_q: Optional[str] = None
     pending_en: Optional[str] = None
+    pending_header_value: Optional[str] = None
 
     re_q = re.compile(r"^\s*Q\d*\s*:\s*(.*)$", re.IGNORECASE)
     re_a = re.compile(r"^\s*A\d*\s*:\s*(.*)$", re.IGNORECASE)
@@ -184,10 +215,39 @@ def parse_homework_text(text: str) -> Dict:
         if not ln:
             continue
 
+        header_only = HEADER_ONLY_RE.match(ln)
+        if header_only:
+            header_name = header_only.group(1).strip().lower()
+            for key, aliases in SECTION_ALIASES.items():
+                if header_name in aliases:
+                    section = key
+                    pending_header_value = key if key in {"title", "tags", "reading_title", "listening_title"} else None
+                    current_q = None
+                    if key != "sentences":
+                        flush_pending_en()
+                    header_name = ""
+                    break
+            if not header_name:
+                continue
+
+        if pending_header_value:
+            if pending_header_value == "title":
+                title = ln
+            elif pending_header_value == "tags":
+                tags = [x.strip() for x in re.split(r"[,，、]", ln) if x.strip()]
+            elif pending_header_value == "reading_title":
+                reading_title = ln
+            elif pending_header_value == "listening_title":
+                listening_title = ln
+            pending_header_value = None
+            continue
+
         matched, after = _match_section(ln, "title")
         if matched:
             if after:
                 title = after
+            else:
+                pending_header_value = "title"
             section = None
             current_q = None
             flush_pending_en()
@@ -195,7 +255,10 @@ def parse_homework_text(text: str) -> Dict:
 
         matched, after = _match_section(ln, "tags")
         if matched:
-            tags = [x.strip() for x in re.split(r"[,，、]", after) if x.strip()]
+            if after:
+                tags = [x.strip() for x in re.split(r"[,，、]", after) if x.strip()]
+            else:
+                pending_header_value = "tags"
             section = None
             continue
 
@@ -225,6 +288,57 @@ def parse_homework_text(text: str) -> Dict:
             section = "qa"
             current_q = None
             flush_pending_en()
+            continue
+
+        matched, after = _match_section(ln, "reading_title")
+        if matched:
+            section = "reading_title"
+            current_q = None
+            flush_pending_en()
+            if after:
+                reading_title = after
+            else:
+                pending_header_value = "reading_title"
+            continue
+
+        matched, after = _match_section(ln, "reading_text")
+        if matched:
+            section = "reading_text"
+            current_q = None
+            flush_pending_en()
+            if after:
+                reading_lines.append(after)
+            continue
+
+        matched, after = _match_section(ln, "listening_title")
+        if matched:
+            section = "listening_title"
+            current_q = None
+            flush_pending_en()
+            if after:
+                listening_title = after
+            else:
+                pending_header_value = "listening_title"
+            continue
+
+        matched, after = _match_section(ln, "listening_text")
+        if matched:
+            section = "listening_text"
+            current_q = None
+            flush_pending_en()
+            if after:
+                listening_lines.append(after)
+            continue
+
+        matched, after = _match_section(ln, "comp_questions")
+        if matched:
+            section = "comp_questions"
+            current_q = None
+            flush_pending_en()
+            if after:
+                item = _parse_comp_question_line(after)
+                if item:
+                    comp_questions.append(item)
             continue
 
         if section == "vocab":
@@ -270,6 +384,20 @@ def parse_homework_text(text: str) -> Dict:
                 current_q = None
             continue
 
+        if section == "reading_text":
+            reading_lines.append(ln)
+            continue
+
+        if section == "listening_text":
+            listening_lines.append(ln)
+            continue
+
+        if section == "comp_questions":
+            item = _parse_comp_question_line(ln)
+            if item:
+                comp_questions.append(item)
+            continue
+
     flush_pending_en()
 
     seen = set()
@@ -296,4 +424,7 @@ def parse_homework_text(text: str) -> Dict:
         "vocab": [{"en": v.en, "zh": v.zh, **({"pos": v.pos} if v.pos else {})} for v in dedup_vocab],
         "sentences": norm_sents,
         "qa": [{"q": x.q, "a": x.a} for x in qa],
+        "reading_block": {"title": reading_title, "text": "\n".join(reading_lines).strip()},
+        "listening_block": {"title": listening_title, "text": "\n".join(listening_lines).strip()},
+        "comprehension_questions": [{"q": x.q, "choices": x.choices, "answer": x.answer} for x in comp_questions],
     }

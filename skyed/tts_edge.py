@@ -184,3 +184,54 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
             )
 
     return outputs
+
+
+
+def generate_long_audio_variants(spec: Dict[str, Any], lesson_root: Path) -> Dict[str, Any]:
+    """
+    Additive extension used by stricter older-student lesson surfaces.
+    Keeps generate_audio() intact and optionally creates long-form variants
+    for reading/listening blocks when those sections exist.
+    """
+    lesson_root = Path(lesson_root)
+    rate_env = (os.environ.get("SKYED_TTS_RATE") or "-10%").strip()
+    if rate_env.endswith("%"):
+        rate = rate_env
+    else:
+        try:
+            rate = _rate_string(int(rate_env))
+        except Exception:
+            rate = "-10%"
+
+    concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
+    max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
+    gb_voice = (os.environ.get("SKYED_STRICT_VOICE_GB") or "en-GB-SoniaNeural").strip()
+    us_voice = (os.environ.get("SKYED_STRICT_VOICE_US") or "en-US-GuyNeural").strip()
+
+    async def _runner() -> Dict[str, Any]:
+        semaphore = asyncio.Semaphore(concurrency)
+        for block_key, subdir in (("reading_block", "reading"), ("listening_block", "listening")):
+            block = spec.get(block_key) or {}
+            if not isinstance(block, dict):
+                continue
+            text = str(block.get("text") or "").strip()
+            if not text:
+                continue
+            out_dir = lesson_root / "audio" / subdir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            variants = []
+            for voice, key, label in ((gb_voice, "british_female", "British Female"), (us_voice, "us_male", "US Male")):
+                out_path = out_dir / f"{key}.mp3"
+                ok, err = await _synth_to_mp3(text, voice, rate, out_path, max_retries=max_retries, semaphore=semaphore)
+                if ok:
+                    variants.append({
+                        "key": key,
+                        "label": label,
+                        "url": str(out_path.relative_to(lesson_root)).replace('\\', '/'),
+                    })
+            if variants:
+                block["audio_variants"] = variants
+                spec[block_key] = block
+        return spec
+
+    return asyncio.run(_runner())

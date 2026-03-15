@@ -3,120 +3,106 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Quiz</title>
+  <title>Practice</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background: #f8fafc; }
-    .top { padding: 16px; background: #2563eb; color: white; }
-    .wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
-    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 18px rgba(15,23,42,0.08); margin: 12px 0; }
-    .q { font-size: 18px; font-weight: 650; margin-bottom: 10px; white-space: pre-wrap; }
-    .choice { display: block; margin: 8px 0; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
-    .choice:hover { border-color: #38bdf8; }
-    .choice-inner { display:flex; gap:12px; align-items:center; }
-    .choice img { width: 120px; height: 90px; object-fit: contain; background: #eef2ff; border-radius: 12px; }
-    .btn { background:#f97316; color:white; border:0; padding:10px 14px; border-radius: 12px; cursor:pointer; font-weight:650; }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    .result { font-size: 18px; font-weight: 700; }
+    :root{
+      --bg:#f4f7fb;--surface:#fff;--surface-2:#f7faff;--ink:#102033;--muted:#607089;--line:rgba(16,32,51,.10);--accent:#0e7490;--accent-2:#22d3ee;
+    }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:var(--bg);color:var(--ink)}
+    .top{padding:16px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:white}
+    .wrap{max-width:920px;margin:0 auto;padding:16px}
+    .card{background:white;border-radius:20px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.08);margin:12px 0;border:1px solid var(--line)}
+    .meta{font-size:13px;color:rgba(255,255,255,.9)}
+    .toolbar,.actions,.nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .toolbar{justify-content:space-between}
+    .q-label{display:inline-flex;border-radius:999px;padding:4px 10px;background:#e8fbff;color:#0e7490;font-size:12px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
+    .q{font-size:18px;font-weight:700;margin-bottom:10px;white-space:pre-wrap}
+    .helper{font-size:14px;color:#607089;margin-bottom:10px}
+    .prompt img{width:min(280px,100%);aspect-ratio:4/3;object-fit:contain;background:#eef2ff;border-radius:16px;padding:8px}
+    .choice{display:block;margin:8px 0;padding:10px 12px;border:2px solid #e2e8f0;border-radius:16px;cursor:pointer;background:white}
+    .choice.active{border-color:#38bdf8;box-shadow:0 0 0 4px rgba(56,189,248,.12)}
+    .choice.correct{border-color:#198754;background:rgba(25,135,84,.05)}
+    .choice.wrong{border-color:#dc3545;background:rgba(220,53,69,.05)}
+    .choice-inner{display:flex;gap:12px;align-items:center}
+    .choice img{width:120px;height:90px;object-fit:contain;background:#eef2ff;border-radius:12px;padding:8px}
+    .choice-text{display:flex;flex-direction:column;gap:4px}
+    .sub{font-size:13px;color:#607089}
+    .btn{background:#fff;color:#102033;border:1px solid var(--line);padding:10px 14px;border-radius:999px;cursor:pointer;font-weight:700}
+    .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:0}
+    .play{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:#f7faff;cursor:pointer;font-weight:700}
+    .progress{height:10px;border-radius:999px;background:#e8eef7;overflow:hidden;margin:12px 0 18px}
+    .bar{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .2s ease}
+    
+    .fun-top{background:linear-gradient(135deg,#f08c00,#ffbf69)!important}
+    .kid-top{background:linear-gradient(135deg,#228be6,#74c0fc)!important}
+    .strict-top{background:linear-gradient(135deg,#263246,#0f172a)!important}
+    .choice.kid-image-only .choice-text,.choice.kid-image-only .play{display:none!important}
+    .choice.kid-image-only img{width:100%;height:auto;aspect-ratio:4/3;max-width:320px}
+@media (max-width:820px){ .choice-inner{flex-direction:column;align-items:flex-start}.choice img{width:100%;height:auto;aspect-ratio:4/3} }
   </style>
 </head>
 <body>
-  <div class="top"><div class="wrap"><b id="title">Quiz</b></div></div>
+  <div class="top"><div class="wrap"><b id="title">Practice</b><div id="subtitle" class="meta"></div></div></div>
   <div class="wrap">
+    <div class="toolbar card">
+      <div class="nav" id="nav"></div>
+      <div class="actions">
+        <button class="btn" id="retry">Retry</button>
+        <button class="btn primary" id="submit">Check answers</button>
+      </div>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
     <div id="app"></div>
+    <div class="card" id="result" style="display:none"></div>
   </div>
-
 <script>
 function normalizeChoice(c){
-  if (typeof c === "string") return { text: c, img: "" };
-  if (c && typeof c === "object") return { text: c.text || "", img: c.img || "" };
-  return { text: "—", img: "" };
+  if (typeof c === 'string') return { text: c, img: '', subtext: '', audio: '' };
+  if (c && typeof c === 'object') return { text: c.text || '', img: c.img || '', subtext: c.subtext || '', audio: c.audio || '' };
+  return { text: '—', img: '', subtext: '', audio: '' };
 }
-
+function playAudio(url){ if(!url) return; try{ const a = new Audio(url); a.play().catch(()=>{});}catch(e){} }
+function makePlay(url,label,cls){ if(!url) return null; const b=document.createElement('button'); b.type='button'; b.className=cls||'play'; b.textContent=label||'Listen'; b.onclick=()=>playAudio(url); return b; }
 async function main(){
-  const res = await fetch("quiz.json", { cache: "no-store" });
+  const res = await fetch('quiz.json',{cache:'no-store'});
   const quiz = await res.json();
+  const app = document.getElementById('app');
+  const title = document.getElementById('title');
+  const subtitle = document.getElementById('subtitle');
+  const nav = document.getElementById('nav');
+  const retry = document.getElementById('retry');
+  const submit = document.getElementById('submit');
+  const result = document.getElementById('result');
+  const bar = document.getElementById('bar');
+  title.textContent = quiz.section_title || quiz.title || 'Practice';
+  subtitle.textContent = quiz.subtitle || '';
+  const questions = quiz.questions || [];
+  const mode = quiz.renderer_mode || 'list';
+  if ((quiz.practice_family||'') === 'fun_mission') document.querySelector('.top').classList.add('fun-top');
+  if (mode === 'kid_single') document.querySelector('.top').classList.add('kid-top');
+  if ((quiz.practice_family||'') === 'strict_study') document.querySelector('.top').classList.add('strict-top');
+  const answers = {};
+  let current = 0;
 
-  document.getElementById("title").textContent = quiz.title || "Quiz";
-  const app = document.getElementById("app");
-
-  let answers = {}; // qIndex -> value (number for mcq, bool for tf)
-
-  (quiz.questions || []).forEach((q, idx) => {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const qt = document.createElement("div");
-    qt.className = "q";
-    qt.textContent = `${idx+1}. ${q.q || ""}`;
-    card.appendChild(qt);
-
-    if (q.type === "mcq") {
-      (q.choices || []).forEach((rawChoice, ci) => {
-        const ch = normalizeChoice(rawChoice);
-
-        const lab = document.createElement("div");
-        lab.className = "choice";
-
-        const inner = document.createElement("div");
-        inner.className = "choice-inner";
-
-        if (ch.img) {
-          const im = document.createElement("img");
-          im.src = ch.img;
-          im.alt = ch.text || `choice ${ci+1}`;
-          inner.appendChild(im);
-        }
-
-        const tx = document.createElement("div");
-        tx.textContent = ch.text || "";
-        inner.appendChild(tx);
-
-        lab.appendChild(inner);
-
-        lab.onclick = () => {
-          answers[idx] = ci;
-          [...card.querySelectorAll(".choice")].forEach(x => x.style.borderColor = "#e2e8f0");
-          lab.style.borderColor = "#38bdf8";
-        };
-
-        card.appendChild(lab);
-      });
-    }
-
-    if (q.type === "tf") {
-      ["True", "False"].forEach((label, bi) => {
-        const lab = document.createElement("div");
-        lab.className = "choice";
-        lab.textContent = label;
-        lab.onclick = () => {
-          answers[idx] = (bi === 0);
-          [...card.querySelectorAll(".choice")].forEach(x => x.style.borderColor = "#e2e8f0");
-          lab.style.borderColor = "#38bdf8";
-        };
-        card.appendChild(lab);
-      });
-    }
-
-    app.appendChild(card);
-  });
-
-  const footer = document.createElement("div");
-  footer.className = "card";
-
-  const btn = document.createElement("button");
-  btn.className = "btn";
-  btn.textContent = "Submit";
-  btn.onclick = () => {
-    let score = 0;
-    (quiz.questions || []).forEach((q, idx) => {
-      if (q.type === "mcq" && answers[idx] === q.answer_index) score++;
-      if (q.type === "tf" && answers[idx] === q.answer_bool) score++;
-    });
-    footer.innerHTML = `<div class="result">Score: ${score} / ${(quiz.questions || []).length}</div>`;
-  };
-
-  footer.appendChild(btn);
-  app.appendChild(footer);
+  function updateProgress(){ const pct = questions.length ? Math.round((Object.keys(answers).length/questions.length)*100) : 0; bar.style.width = pct + '%'; }
+  function renderNav(){ nav.innerHTML=''; if(mode==='list') return; const meta=document.createElement('div'); meta.textContent=(mode==='kid_single' ? 'Round ' : ((quiz.practice_family||'')==='fun_mission' ? 'Checkpoint ' : 'Question '))+(current+1)+' of '+questions.length; nav.append(meta); if(mode==='kid_single'){ const q=questions[current]||{}; if(q.prompt_audio){ const replay=makePlay(q.prompt_audio,'Listen again','btn'); nav.append(replay);} return; } const prev=document.createElement('button'); prev.className='btn'; prev.textContent=((quiz.practice_family||'')==='fun_mission'?'Previous checkpoint':'Previous'); prev.disabled=current<=0; prev.onclick=()=>{if(current>0){current--;render();}}; const next=document.createElement('button'); next.className='btn'; next.textContent=((quiz.practice_family||'')==='fun_mission'?'Next checkpoint':'Next'); next.disabled=current>=questions.length-1; next.onclick=()=>{if(current<questions.length-1){current++;render();}}; nav.append(prev,next); }
+  function buildCard(q, idx){
+    const card=document.createElement('article'); card.className='card'; card.dataset.index=idx;
+    const label=document.createElement('div'); label.className='q-label'; label.textContent=mode==='kid_single' ? 'Listen and tap' : (((quiz.practice_family||'')==='fun_mission') ? ('Checkpoint '+(idx+1)) : (q.action_label || (q.kind||'Question').replace(/_/g,' '))); card.appendChild(label);
+    if(mode!=='kid_single'){ const qt=document.createElement('div'); qt.className='q'; qt.textContent=(idx+1)+'. '+(q.q||''); card.appendChild(qt); }
+    if(q.helper && mode!=='kid_single'){ const h=document.createElement('div'); h.className='helper'; h.textContent=q.helper; card.appendChild(h); }
+    if(q.prompt_audio){ const row=document.createElement('div'); row.className='actions'; const pb=makePlay(q.prompt_audio, mode==='kid_single'?'▶ Play sound':(((quiz.practice_family||'')==='fun_mission')?'Listen to checkpoint':'Listen'), 'play'); if(pb) row.appendChild(pb); card.appendChild(row); }
+    if(q.prompt_image){ const pm=document.createElement('div'); pm.className='prompt'; const img=document.createElement('img'); img.src=q.prompt_image; img.alt=q.q||''; pm.appendChild(img); card.appendChild(pm); }
+    (q.choices||[]).forEach((raw, ci)=>{ const ch=normalizeChoice(raw); const btn=document.createElement('button'); btn.type='button'; btn.className='choice' + (mode==='kid_single' ? ' kid-image-only' : ''); const inner=document.createElement('div'); inner.className='choice-inner'; if(ch.img){const im=document.createElement('img'); im.src=ch.img; im.alt=ch.text||('choice '+(ci+1)); inner.appendChild(im);} if(mode!=='kid_single'){ const tx=document.createElement('div'); tx.className='choice-text'; if(ch.text){const m=document.createElement('div'); m.textContent=ch.text; tx.appendChild(m);} if(ch.subtext){const s=document.createElement('div'); s.className='sub'; s.textContent=ch.subtext; tx.appendChild(s);} inner.appendChild(tx); } if(ch.audio && mode!=='kid_single'){ const ab=makePlay(ch.audio,'🔊','play'); inner.appendChild(ab); } btn.appendChild(inner); btn.onclick=()=>{ answers[idx]=ci; [...card.querySelectorAll('.choice')].forEach(x=>x.classList.remove('active','correct','wrong')); btn.classList.add('active'); updateProgress(); if(mode==='kid_single'){ const expected=Number(q.answer_index); if(ci===expected){ btn.classList.add('correct'); result.style.display='block'; result.innerHTML='⭐ Great!'; if(current<questions.length-1){ setTimeout(()=>{current++;render();},650);} } else { btn.classList.add('wrong'); result.style.display='block'; result.innerHTML='Try again. Listen one more time.'; if(q.prompt_audio){ setTimeout(()=>playAudio(q.prompt_audio),250); } } } }; card.appendChild(btn); });
+    return card;
+  }
+  function render(){ app.innerHTML=''; renderNav(); if(mode==='list'){ questions.forEach((q,idx)=>app.appendChild(buildCard(q,idx))); } else { if(questions[current]) app.appendChild(buildCard(questions[current],current)); }
+    [...app.querySelectorAll('[data-index]')].forEach(card=>{ const idx=Number(card.dataset.index); const chosen=answers[idx]; if(typeof chosen==='number'){ const btns=[...card.querySelectorAll('.choice')]; if(btns[chosen]) btns[chosen].classList.add('active'); }});
+  }
+  function reset(){ Object.keys(answers).forEach(k=>delete answers[k]); current=0; result.style.display='none'; result.innerHTML=''; updateProgress(); render(); }
+  retry.onclick=reset;
+  submit.onclick=()=>{ let score=0; result.style.display='block'; result.innerHTML=''; if(mode!=='list') render(); [...app.querySelectorAll('[data-index]')].forEach(card=>{ const idx=Number(card.dataset.index); const q=questions[idx]||{}; const expected=Number(q.answer_index); const chosen=(idx in answers)?Number(answers[idx]):-1; const btns=[...card.querySelectorAll('.choice')]; btns.forEach((b,bi)=>{ b.classList.remove('correct','wrong'); if(bi===expected) b.classList.add('correct'); if(bi===chosen && chosen!==expected) b.classList.add('wrong'); }); if(chosen===expected) score++; }); result.innerHTML='<b>Score:</b> '+score+' / '+questions.length; };
+  reset();
 }
 main();
 </script>
