@@ -918,6 +918,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
+        self.right_tabs.addTab(self._build_tab_picture_reader(), "Picture Reader")
         self.hsplit.addWidget(self.right_tabs)
 
         self.status = QtWidgets.QStatusBar()
@@ -963,14 +964,16 @@ class MainWindow(QtWidgets.QMainWindow):
         btn1 = QtWidgets.QPushButton("Generate")
         btn2 = QtWidgets.QPushButton("Generate + Publish")
         btn3 = QtWidgets.QPushButton("Publish Only")
-        btn4 = QtWidgets.QPushButton("Stop Pipeline")
-        for b in (btn1, btn2, btn3, btn4):
+        btn4 = QtWidgets.QPushButton("Picture → Publish")
+        btn5 = QtWidgets.QPushButton("Stop Pipeline")
+        for b in (btn1, btn2, btn3, btn4, btn5):
             b.setMinimumHeight(36)
             l1.addWidget(b)
         btn1.clicked.connect(lambda: self.run_pipeline("generate"))
         btn2.clicked.connect(lambda: self.run_pipeline("generate_publish"))
         btn3.clicked.connect(lambda: self.run_pipeline("publish_only"))
-        btn4.clicked.connect(self.stop_pipeline)
+        btn4.clicked.connect(self.run_picture_reader_publish)
+        btn5.clicked.connect(self.stop_pipeline)
 
         g2 = self._group_box("ComfyUI")
         l2 = QtWidgets.QVBoxLayout(g2)
@@ -1262,6 +1265,59 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(self, "Image cache cleared", "Removed latest image AI cache/spec/report files.")
         else:
             QtWidgets.QMessageBox.information(self, "Image cache", "No image cache/spec/report files found in the latest lesson folder.")
+
+
+    def browse_reader_image(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select bilingual picture",
+            str(self.root_dir),
+            "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"
+        )
+        if path:
+            self.edit_reader_image.setText(path)
+            self.status.showMessage(f"Picture selected: {Path(path).name}")
+
+    def run_picture_reader_publish(self) -> None:
+        self._clear_error_box()
+        script = self._pipeline_script_path()
+        if not script.exists():
+            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
+            return
+        if not hasattr(self, "edit_reader_image"):
+            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Picture Reader controls are not available.")
+            return
+        image_path = Path(self.edit_reader_image.text().strip()).expanduser()
+        if not image_path.exists():
+            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Please select an existing image file first.")
+            return
+        title = self.edit_reader_title.text().strip()
+
+        env = os.environ.copy()
+        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
+        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
+        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
+        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
+        wf = self.resolve_workflow_path()
+        env["COMFY_URL"] = str(self.cfg.comfy_url)
+        env["COMFY_WORKFLOW"] = str(wf)
+
+        args: List[str] = [
+            str(script),
+            "--page-kind", "picture_reader",
+            "--input-image", str(image_path),
+            "--theme", _normalize_theme_value(self.cfg.lesson_theme),
+            "--lesson-mode", "standard_homework",
+            "--surface-variant", "classic",
+            "--publish",
+        ]
+        if title:
+            args.extend(["--reader-title", title])
+
+        self.append_log(f"[PictureReader] IMAGE={image_path}\n")
+        if title:
+            self.append_log(f"[PictureReader] TITLE={title}\n")
+        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
     def _clear_images_grid(self) -> None:
         if not hasattr(self, "images_grid"):

@@ -20,6 +20,7 @@ from skyed.quizgen import generate_quiz, normalize_theme_variant
 from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
 from skyed.lesson_metadata import infer_lesson_metadata, update_catalog
 from skyed.tag_registry import discover_tag_games, write_tag_registry
+from skyed.picture_reader import parse_bilingual_image
 
 
 def _sentence_audio_stem(base_text: str) -> str:
@@ -205,6 +206,81 @@ def build_lesson_html(
     return html_out
 
 
+
+def build_picture_reader_html(title: str, lines: List[Dict[str, str]]) -> str:
+    css = """
+    <style>
+      :root{--bg:#f4f7fb;--card:#ffffff;--ink:#0f172a;--muted:#64748b;--brand:#2563eb;--brand2:#38bdf8;--line:#dbe7ff;--shadow:0 18px 40px rgba(15,23,42,.08);}
+      body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:linear-gradient(180deg,#eef6ff 0%,#f8fbff 48%,#f4f7fb 100%);color:var(--ink);}
+      .reader-shell{max-width:940px;margin:0 auto;padding:18px 14px 64px;}
+      .reader-hero{background:linear-gradient(120deg,var(--brand),var(--brand2));padding:20px;border-radius:26px;color:#fff;box-shadow:var(--shadow);margin-bottom:18px;}
+      .reader-hero h1{margin:0 0 6px;font-size:clamp(24px,3vw,38px);}
+      .reader-hero p{margin:0;opacity:.95;font-size:14px;}
+      .reader-frame{background:rgba(255,255,255,.72);border:1px solid rgba(37,99,235,.12);backdrop-filter:blur(8px);border-radius:30px;padding:14px;box-shadow:var(--shadow);}
+      .reader-paper{background:var(--card);border-radius:24px;padding:16px;border:1px solid rgba(15,23,42,.06);}
+      .reader-tip{display:flex;gap:10px;align-items:center;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:18px;padding:12px 14px;margin-bottom:14px;font-size:14px;}
+      .reader-list{display:flex;flex-direction:column;gap:12px;}
+      .reader-line{border:1px solid var(--line);border-radius:18px;padding:16px;background:linear-gradient(180deg,#ffffff,#f8fbff);cursor:pointer;transition:.18s ease;position:relative;width:100%;text-align:left;}
+      .reader-line:hover,.reader-line:focus-visible{transform:translateY(-1px);box-shadow:0 10px 24px rgba(37,99,235,.10);border-color:#93c5fd;}
+      .reader-line.is-playing{border-color:#2563eb;box-shadow:0 14px 28px rgba(37,99,235,.18);}
+      .reader-line__num{position:absolute;top:12px;right:12px;min-width:28px;height:28px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px;}
+      .reader-line__en{font-size:clamp(18px,2.5vw,26px);font-weight:800;line-height:1.45;padding-right:40px;}
+      .reader-line__zh{font-size:clamp(15px,2vw,21px);color:#334155;line-height:1.65;margin-top:8px;}
+      .reader-line__actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:13px;}
+      .reader-pill{display:inline-flex;align-items:center;gap:8px;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:8px 12px;font-weight:700;}
+      .reader-muted{color:var(--muted);}
+      @media (max-width:640px){.reader-shell{padding:12px 10px 44px}.reader-hero{border-radius:22px}.reader-frame{border-radius:22px;padding:10px}.reader-paper{padding:12px;border-radius:18px}.reader-line{padding:14px 14px 16px}}
+    </style>
+    """
+    cards: List[str] = []
+    for idx, it in enumerate(lines, start=1):
+        en = _h((it.get("en") or "").strip())
+        zh = _h((it.get("zh") or "").strip())
+        raw = _h((it.get("raw") or "").strip())
+        a_en = _hu((it.get("audio_en") or "").strip())
+        a_zh = _hu((it.get("audio_zh") or "").strip())
+        text_main = en or raw
+        text_sub = zh if zh else ""
+        zh_html = f'<div class="reader-line__zh">{text_sub}</div>' if text_sub else ""
+        cards.append(
+            f'<button class="reader-line" type="button" data-audio-en="{a_en}" data-audio-zh="{a_zh}">'
+            f'<span class="reader-line__num">{idx}</span>'
+            f'<div class="reader-line__en">{text_main}</div>'
+            f'{zh_html}'
+            f'<div class="reader-line__actions"><span class="reader-pill">Tap to listen</span>'
+            f'<span class="reader-muted">English and Chinese will play in order.</span></div></button>'
+        )
+    script = """
+    <script>
+    (function(){
+      let current=null;
+      function stopCurrent(){ if(current){ try{ current.pause(); current.currentTime=0; }catch(e){} current=null; } document.querySelectorAll('.reader-line.is-playing').forEach(el=>el.classList.remove('is-playing')); }
+      function playQueue(urls, host){
+        stopCurrent();
+        host.classList.add('is-playing');
+        const clean=urls.filter(Boolean);
+        let idx=0;
+        function next(){
+          if(idx>=clean.length){ host.classList.remove('is-playing'); current=null; return; }
+          current=new Audio(clean[idx++]);
+          current.addEventListener('ended', next, {once:true});
+          current.addEventListener('error', next, {once:true});
+          current.play().catch(next);
+        }
+        next();
+      }
+      document.querySelectorAll('.reader-line').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const urls=[btn.dataset.audioEn||'', btn.dataset.audioZh||''];
+          playQueue(urls, btn);
+        });
+      });
+    })();
+    </script>
+    """
+    return f"""{css}<div class=\"reader-shell\"><section class=\"reader-hero\"><h1>{_h(title)}</h1><p>Tap any line to hear the bilingual reading on mobile. Designed for parent-guided reading practice.</p></section><div class=\"reader-frame\"><div class=\"reader-paper\"><div class=\"reader-tip\">Touch any sentence block to play the audio. The layout keeps the picture-text reading style, but turns every line into an easy listening target.</div><div class=\"reader-list\">{''.join(cards)}</div></div></div></div>{script}"""
+
+
 def _audio_rel_key(audio_root: Path, f: Path) -> str:
     """Stable key preserving language subfolder, e.g. en/apple.mp3, zh/sent_xxx.mp3"""
     try:
@@ -345,7 +421,10 @@ def main() -> None:
     load_dotenv()
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True, help="Path to homework text file")
+    ap.add_argument("--input", default="", help="Path to homework text file")
+    ap.add_argument("--input-image", default="", help="Path to a bilingual picture/text image for picture-reader publishing")
+    ap.add_argument("--reader-title", default=None, help="Optional title override for picture-reader pages")
+    ap.add_argument("--page-kind", default="lesson", choices=["lesson", "picture_reader"], help="Internal output/publish mode")
     ap.add_argument("--lesson_title", default=None)
     ap.add_argument("--publish", action="store_true", help="If set, upload to WordPress and create post/page")
     ap.add_argument("--publish-only", action="store_true", help="Publish from existing output folder (no generation)")
@@ -396,12 +475,39 @@ def main() -> None:
     print(f"[ENV] PYTHON={os.sys.executable}")
     print(f"[PUBLISH] THEME={lesson_theme} MODE={lesson_mode} SURFACE={surface_variant}")
 
-    hw_text = Path(args.input).read_text(encoding="utf-8", errors="ignore")
-    spec = parse_homework_text(hw_text)
+    page_kind = (args.page_kind or "lesson").strip().lower()
+    input_image = Path(args.input_image).expanduser().resolve() if str(args.input_image or "").strip() else None
+    if input_image:
+        page_kind = "picture_reader"
+
+    if page_kind == "picture_reader":
+        if not input_image or not input_image.exists():
+            raise RuntimeError("--input-image is required and must point to an existing image for picture_reader mode.")
+        reader_slug = slugify(args.reader_title or input_image.stem) or "picture-reader"
+        reader_debug = (Path(os.getenv("OUTPUT_DIR", "output")) / reader_slug / "ocr_debug.json")
+        reader_payload = parse_bilingual_image(input_image, save_debug_to=reader_debug)
+        lines = reader_payload.get("lines", []) or []
+        spec = {
+            "title": args.reader_title or reader_payload.get("title") or input_image.stem,
+            "tags": ["picture-reader", "bilingual"],
+            "vocab": [],
+            "sentences": [{"en": str(line.get("en") or "").strip(), "zh": str(line.get("zh") or "").strip(), "raw": str(line.get("raw") or "").strip()} for line in lines if str(line.get("en") or line.get("zh") or line.get("raw") or "").strip()],
+            "picture_reader_lines": lines,
+            "picture_reader_meta": {
+                "source_image": str(input_image),
+                "ocr_backend": reader_payload.get("ocr_backend") or "tesseract",
+                "ocr_lang": reader_payload.get("ocr_lang") or "eng+chi_sim",
+            },
+        }
+    else:
+        if not str(args.input or "").strip():
+            raise RuntimeError("--input is required for lesson mode.")
+        hw_text = Path(args.input).read_text(encoding="utf-8", errors="ignore")
+        spec = parse_homework_text(hw_text)
 
     dry_run = bool(args.dry_run) or (os.getenv("SKYED_DRY_RUN", "").strip().lower() in ("1", "true", "yes", "on"))
 
-    title = args.lesson_title or spec.get("title", "Homework")
+    title = args.reader_title or args.lesson_title or spec.get("title", "Homework")
     slug = slugify(title)
     publish_slug = ""
     wp_group_path = _clean_publish_group_path(args.wp_group_path or os.getenv("WP_GROUP_PATH", ""))
@@ -462,7 +568,7 @@ def main() -> None:
         missing_zh = [v.get("en", "") for v in vocab_list if not (v.get("zh") or "").strip()]
         if missing_zh:
             print("[WARN] Missing Chinese for vocab:", ", ".join(missing_zh))
-        if len(vocab_list) == 0 and lesson_mode != "reading_listening":
+        if len(vocab_list) == 0 and lesson_mode != "reading_listening" and page_kind != "picture_reader":
             raise RuntimeError(
                 "Parser produced 0 vocab items. Check output/<slug>/spec_debug.json.\n"
                 "Your homework.txt MUST include:\n"
@@ -474,10 +580,12 @@ def main() -> None:
             card_files = []
             audio_files = []
         else:
-            # Generate cards + audio (EN + ZH for vocab + sentences)
-            t_cards = perf_counter()
-            card_files = generate_vocab_cards(spec, font_path, cards_dir)
-            print(f"[TIME] cards={perf_counter() - t_cards:.2f}s")
+            if page_kind != "picture_reader":
+                t_cards = perf_counter()
+                card_files = generate_vocab_cards(spec, font_path, cards_dir)
+                print(f"[TIME] cards={perf_counter() - t_cards:.2f}s")
+            else:
+                card_files = []
 
             t_audio = perf_counter()
             audio_files = generate_audio(spec, audio_dir)
@@ -492,25 +600,25 @@ def main() -> None:
                 except Exception:
                     pass
 
-        # Keep variables referenced so linters don't complain in stricter configs
         _ = (card_files, audio_files)
 
-        # Generate quiz into lesson_root
-        t_quiz = perf_counter()
-        quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8, theme_variant=lesson_theme)
-        print(f"[TIME] quiz={perf_counter() - t_quiz:.2f}s")
+        if page_kind != "picture_reader":
+            t_quiz = perf_counter()
+            quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8, theme_variant=lesson_theme)
+            print(f"[TIME] quiz={perf_counter() - t_quiz:.2f}s")
 
-        template_html_path = Path("templates/quiz_index.html")
-        if template_html_path.exists():
-            template_html = template_html_path.read_text(encoding="utf-8", errors="ignore")
-        else:
-            # fallback: minimal loader (expects quiz.json alongside)
-            template_html = """<!doctype html><html><head><meta charset="utf-8"><title>Quiz</title></head>
+            template_html_path = Path("templates/quiz_index.html")
+            if template_html_path.exists():
+                template_html = template_html_path.read_text(encoding="utf-8", errors="ignore")
+            else:
+                template_html = """<!doctype html><html><head><meta charset="utf-8"><title>Quiz</title></head>
 <body><div id="app">Quiz template missing.</div></body></html>"""
-        (lesson_root / "index.html").write_text(template_html, encoding="utf-8")
+            (lesson_root / "index.html").write_text(template_html, encoding="utf-8")
 
-        if quiz_json_path.name != "quiz.json":
-            shutil.copy2(quiz_json_path, lesson_root / "quiz.json")
+            if quiz_json_path.name != "quiz.json":
+                shutil.copy2(quiz_json_path, lesson_root / "quiz.json")
+        else:
+            quiz_json_path = lesson_root / "quiz.json"
 
     # Build LOCAL lesson.html (images inside cards, sentences section with CN + audio)
     items_local: List[Dict[str, str]] = []
@@ -553,16 +661,18 @@ def main() -> None:
 
         sent_local.append({"en": en_txt, "zh": zh_txt, "audio_en": a_en_rel, "audio_zh": a_zh_rel})
 
-    # Local quiz iframe points to local index.html (works as file)
     t_lesson_html = perf_counter()
-    lesson_html_local = build_lesson_html(
-        title,
-        items_local,
-        sent_local,
-        quiz_url="index.html",
-        quiz_embed_mode="embed",
-        quiz_note="",
-    )
+    if page_kind == "picture_reader":
+        lesson_html_local = build_picture_reader_html(title, sent_local)
+    else:
+        lesson_html_local = build_lesson_html(
+            title,
+            items_local,
+            sent_local,
+            quiz_url="index.html",
+            quiz_embed_mode="embed",
+            quiz_note="",
+        )
     print(f"[TIME] lesson_html={perf_counter() - t_lesson_html:.2f}s")
     (lesson_root / "lesson.html").write_text(lesson_html_local, encoding="utf-8")
 
@@ -779,14 +889,15 @@ def main() -> None:
         # Recommended mode: publish a shortcode block that renders the lesson via a WP plugin.
         # This survives restrictive WP roles (no unfiltered_html) and allows real styling + audio + quiz JS.
         quiz_dict = {}
-        try:
-            qp = lesson_root / "quiz.json"
-            if qp.exists():
-                quiz_dict = json.loads(qp.read_text(encoding="utf-8", errors="ignore"))
-        except Exception:
-            quiz_dict = {}
+        if page_kind != "picture_reader":
+            try:
+                qp = lesson_root / "quiz.json"
+                if qp.exists():
+                    quiz_dict = json.loads(qp.read_text(encoding="utf-8", errors="ignore"))
+            except Exception:
+                quiz_dict = {}
 
-        quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem, audio_url_by_rel)
+            quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem, audio_url_by_rel)
 
         payload_categories = infer_lesson_metadata(spec, theme=lesson_theme, publish_slug=publish_slug)
         payload = {
@@ -803,6 +914,8 @@ def main() -> None:
             "quiz": quiz_dict,
             "practice": quiz_dict,
             "renderer_theme": lesson_theme,
+            "page_kind": page_kind,
+            "bilingual_lines": sent_remote if page_kind == "picture_reader" else [],
             "consistency": consistency_report,
             "meta": {
                 "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
@@ -810,6 +923,7 @@ def main() -> None:
                 "quiz_embed_mode": quiz_embed_mode,
                 "tags_public_base": os.getenv("TAGS_PUBLIC_BASE", "").strip(),
                 "theme_variant": lesson_theme,
+                "page_kind": page_kind,
                 "wp_group_path": wp_group_path,
                 "publish_slug": publish_slug,
                 "publish_slug_mode": publish_slug_mode,

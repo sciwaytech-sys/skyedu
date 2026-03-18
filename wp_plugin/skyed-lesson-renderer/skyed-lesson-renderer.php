@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SkyEd Lesson Renderer Next
  * Description: Renders SkyEd-generated lesson payload data (cards + audio + practice) via shortcode.
- * Version: 0.4.0
+ * Version: 0.5.0
  * Author: Sky Education
  */
 
@@ -57,7 +57,7 @@ class SkyEd_Lesson_Renderer {
             self::CSS_HANDLE,
             plugins_url('assets/skyed-lesson.css', __FILE__),
             [],
-            '0.4.0'
+            '0.5.0'
         );
         wp_enqueue_style(self::CSS_HANDLE);
     }
@@ -413,6 +413,82 @@ class SkyEd_Lesson_Renderer {
         <?php return ob_get_clean();
     }
 
+
+    private static function render_picture_reader(array $payload, string $theme) : string {
+        $title = isset($payload['title']) ? (string) $payload['title'] : 'Picture Reader';
+        $lines = isset($payload['bilingual_lines']) && is_array($payload['bilingual_lines']) ? $payload['bilingual_lines'] : [];
+        if (empty($lines) && isset($payload['sentences']) && is_array($payload['sentences'])) {
+            $lines = $payload['sentences'];
+        }
+        $uid = 'skyed_reader_' . wp_rand(100000, 999999);
+        ob_start(); ?>
+        <div class="skyed-lesson skyed-lesson--reader" data-theme="<?php echo esc_attr($theme); ?>">
+          <div class="skyed-shell skyed-reader-shell">
+            <section class="skyed-reader-hero">
+              <div class="skyed-kicker">Sky Reading Frame</div>
+              <h2 class="skyed-title"><?php echo self::esc($title); ?></h2>
+              <p class="skyed-subtitle">Touch any line on mobile to hear the bilingual reading. English plays first, then Chinese.</p>
+            </section>
+            <section class="skyed-reader-frame">
+              <div class="skyed-reader-toolbar">
+                <div class="skyed-reader-pill">Interactive picture text</div>
+                <div class="skyed-reader-note">Built for parent-guided reading and quick sentence replay.</div>
+              </div>
+              <div class="skyed-reader-list" id="<?php echo esc_attr($uid); ?>_list">
+                <?php foreach ($lines as $idx => $line):
+                  $en = isset($line['en']) ? (string) $line['en'] : '';
+                  $zh = isset($line['zh']) ? (string) $line['zh'] : '';
+                  $raw = isset($line['raw']) ? (string) $line['raw'] : '';
+                  $a_en = isset($line['audio_en']) ? (string) $line['audio_en'] : '';
+                  $a_zh = isset($line['audio_zh']) ? (string) $line['audio_zh'] : '';
+                  $main = $en !== '' ? $en : $raw;
+                ?>
+                  <button class="skyed-reader-line" type="button" data-audio-en="<?php echo esc_attr($a_en); ?>" data-audio-zh="<?php echo esc_attr($a_zh); ?>">
+                    <span class="skyed-reader-line__num"><?php echo intval($idx + 1); ?></span>
+                    <div class="skyed-reader-line__en"><?php echo self::esc($main); ?></div>
+                    <?php if ($zh !== ''): ?><div class="skyed-reader-line__zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
+                    <div class="skyed-reader-line__meta">
+                      <span class="skyed-reader-line__play">Tap to listen</span>
+                      <span class="skyed-reader-line__hint">Easy replay for mobile</span>
+                    </div>
+                  </button>
+                <?php endforeach; ?>
+              </div>
+            </section>
+          </div>
+          <script>
+          (function(){
+            const root = document.getElementById(<?php echo json_encode($uid . '_list'); ?>);
+            if (!root) return;
+            let current = null;
+            function stopCurrent(){
+              if (current){ try { current.pause(); current.currentTime = 0; } catch(e) {} current = null; }
+              root.querySelectorAll('.skyed-reader-line.is-playing').forEach(el => el.classList.remove('is-playing'));
+            }
+            function playQueue(urls, host){
+              stopCurrent();
+              host.classList.add('is-playing');
+              const clean = urls.filter(Boolean);
+              let idx = 0;
+              function next(){
+                if (idx >= clean.length){ host.classList.remove('is-playing'); current = null; return; }
+                current = new Audio(clean[idx++]);
+                current.addEventListener('ended', next, {once:true});
+                current.addEventListener('error', next, {once:true});
+                current.play().catch(next);
+              }
+              next();
+            }
+            root.querySelectorAll('.skyed-reader-line').forEach(btn => {
+              btn.addEventListener('click', () => playQueue([btn.dataset.audioEn || '', btn.dataset.audioZh || ''], btn));
+            });
+          })();
+          </script>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public static function shortcode($atts, $content = null) : string {
         $atts = shortcode_atts(['data_url' => '', 'theme' => ''], $atts, self::SHORTCODE);
         $payload = self::fetch_payload((string)$atts['data_url']);
@@ -443,6 +519,11 @@ class SkyEd_Lesson_Renderer {
         $practice_family    = isset($practice['practice_family']) && is_string($practice['practice_family']) ? $practice['practice_family'] : 'lesson_practice';
         $practice_subtitle  = isset($practice['subtitle']) && is_string($practice['subtitle']) ? $practice['subtitle'] : (count($practice_questions) . ' questions');
         $renderer_mode      = isset($practice['renderer_mode']) && is_string($practice['renderer_mode']) ? $practice['renderer_mode'] : ($theme === 'sky_tiles' ? 'kid_single' : ($theme === 'fun_mission' || $theme === 'strict_dark' ? 'single' : 'list'));
+
+        $page_kind = isset($payload['page_kind']) ? (string) $payload['page_kind'] : ((isset($meta['page_kind']) ? (string) $meta['page_kind'] : 'lesson'));
+        if ($page_kind === 'picture_reader' || (!empty($payload['bilingual_lines']) && is_array($payload['bilingual_lines']))) {
+            return self::render_picture_reader($payload, $theme);
+        }
 
         $uid          = 'skyed_' . wp_rand(100000, 999999);
         $count_vocab  = count($vocab);

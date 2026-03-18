@@ -614,3 +614,21 @@ body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; 
 .skyed-pron__status{font-size:.86rem;color:#607089}.skyed-pron__result{display:flex;flex-direction:column;gap:.42rem}.skyed-pron__score{font-size:1rem;color:#102033}.skyed-pron__line{font-size:.88rem;color:#43566c}
 @media (max-width: 991.98px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr 1fr}}
 @media (max-width: 640px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr}.skyed-practice__toolbar{top:6px}.skyed-pron{right:10px;left:10px;align-items:stretch}.skyed-pron__panel{width:auto}.skyed-pron__fab{align-self:flex-end}}
+
+.skyed-lesson--reader .skyed-reader-shell{max-width:980px}
+.skyed-reader-hero{background:linear-gradient(120deg,#2563eb,#38bdf8);border-radius:28px;padding:22px;color:#fff;box-shadow:0 18px 40px rgba(15,23,42,.10);margin-bottom:18px}
+.skyed-reader-frame{background:rgba(255,255,255,.82);border:1px solid rgba(37,99,235,.12);border-radius:28px;padding:14px;backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(15,23,42,.08)}
+.skyed-reader-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.skyed-reader-pill{display:inline-flex;align-items:center;border-radius:999px;background:#dbeafe;color:#1d4ed8;padding:8px 12px;font-weight:800}
+.skyed-reader-note{color:#64748b;font-size:13px}
+.skyed-reader-list{display:flex;flex-direction:column;gap:12px}
+.skyed-reader-line{width:100%;text-align:left;position:relative;border:1px solid #dbe7ff;border-radius:20px;background:linear-gradient(180deg,#fff,#f8fbff);padding:16px;transition:.18s ease;cursor:pointer}
+.skyed-reader-line:hover,.skyed-reader-line:focus-visible{transform:translateY(-1px);box-shadow:0 12px 26px rgba(37,99,235,.12);border-color:#93c5fd}
+.skyed-reader-line.is-playing{border-color:#2563eb;box-shadow:0 16px 28px rgba(37,99,235,.18)}
+.skyed-reader-line__num{position:absolute;top:12px;right:12px;display:flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:13px}
+.skyed-reader-line__en{font-size:clamp(18px,2.2vw,26px);line-height:1.45;font-weight:800;color:#0f172a;padding-right:42px}
+.skyed-reader-line__zh{font-size:clamp(15px,1.8vw,21px);line-height:1.65;color:#334155;margin-top:8px}
+.skyed-reader-line__meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.skyed-reader-line__play{display:inline-flex;align-items:center;border-radius:999px;background:#eff6ff;color:#1d4ed8;padding:7px 11px;font-weight:800;font-size:13px}
+.skyed-reader-line__hint{color:#64748b;font-size:13px}
+@media (max-width:640px){.skyed-reader-hero{border-radius:22px;padding:16px}.skyed-reader-frame{border-radius:22px;padding:10px}.skyed-reader-line{border-radius:16px;padding:14px}}
