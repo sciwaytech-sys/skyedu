@@ -9,13 +9,12 @@ from typing import Iterable
 from .image_semantics import clean_visual_label, resolve_visual_plan, TEXT_EXCLUSION_TOKENS
 
 ANCHOR_PHRASES = [
-    "ESL lesson illustration for children",
-    "clear literal meaning",
-    "single obvious concept",
-    "school or home context when useful",
+    "child-friendly ESL illustration",
+    "literal meaning shown clearly",
+    "single main concept",
+    "clean composition",
     "safe for young learners",
-    "clean educational illustration",
-    "plain or uncluttered background",
+    "plain or softly simplified background",
 ]
 
 POS_ALIASES = {
@@ -29,9 +28,19 @@ POS_ALIASES = {
     "adverb": "adverb",
     "prep": "preposition",
     "preposition": "preposition",
+    "pron": "pronoun",
+    "pronoun": "pronoun",
+    "det": "determiner",
+    "determiner": "determiner",
+    "num": "number",
+    "number": "number",
+    "question": "question_word",
+    "question word": "question_word",
+    "question_word": "question_word",
+    "word": "noun",
     "time": "time",
     "phrase": "phrase",
-    "expression": "phrase",
+    "expression": "expression",
 }
 
 SEMANTIC_DEFAULT_NEGATIVES = {
@@ -40,7 +49,11 @@ SEMANTIC_DEFAULT_NEGATIVES = {
     "adjective": ["isolated stationery", "empty desk", "logo", "typography only", "abstract art"],
     "time": ["isolated object", "logo", "typography only", "abstract symbol"],
     "phrase": ["logo", "typography only", "abstract concept art"],
+    "expression": ["logo", "typography only", "abstract concept art"],
     "preposition": ["logo", "typography only", "abstract concept art", "floating text labels"],
+    "number": ["written numeral", "calendar page", "poster with numbers", "typography only"],
+    "question_word": ["speech bubble text", "written word", "poster", "worksheet"],
+    "pronoun": ["name tag", "written label", "poster"],
 }
 
 WORD_OVERRIDES = {
@@ -134,17 +147,18 @@ class ImageSpec:
     must_include: list[str] = field(default_factory=list)
     must_exclude: list[str] = field(default_factory=list)
     fallback_label: str = ""
+    semantic_class: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
 _HEADER_RE = re.compile(r"^\s*#\s*([A-Za-z ]+)\s*:\s*(.*?)\s*$")
-_VOCAB_LINE_RE = re.compile(r"\s*([A-Za-z]+)\s*:\s*([^,]+)")
+_VOCAB_LINE_RE = re.compile(r"\s*([A-Za-z_ ]+)\s*:\s*([^,]+)")
 
 
 def normalize_pos(pos: str) -> str:
-    pos = (pos or "").strip().lower()
+    pos = re.sub(r"\s+", " ", (pos or "").strip().lower())
     return POS_ALIASES.get(pos, pos or "noun")
 
 
@@ -162,14 +176,31 @@ def _context_hint(example_en: str, clean_word: str) -> str:
     ex = (example_en or "").strip()
     if not ex:
         return ""
-    # keep context usable but not text-heavy; remove punctuation noise
     ex = re.sub(r"\s+", " ", ex)
-    if len(ex) > 90:
-        ex = ex[:90].rsplit(" ", 1)[0]
     ex = ex.replace("'", "").replace('"', "")
+    if len(ex) > 80:
+        ex = ex[:80].rsplit(" ", 1)[0]
+    if not ex:
+        return ""
     if clean_word and clean_word.lower() in ex.lower():
-        return f"context hint from lesson sentence: {ex}"
+        return f"scene inspired by lesson usage without any visible words"
     return ""
+
+
+def _semantic_class(pos: str, render_mode: str, scene_type: str) -> str:
+    if pos == "number" or render_mode == "counting_scene":
+        return "number"
+    if pos == "question_word" or render_mode == "question_scene":
+        return "question_word"
+    if pos == "preposition" or render_mode == "relation_scene":
+        return "preposition"
+    if pos == "verb" or render_mode == "action_scene":
+        return "action"
+    if scene_type == "color_focus_scene":
+        return "color"
+    if pos == "pronoun":
+        return "pronoun"
+    return pos or "noun"
 
 
 def build_prompt_parts(item: VocabItem) -> tuple[list[str], list[str], list[str], str, str, str]:
@@ -179,8 +210,21 @@ def build_prompt_parts(item: VocabItem) -> tuple[list[str], list[str], list[str]
     override = WORD_OVERRIDES.get(clean.lower())
     if override:
         include = list(dict.fromkeys(list(override.get("include", [])) + [clean]))
-        exclude = list(dict.fromkeys(list(override.get("exclude", [])) + list(TEXT_EXCLUSION_TOKENS) + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))))
-        return ANCHOR_PHRASES.copy(), include, exclude, override["scene"], override.get("render_mode", "single_object"), override.get("scene_type", "literal_educational_scene")
+        exclude = list(
+            dict.fromkeys(
+                list(override.get("exclude", []))
+                + list(TEXT_EXCLUSION_TOKENS)
+                + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))
+            )
+        )
+        return (
+            ANCHOR_PHRASES.copy(),
+            include,
+            exclude,
+            override["scene"],
+            override.get("render_mode", "single_object"),
+            override.get("scene_type", "literal_educational_scene"),
+        )
 
     plan = resolve_visual_plan(clean, pos, item.zh, item.example_en)
     include = list(dict.fromkeys(plan.include + [clean]))
@@ -195,14 +239,13 @@ def build_image_spec(item: VocabItem) -> ImageSpec:
 
     parts = [
         scene,
-        "do not use symbolic or decorative substitutions",
-        "no text, no letters, no numbers, no chinese characters, no english words, no labels, no signboards, no watermark",
+        "show the target meaning directly",
+        "do not use decorative substitutions",
+        "no readable text, no letters, no numbers, no chinese characters, no english words, no labels, no signboards, no watermark",
     ]
     context_hint = _context_hint(item.example_en, clean)
     if context_hint:
         parts.append(context_hint)
-    if item.theme:
-        parts.append(f"soft lesson context only: {item.theme}")
     parts.extend(anchors)
 
     positive_prompt = ", ".join([p for p in parts if p])
@@ -222,6 +265,7 @@ def build_image_spec(item: VocabItem) -> ImageSpec:
         must_include=list(dict.fromkeys(include)),
         must_exclude=list(dict.fromkeys(exclude)),
         fallback_label=fallback_label,
+        semantic_class=_semantic_class(normalized_pos, render_mode, scene_type),
     )
 
 
@@ -278,7 +322,7 @@ def parse_homework_vocabulary(homework_text: str) -> list[VocabItem]:
             word, zh = body.split("-", 1)
         else:
             word, zh = body, ""
-        word = word.strip()
+        word = clean_visual_label(word.strip())
         zh = zh.strip()
         items.append(
             VocabItem(

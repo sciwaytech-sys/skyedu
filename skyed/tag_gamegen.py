@@ -61,6 +61,9 @@ def export_tag_s_matching_pairs(
             "title": title or f"{tag_norm} — Matching Pairs",
             "renderer": "matching_pairs",
             "variant": "en_zh",
+            "skill": "matching",
+            "difficulty": "beginner",
+            "thumbnail": "",
         },
         "items": items,
     }

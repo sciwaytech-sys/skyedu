@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SkyEd Lesson Renderer Next
  * Description: Renders SkyEd-generated lesson payload data (cards + audio + practice) via shortcode.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Author: Sky Education
  */
 
@@ -18,6 +18,7 @@ class SkyEd_Lesson_Renderer {
         add_filter('body_class', [__CLASS__, 'body_class']);
         add_filter('upload_mimes', [__CLASS__, 'allow_payload_mimes'], 10, 2);
         add_filter('wp_check_filetype_and_ext', [__CLASS__, 'fix_payload_filetype'], 10, 5);
+        add_action('wp_footer', [__CLASS__, 'render_pronunciation_widget']);
     }
 
     public static function allow_payload_mimes($mimes, $user) {
@@ -56,7 +57,7 @@ class SkyEd_Lesson_Renderer {
             self::CSS_HANDLE,
             plugins_url('assets/skyed-lesson.css', __FILE__),
             [],
-            '0.3.0'
+            '0.4.0'
         );
         wp_enqueue_style(self::CSS_HANDLE);
     }
@@ -118,6 +119,123 @@ class SkyEd_Lesson_Renderer {
         return '<span class="skyed-chip">' . esc_html($text) . '</span>';
     }
 
+    private static function pronunciation_enabled() : bool {
+        if (is_admin()) {
+            return false;
+        }
+        return (bool) apply_filters('skyed_pron_enabled', true);
+    }
+
+    private static function pronunciation_endpoint() : string {
+        $endpoint = defined('SKYED_PRON_ENDPOINT') ? (string) SKYED_PRON_ENDPOINT : '';
+        if ($endpoint === '') {
+            $env_endpoint = getenv('SKYED_PRON_ENDPOINT');
+            if (is_string($env_endpoint) && trim($env_endpoint) !== '') {
+                $endpoint = trim($env_endpoint);
+            }
+        }
+        $endpoint = apply_filters('skyed_pron_endpoint', $endpoint);
+        return trim((string) $endpoint);
+    }
+
+    private static function flatten_category_values($value) : array {
+        $items = [];
+        if (is_array($value)) {
+            foreach ($value as $row) {
+                foreach (self::flatten_category_values($row) as $nested) {
+                    $items[] = $nested;
+                }
+            }
+        } elseif (is_string($value)) {
+            $value = trim($value);
+            if ($value !== '') {
+                $items[] = $value;
+            }
+        }
+        return array_values(array_unique($items));
+    }
+
+    private static function render_category_groups(array $categories) : string {
+        if (empty($categories)) {
+            return '';
+        }
+        $label_map = [
+            'level' => 'Level',
+            'age_band' => 'Age band',
+            'skill_focus' => 'Skills',
+            'grammar_focus' => 'Grammar',
+            'lexical_fields' => 'Topics',
+            'internal_categories' => 'Categories',
+            'theme' => 'Theme',
+            'device' => 'Device',
+            'pronunciation_mode' => 'Pronunciation',
+        ];
+        $order = ['level', 'age_band', 'skill_focus', 'grammar_focus', 'lexical_fields', 'internal_categories', 'theme', 'device', 'pronunciation_mode'];
+        ob_start(); ?>
+        <section class="skyed-section skyed-section--meta">
+          <div class="skyed-section__head">
+            <div>
+              <div class="skyed-section__eyebrow">Internal lesson map</div>
+              <h2 class="skyed-section__title">Categories</h2>
+            </div>
+            <div class="skyed-section__note">Useful for sorting lessons, grouping homework, and attaching tag_s mini games later.</div>
+          </div>
+          <div class="skyed-category-grid">
+            <?php foreach ($order as $key): if (!array_key_exists($key, $categories)) continue; $values = self::flatten_category_values($categories[$key]); if (empty($values)) continue; ?>
+              <article class="skyed-category-box">
+                <div class="skyed-category-box__label"><?php echo esc_html($label_map[$key] ?? ucwords(str_replace('_', ' ', $key))); ?></div>
+                <div class="skyed-category-box__chips">
+                  <?php foreach ($values as $value): ?><span class="skyed-category-chip"><?php echo esc_html((string) $value); ?></span><?php endforeach; ?>
+                </div>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </section>
+        <?php
+        return ob_get_clean();
+    }
+
+    private static function render_tag_games(array $tag_games) : string {
+        if (empty($tag_games)) {
+            return '';
+        }
+        ob_start(); ?>
+        <section class="skyed-section skyed-section--tag-games">
+          <div class="skyed-section__head">
+            <div>
+              <div class="skyed-section__eyebrow">Theme practice</div>
+              <h2 class="skyed-section__title">Related tag_s Games</h2>
+            </div>
+            <div class="skyed-section__note">Separate mini-games linked to this lesson theme. Keep them outside the lesson flow, but close enough for quick revision.</div>
+          </div>
+          <div class="skyed-tag-games">
+            <?php foreach ($tag_games as $game):
+              $title = isset($game['title']) ? (string) $game['title'] : 'Tag game';
+              $url = isset($game['url']) ? (string) $game['url'] : '';
+              $tag = isset($game['tag']) ? (string) $game['tag'] : '';
+              $variant = isset($game['variant']) ? (string) $game['variant'] : '';
+              $renderer = isset($game['renderer']) ? (string) $game['renderer'] : '';
+            ?>
+              <article class="skyed-tag-game">
+                <div class="skyed-tag-game__meta">
+                  <?php if ($tag !== ''): ?><span class="skyed-tag"><?php echo esc_html($tag); ?></span><?php endif; ?>
+                  <?php if ($variant !== ''): ?><span class="skyed-tag"><?php echo esc_html($variant); ?></span><?php endif; ?>
+                </div>
+                <h3 class="skyed-tag-game__title"><?php echo esc_html($title); ?></h3>
+                <?php if ($renderer !== ''): ?><div class="skyed-tag-game__sub"><?php echo esc_html(str_replace('_', ' ', $renderer)); ?></div><?php endif; ?>
+                <?php if ($url !== ''): ?>
+                  <a class="skyed-btn skyed-btn--ghost skyed-tag-game__link" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener">Open game</a>
+                <?php else: ?>
+                  <div class="skyed-tag-game__sub">Public URL not configured yet.</div>
+                <?php endif; ?>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </section>
+        <?php
+        return ob_get_clean();
+    }
+
     private static function theme_copy(string $theme) : array {
         switch ($theme) {
             case 'sky_tiles':
@@ -177,8 +295,16 @@ class SkyEd_Lesson_Renderer {
                 <span class="skyed-play-badge">▶</span>
               </button>
               <div class="skyed-card__body skyed-card__body--tile">
-                <div class="skyed-tile-caption">Tap to hear</div>
-                <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">Hint</button><?php endif; ?>
+                <div class="skyed-tile-text">
+                  <?php if ($pos !== ''): ?><div class="skyed-card__badge skyed-card__badge--tile"><?php echo self::esc($pos); ?></div><?php endif; ?>
+                  <div class="skyed-tile-word"><?php echo self::esc($en); ?></div>
+                  <?php if ($zh !== ''): ?><div class="skyed-tile-zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
+                  <div class="skyed-tile-caption">Tap the picture, listen, and say the word.</div>
+                </div>
+                <div class="skyed-tile-actions">
+                  <?php if ($a_en): ?><button class="skyed-mini-play" type="button" data-audio="<?php echo esc_attr($a_en); ?>">Play EN</button><?php endif; ?>
+                  <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">Play CN</button><?php endif; ?>
+                </div>
               </div>
             </article>
         <?php elseif ($theme === 'strict_dark'): ?>
@@ -252,8 +378,8 @@ class SkyEd_Lesson_Renderer {
           <?php if ($theme === 'fun_mission'): ?><div class="skyed-sent__marker"><?php echo intval($idx + 1); ?></div><?php endif; ?>
           <div class="skyed-sent__text">
             <?php if ($theme === 'sky_tiles'): ?>
-              <div class="skyed-sent__oral-title">Listen and say it</div>
-              <div class="skyed-sent__oral-note">No reading needed on the child view.</div>
+              <div class="skyed-sent__oral-title">Listen, then say the whole sentence</div>
+              <div class="skyed-sent__oral-note">Replay the English audio first, then open the hint to see both English and Chinese.</div>
             <?php else: ?>
               <?php if ($en !== ''): ?><div class="skyed-sent__line skyed-sent__line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
               <?php if ($zh !== ''): ?><div class="skyed-sent__line skyed-sent__line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
@@ -308,6 +434,8 @@ class SkyEd_Lesson_Renderer {
 
         $meta               = isset($payload['meta']) && is_array($payload['meta']) ? $payload['meta'] : [];
         $consistency        = isset($payload['consistency']) && is_array($payload['consistency']) ? $payload['consistency'] : [];
+        $categories         = isset($payload['categories']) && is_array($payload['categories']) ? $payload['categories'] : [];
+        $tag_games          = isset($payload['tag_games']) && is_array($payload['tag_games']) ? $payload['tag_games'] : [];
         $theme              = self::theme_name((string)($atts['theme'] ?: ($payload['renderer_theme'] ?? ($meta['theme_variant'] ?? 'sky'))));
         $copy               = self::theme_copy($theme);
         $practice_title     = isset($practice['section_title']) && is_string($practice['section_title']) ? $practice['section_title'] : 'Practice';
@@ -356,6 +484,8 @@ class SkyEd_Lesson_Renderer {
                 <?php foreach ($warnings as $warning): ?><div><?php echo wp_kses_post($warning); ?></div><?php endforeach; ?>
               </div>
             <?php endif; ?>
+
+            <?php echo self::render_category_groups($categories); ?>
 
             <section class="skyed-section skyed-section--vocab">
               <div class="skyed-section__head">
@@ -433,6 +563,17 @@ class SkyEd_Lesson_Renderer {
                   const answers = {};
                   let currentIndex = 0;
                   const rendererMode = practice.renderer_mode || (theme === 'sky_tiles' ? 'kid_single' : ((theme === 'strict_dark') ? 'single' : ((theme === 'fun_mission') ? 'mission_auto' : 'list')));
+                  const practiceRoot = app.closest('.skyed-practice');
+
+                  function scrollPracticeIntoView(force){
+                    if (!practiceRoot) return;
+                    const shouldScroll = force || window.innerWidth <= 1024 || rendererMode === 'kid_single' || rendererMode === 'mission_auto';
+                    if (!shouldScroll) return;
+                    const top = Math.max(0, practiceRoot.getBoundingClientRect().top + window.pageYOffset - 104);
+                    window.requestAnimationFrame(() => {
+                      window.scrollTo({ top: top, behavior: 'smooth' });
+                    });
+                  }
 
                   function normalizeChoice(c){
                     if (typeof c === 'string') return { text: c, img: '', subtext: '', audio: '' };
@@ -569,7 +710,7 @@ class SkyEd_Lesson_Renderer {
                             }
                           } else {
                             choiceBtn.classList.add('wrong');
-                            window.setTimeout(() => { choiceBtn.classList.remove('wrong','active'); }, 520);
+                            window.setTimeout(() => { choiceBtn.classList.remove('wrong','active'); scrollPracticeIntoView(true); }, 520);
                             window.setTimeout(() => { if (q.prompt_audio) playAudio(q.prompt_audio); }, 180);
                           }
                         } else if (rendererMode === 'mission_auto') {
@@ -604,6 +745,11 @@ class SkyEd_Lesson_Renderer {
                     meta.className = 'skyed-nav-meta';
                     meta.textContent = (rendererMode === 'kid_single' ? 'Round ' : (rendererMode === 'mission_auto' ? 'Checkpoint ' : 'Question ')) + (currentIndex + 1) + ' of ' + questions.length;
                     nav.appendChild(meta);
+                    const currentQuestion = questions[currentIndex] || {};
+                    if ((rendererMode === 'kid_single' || rendererMode === 'mission_auto') && currentQuestion.prompt_audio) {
+                      const replay = makePlayButton(currentQuestion.prompt_audio, rendererMode === 'mission_auto' ? 'Replay checkpoint' : 'Listen again', 'skyed-btn skyed-btn--ghost skyed-btn--replay');
+                      if (replay) nav.appendChild(replay);
+                    }
                     if (rendererMode === 'kid_single' || rendererMode === 'mission_auto') return;
                     const prev = document.createElement('button');
                     prev.type = 'button';
@@ -639,6 +785,7 @@ class SkyEd_Lesson_Renderer {
                         if (btns[chosen]) btns[chosen].classList.add('active');
                       }
                     });
+                    scrollPracticeIntoView(false);
                   }
 
                   function resetPractice(){
@@ -708,10 +855,153 @@ class SkyEd_Lesson_Renderer {
                 <div class="skyed-alert">Practice data missing in payload. Re-run generation.</div>
               <?php endif; ?>
             </section>
+
+            <?php echo self::render_tag_games($tag_games); ?>
           </div>
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    public static function render_pronunciation_widget() : void {
+        static $printed = false;
+        if ($printed || !self::pronunciation_enabled()) {
+            return;
+        }
+        $printed = true;
+        $endpoint = self::pronunciation_endpoint();
+        ?>
+        <div class="skyed-pron" data-endpoint="<?php echo esc_attr($endpoint); ?>">
+          <button class="skyed-pron__fab" type="button" aria-expanded="false">🎙 Pronunciation</button>
+          <div class="skyed-pron__panel" hidden>
+            <div class="skyed-pron__title">Sky Pronunciation Check</div>
+            <div class="skyed-pron__sub">Record, compare, and rate the spoken English phrase.</div>
+            <label class="skyed-pron__field">
+              <span>Expected text</span>
+              <input type="text" class="skyed-pron__input" placeholder="Type the word or sentence to practice">
+            </label>
+            <label class="skyed-pron__field">
+              <span>Language</span>
+              <select class="skyed-pron__select">
+                <option value="en">English</option>
+                <option value="zh">Chinese</option>
+              </select>
+            </label>
+            <div class="skyed-pron__actions">
+              <button class="skyed-btn skyed-btn--ghost skyed-pron__record" type="button">Start recording</button>
+              <button class="skyed-btn skyed-btn--primary skyed-pron__send" type="button">Evaluate</button>
+            </div>
+            <div class="skyed-pron__status">Waiting for audio.</div>
+            <div class="skyed-pron__result"></div>
+          </div>
+        </div>
+        <script>
+        (function(){
+          const root = document.querySelector('.skyed-pron');
+          if (!root) return;
+          const fab = root.querySelector('.skyed-pron__fab');
+          const panel = root.querySelector('.skyed-pron__panel');
+          const input = root.querySelector('.skyed-pron__input');
+          const lang = root.querySelector('.skyed-pron__select');
+          const recordBtn = root.querySelector('.skyed-pron__record');
+          const sendBtn = root.querySelector('.skyed-pron__send');
+          const status = root.querySelector('.skyed-pron__status');
+          const result = root.querySelector('.skyed-pron__result');
+          const endpoint = (root.getAttribute('data-endpoint') || '').trim();
+          let chunks = [];
+          let mediaRecorder = null;
+          let audioBlob = null;
+          let streamRef = null;
+
+          fab.addEventListener('click', function(){
+            const hidden = panel.hasAttribute('hidden');
+            if (hidden) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', 'hidden');
+            fab.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+          });
+
+          async function startRecording(){
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+              status.textContent = 'Microphone recording is not supported in this browser.';
+              return;
+            }
+            chunks = [];
+            audioBlob = null;
+            result.innerHTML = '';
+            status.textContent = 'Requesting microphone permission…';
+            streamRef = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(streamRef);
+            mediaRecorder.ondataavailable = function(ev){ if (ev.data && ev.data.size) chunks.push(ev.data); };
+            mediaRecorder.onstop = function(){
+              audioBlob = new Blob(chunks, { type: mediaRecorder && mediaRecorder.mimeType ? mediaRecorder.mimeType : 'audio/webm' });
+              status.textContent = 'Audio ready. Press Evaluate.';
+              if (streamRef) {
+                streamRef.getTracks().forEach(t => t.stop());
+                streamRef = null;
+              }
+            };
+            mediaRecorder.start();
+            recordBtn.textContent = 'Stop recording';
+            recordBtn.dataset.state = 'recording';
+            status.textContent = 'Recording…';
+          }
+
+          function stopRecording(){
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+              mediaRecorder.stop();
+            }
+            recordBtn.textContent = 'Start recording';
+            recordBtn.dataset.state = 'idle';
+          }
+
+          recordBtn.addEventListener('click', async function(){
+            try {
+              if (recordBtn.dataset.state === 'recording') stopRecording(); else await startRecording();
+            } catch (err) {
+              status.textContent = 'Recording failed: ' + (err && err.message ? err.message : String(err));
+              recordBtn.textContent = 'Start recording';
+              recordBtn.dataset.state = 'idle';
+            }
+          });
+
+          sendBtn.addEventListener('click', async function(){
+            if (!endpoint) {
+              status.textContent = 'Pronunciation service endpoint is not configured yet.';
+              return;
+            }
+            if (!audioBlob) {
+              status.textContent = 'Record audio first.';
+              return;
+            }
+            const expected = (input.value || '').trim();
+            if (!expected) {
+              status.textContent = 'Enter the expected word or sentence first.';
+              return;
+            }
+            status.textContent = 'Checking pronunciation…';
+            result.innerHTML = '';
+            const fd = new FormData();
+            fd.append('audio', audioBlob, 'speech.webm');
+            fd.append('expected_text', expected);
+            fd.append('lang', lang.value || 'en');
+            try {
+              const res = await fetch(endpoint, { method: 'POST', body: fd });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                throw new Error(data.detail || data.error || ('HTTP ' + res.status));
+              }
+              const score = typeof data.score === 'number' ? Math.round(data.score * 100) : null;
+              const transcript = data.transcript || '';
+              result.innerHTML = '<div class="skyed-pron__score">' + (score !== null ? ('Score: <b>' + score + '%</b>') : 'Score unavailable') + '</div>' +
+                                 '<div class="skyed-pron__line"><b>You said:</b> ' + (transcript || '—') + '</div>' +
+                                 '<div class="skyed-pron__line"><b>Target:</b> ' + expected + '</div>';
+              status.textContent = 'Finished.';
+            } catch (err) {
+              status.textContent = 'Pronunciation check failed: ' + (err && err.message ? err.message : String(err));
+            }
+          });
+        })();
+        </script>
+        <?php
     }
 }
 

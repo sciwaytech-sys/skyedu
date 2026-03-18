@@ -14,7 +14,7 @@
     .card{background:white;border-radius:20px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.08);margin:12px 0;border:1px solid var(--line)}
     .meta{font-size:13px;color:rgba(255,255,255,.9)}
     .toolbar,.actions,.nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .toolbar{justify-content:space-between}
+    .toolbar{justify-content:space-between;position:sticky;top:8px;z-index:8;background:rgba(244,247,251,.96);backdrop-filter:blur(8px)}
     .q-label{display:inline-flex;border-radius:999px;padding:4px 10px;background:#e8fbff;color:#0e7490;font-size:12px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
     .q{font-size:18px;font-weight:700;margin-bottom:10px;white-space:pre-wrap}
     .helper{font-size:14px;color:#607089;margin-bottom:10px}
@@ -38,7 +38,7 @@
     .strict-top{background:linear-gradient(135deg,#263246,#0f172a)!important}
     .choice.kid-image-only .choice-text,.choice.kid-image-only .play{display:none!important}
     .choice.kid-image-only img{width:100%;height:auto;aspect-ratio:4/3;max-width:320px}
-@media (max-width:820px){ .choice-inner{flex-direction:column;align-items:flex-start}.choice img{width:100%;height:auto;aspect-ratio:4/3} }
+@media (max-width:820px){ .choice-inner{flex-direction:column;align-items:flex-start}.choice img{width:100%;height:auto;aspect-ratio:4/3} .toolbar{top:0} }
   </style>
 </head>
 <body>
@@ -74,6 +74,7 @@ async function main(){
   const submit = document.getElementById('submit');
   const result = document.getElementById('result');
   const bar = document.getElementById('bar');
+  const toolbar = document.querySelector('.toolbar');
   title.textContent = quiz.section_title || quiz.title || 'Practice';
   subtitle.textContent = quiz.subtitle || '';
   const questions = quiz.questions || [];
@@ -84,8 +85,27 @@ async function main(){
   const answers = {};
   let current = 0;
 
+  function scrollPracticeIntoView(force){
+    const shouldScroll = force || window.innerWidth <= 1024 || mode === 'kid_single' || (quiz.practice_family||'') === 'fun_mission';
+    if (!shouldScroll || !toolbar) return;
+    const top = Math.max(0, toolbar.getBoundingClientRect().top + window.pageYOffset - 88);
+    window.requestAnimationFrame(()=>window.scrollTo({top, behavior:'smooth'}));
+  }
+
   function updateProgress(){ const pct = questions.length ? Math.round((Object.keys(answers).length/questions.length)*100) : 0; bar.style.width = pct + '%'; }
-  function renderNav(){ nav.innerHTML=''; if(mode==='list') return; const meta=document.createElement('div'); meta.textContent=(mode==='kid_single' ? 'Round ' : ((quiz.practice_family||'')==='fun_mission' ? 'Checkpoint ' : 'Question '))+(current+1)+' of '+questions.length; nav.append(meta); if(mode==='kid_single'){ const q=questions[current]||{}; if(q.prompt_audio){ const replay=makePlay(q.prompt_audio,'Listen again','btn'); nav.append(replay);} return; } const prev=document.createElement('button'); prev.className='btn'; prev.textContent=((quiz.practice_family||'')==='fun_mission'?'Previous checkpoint':'Previous'); prev.disabled=current<=0; prev.onclick=()=>{if(current>0){current--;render();}}; const next=document.createElement('button'); next.className='btn'; next.textContent=((quiz.practice_family||'')==='fun_mission'?'Next checkpoint':'Next'); next.disabled=current>=questions.length-1; next.onclick=()=>{if(current<questions.length-1){current++;render();}}; nav.append(prev,next); }
+  function renderNav(){
+    nav.innerHTML='';
+    if(mode==='list') return;
+    const meta=document.createElement('div');
+    meta.textContent=(mode==='kid_single' ? 'Round ' : ((quiz.practice_family||'')==='fun_mission' ? 'Checkpoint ' : 'Question '))+(current+1)+' of '+questions.length;
+    nav.append(meta);
+    const q=questions[current]||{};
+    if((mode==='kid_single' || (quiz.practice_family||'')==='fun_mission') && q.prompt_audio){ const replay=makePlay(q.prompt_audio, (quiz.practice_family||'')==='fun_mission'?'Replay checkpoint':'Listen again','btn'); nav.append(replay); }
+    if(mode==='kid_single' || (quiz.practice_family||'')==='fun_mission') return;
+    const prev=document.createElement('button'); prev.className='btn'; prev.textContent='Previous'; prev.disabled=current<=0; prev.onclick=()=>{if(current>0){current--;render();}};
+    const next=document.createElement('button'); next.className='btn'; next.textContent=current>=questions.length-1?'Last question':'Next'; next.disabled=current>=questions.length-1; next.onclick=()=>{if(current<questions.length-1){current++;render();}};
+    nav.append(prev,next);
+  }
   function buildCard(q, idx){
     const card=document.createElement('article'); card.className='card'; card.dataset.index=idx;
     const label=document.createElement('div'); label.className='q-label'; label.textContent=mode==='kid_single' ? 'Listen and tap' : (((quiz.practice_family||'')==='fun_mission') ? ('Checkpoint '+(idx+1)) : (q.action_label || (q.kind||'Question').replace(/_/g,' '))); card.appendChild(label);
@@ -93,15 +113,56 @@ async function main(){
     if(q.helper && mode!=='kid_single'){ const h=document.createElement('div'); h.className='helper'; h.textContent=q.helper; card.appendChild(h); }
     if(q.prompt_audio){ const row=document.createElement('div'); row.className='actions'; const pb=makePlay(q.prompt_audio, mode==='kid_single'?'▶ Play sound':(((quiz.practice_family||'')==='fun_mission')?'Listen to checkpoint':'Listen'), 'play'); if(pb) row.appendChild(pb); card.appendChild(row); }
     if(q.prompt_image){ const pm=document.createElement('div'); pm.className='prompt'; const img=document.createElement('img'); img.src=q.prompt_image; img.alt=q.q||''; pm.appendChild(img); card.appendChild(pm); }
-    (q.choices||[]).forEach((raw, ci)=>{ const ch=normalizeChoice(raw); const btn=document.createElement('button'); btn.type='button'; btn.className='choice' + (mode==='kid_single' ? ' kid-image-only' : ''); const inner=document.createElement('div'); inner.className='choice-inner'; if(ch.img){const im=document.createElement('img'); im.src=ch.img; im.alt=ch.text||('choice '+(ci+1)); inner.appendChild(im);} if(mode!=='kid_single'){ const tx=document.createElement('div'); tx.className='choice-text'; if(ch.text){const m=document.createElement('div'); m.textContent=ch.text; tx.appendChild(m);} if(ch.subtext){const s=document.createElement('div'); s.className='sub'; s.textContent=ch.subtext; tx.appendChild(s);} inner.appendChild(tx); } if(ch.audio && mode!=='kid_single'){ const ab=makePlay(ch.audio,'🔊','play'); inner.appendChild(ab); } btn.appendChild(inner); btn.onclick=()=>{ answers[idx]=ci; [...card.querySelectorAll('.choice')].forEach(x=>x.classList.remove('active','correct','wrong')); btn.classList.add('active'); updateProgress(); if(mode==='kid_single'){ const expected=Number(q.answer_index); if(ci===expected){ btn.classList.add('correct'); result.style.display='block'; result.innerHTML='⭐ Great!'; if(current<questions.length-1){ setTimeout(()=>{current++;render();},650);} } else { btn.classList.add('wrong'); result.style.display='block'; result.innerHTML='Try again. Listen one more time.'; if(q.prompt_audio){ setTimeout(()=>playAudio(q.prompt_audio),250); } } } }; card.appendChild(btn); });
+    (q.choices||[]).forEach((raw, ci)=>{
+      const ch=normalizeChoice(raw);
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='choice' + (mode==='kid_single' ? ' kid-image-only' : '');
+      const inner=document.createElement('div'); inner.className='choice-inner';
+      if(ch.img){const im=document.createElement('img'); im.src=ch.img; im.alt=ch.text||('choice '+(ci+1)); inner.appendChild(im);}
+      if(mode!=='kid_single'){ const tx=document.createElement('div'); tx.className='choice-text'; if(ch.text){const m=document.createElement('div'); m.textContent=ch.text; tx.appendChild(m);} if(ch.subtext){const s=document.createElement('div'); s.className='sub'; s.textContent=ch.subtext; tx.appendChild(s);} inner.appendChild(tx); }
+      if(ch.audio && mode!=='kid_single'){ const ab=makePlay(ch.audio,'🔊','play'); inner.appendChild(ab); }
+      btn.appendChild(inner);
+      btn.onclick=()=>{
+        answers[idx]=ci;
+        [...card.querySelectorAll('.choice')].forEach(x=>x.classList.remove('active','correct','wrong'));
+        btn.classList.add('active');
+        updateProgress();
+        const expected=Number(q.answer_index);
+        if(mode==='kid_single'){
+          if(ci===expected){
+            btn.classList.add('correct');
+            result.style.display='block';
+            result.innerHTML='⭐ Great!';
+            if(current<questions.length-1){ setTimeout(()=>{current++;render();},650);} else { setTimeout(()=>submit.click(),650); }
+          } else {
+            btn.classList.add('wrong');
+            result.style.display='block';
+            result.innerHTML='Try again. Listen one more time.';
+            if(q.prompt_audio){ setTimeout(()=>playAudio(q.prompt_audio),250); }
+            setTimeout(()=>scrollPracticeIntoView(true),120);
+          }
+        } else if ((quiz.practice_family||'')==='fun_mission'){
+          if(ci===expected){ btn.classList.add('correct'); }
+          else { btn.classList.add('wrong'); const btns=[...card.querySelectorAll('.choice')]; if(btns[expected]) btns[expected].classList.add('correct'); }
+          if(current<questions.length-1){ setTimeout(()=>{current++;render();},650);} else { setTimeout(()=>submit.click(),650); }
+        }
+      };
+      card.appendChild(btn);
+    });
     return card;
   }
-  function render(){ app.innerHTML=''; renderNav(); if(mode==='list'){ questions.forEach((q,idx)=>app.appendChild(buildCard(q,idx))); } else { if(questions[current]) app.appendChild(buildCard(questions[current],current)); }
+  function render(){
+    app.innerHTML='';
+    renderNav();
+    if(mode==='list'){ questions.forEach((q,idx)=>app.appendChild(buildCard(q,idx))); }
+    else { if(questions[current]) app.appendChild(buildCard(questions[current],current)); }
     [...app.querySelectorAll('[data-index]')].forEach(card=>{ const idx=Number(card.dataset.index); const chosen=answers[idx]; if(typeof chosen==='number'){ const btns=[...card.querySelectorAll('.choice')]; if(btns[chosen]) btns[chosen].classList.add('active'); }});
+    scrollPracticeIntoView(false);
   }
   function reset(){ Object.keys(answers).forEach(k=>delete answers[k]); current=0; result.style.display='none'; result.innerHTML=''; updateProgress(); render(); }
   retry.onclick=reset;
-  submit.onclick=()=>{ let score=0; result.style.display='block'; result.innerHTML=''; if(mode!=='list') render(); [...app.querySelectorAll('[data-index]')].forEach(card=>{ const idx=Number(card.dataset.index); const q=questions[idx]||{}; const expected=Number(q.answer_index); const chosen=(idx in answers)?Number(answers[idx]):-1; const btns=[...card.querySelectorAll('.choice')]; btns.forEach((b,bi)=>{ b.classList.remove('correct','wrong'); if(bi===expected) b.classList.add('correct'); if(bi===chosen && chosen!==expected) b.classList.add('wrong'); }); if(chosen===expected) score++; }); result.innerHTML='<b>Score:</b> '+score+' / '+questions.length; };
+  submit.onclick=()=>{ let score=0; result.style.display='block'; result.innerHTML=''; if(mode!=='list') render(); [...app.querySelectorAll('[data-index]')].forEach(card=>{ const idx=Number(card.dataset.index); const q=questions[idx]||{}; const expected=Number(q.answer_index); const chosen=(idx in answers)?Number(answers[idx]):-1; const btns=[...card.querySelectorAll('.choice')]; btns.forEach((b,bi)=>{ b.classList.remove('correct','wrong'); if(bi===expected) b.classList.add('correct'); if(bi===chosen && chosen!==expected) b.classList.add('wrong'); }); if(chosen===expected) score++; }); result.innerHTML=((quiz.practice_family||'')==='fun_mission'?'<b>Mission complete:</b> ':'<b>Score:</b> ')+score+' / '+questions.length; scrollPracticeIntoView(true); };
   reset();
 }
 main();

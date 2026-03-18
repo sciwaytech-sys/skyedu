@@ -579,3 +579,38 @@ body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; 
 .skyed-lesson[data-theme="fun_mission"] .skyed-qcard--single{
   scroll-margin-top: 16px;
 }
+
+
+/* --- SkyEd patch 2026-03-18 --- */
+.skyed-section--meta .skyed-section__note,
+.skyed-section--tag-games .skyed-section__note{max-width:680px}
+.skyed-category-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem}
+.skyed-category-box{border:1px solid var(--line);background:var(--surface-2);border-radius:20px;padding:.9rem 1rem}
+.skyed-category-box__label{font-size:.76rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
+.skyed-category-box__chips{display:flex;flex-wrap:wrap;gap:.45rem}
+.skyed-category-chip{display:inline-flex;align-items:center;border-radius:999px;padding:.34rem .7rem;background:var(--surface);border:1px solid var(--line);font-size:.78rem;font-weight:700;color:var(--ink)}
+.skyed-tag-games{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+.skyed-tag-game{border-radius:22px;border:1px solid var(--line);background:linear-gradient(180deg,var(--surface),var(--surface-2));padding:1rem;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.7rem}
+.skyed-tag-game__meta{display:flex;gap:.4rem;flex-wrap:wrap}
+.skyed-tag-game__title{margin:0;font-size:1.06rem;line-height:1.25;color:var(--ink)}
+.skyed-tag-game__sub{font-size:.88rem;color:var(--muted)}
+.skyed-tag-game__link{align-self:flex-start}
+.skyed-card__badge--tile{display:inline-flex;margin-bottom:.35rem;background:var(--chip);color:var(--accent)}
+.skyed-tile-text{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:.18rem}
+.skyed-tile-word{font-size:1.22rem;font-weight:900;line-height:1.12;color:var(--ink)}
+.skyed-tile-zh{font-size:.98rem;font-weight:700;color:var(--muted)}
+.skyed-tile-caption{font-size:.84rem;font-weight:700;color:var(--accent);line-height:1.35}
+.skyed-card__body--tile{padding:1rem;display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem;align-items:start}
+.skyed-tile-actions{display:flex;gap:.55rem;flex-wrap:wrap}
+.skyed-practice__toolbar{position:sticky;top:12px;z-index:8;padding:.2rem 0 .45rem;background:linear-gradient(180deg,var(--surface),rgba(255,255,255,.82))}
+.skyed-btn--replay{white-space:nowrap}
+.skyed-pron{position:fixed;right:18px;bottom:18px;z-index:99998;display:flex;flex-direction:column;align-items:flex-end;gap:.7rem}
+.skyed-pron__fab{border:0;border-radius:999px;padding:.92rem 1.15rem;background:linear-gradient(135deg,#0f766e,#22d3ee);color:#fff;font-weight:900;box-shadow:0 16px 32px rgba(15,118,110,.28);cursor:pointer}
+.skyed-pron__panel{width:min(360px,calc(100vw - 24px));border-radius:24px;padding:1rem;background:#fff;border:1px solid rgba(16,32,51,.12);box-shadow:0 20px 36px rgba(16,32,51,.18);display:flex;flex-direction:column;gap:.75rem}
+.skyed-pron__title{font-size:1.05rem;font-weight:900;color:#102033}.skyed-pron__sub{font-size:.88rem;color:#607089}
+.skyed-pron__field{display:flex;flex-direction:column;gap:.35rem;font-size:.82rem;font-weight:700;color:#44556b}
+.skyed-pron__input,.skyed-pron__select{width:100%;border:1px solid rgba(16,32,51,.14);border-radius:14px;padding:.72rem .85rem;font:inherit;background:#f8fbff;color:#102033}
+.skyed-pron__actions{display:flex;gap:.65rem;flex-wrap:wrap}.skyed-pron__actions .skyed-btn{flex:1 1 140px}
+.skyed-pron__status{font-size:.86rem;color:#607089}.skyed-pron__result{display:flex;flex-direction:column;gap:.42rem}.skyed-pron__score{font-size:1rem;color:#102033}.skyed-pron__line{font-size:.88rem;color:#43566c}
+@media (max-width: 991.98px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr 1fr}}
+@media (max-width: 640px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr}.skyed-practice__toolbar{top:6px}.skyed-pron{right:10px;left:10px;align-items:stretch}.skyed-pron__panel{width:auto}.skyed-pron__fab{align-self:flex-end}}

@@ -62,7 +62,7 @@ def _normalize_base_url(raw: str) -> str:
         raise WPError(
             "Invalid wp_base_url (missing http/https scheme).\n"
             f"Got: {raw!r}\n"
-            "Expected like: https://course.skyedu.fun"
+            "Expected like: https://skyedu.fun"
         )
     return s
 

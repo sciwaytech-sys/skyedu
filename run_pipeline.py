@@ -18,6 +18,8 @@ from skyed.cards import generate_vocab_cards, slugify as card_slugify
 from skyed.tts_edge import generate_audio, generate_long_audio_variants
 from skyed.quizgen import generate_quiz, normalize_theme_variant
 from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
+from skyed.lesson_metadata import infer_lesson_metadata, update_catalog
+from skyed.tag_registry import discover_tag_games, write_tag_registry
 
 
 def _sentence_audio_stem(base_text: str) -> str:
@@ -564,6 +566,17 @@ def main() -> None:
     print(f"[TIME] lesson_html={perf_counter() - t_lesson_html:.2f}s")
     (lesson_root / "lesson.html").write_text(lesson_html_local, encoding="utf-8")
 
+    tag_games = discover_tag_games(lesson_root.parent, spec.get("tags", []) or [], public_base=os.getenv("TAGS_PUBLIC_BASE", "").strip())
+    lesson_metadata = infer_lesson_metadata(spec, theme=lesson_theme, publish_slug="")
+    try:
+        write_tag_registry(lesson_root.parent, public_base=os.getenv("TAGS_PUBLIC_BASE", "").strip())
+    except Exception:
+        pass
+    try:
+        update_catalog(lesson_root.parent, lesson_root, title, lesson_metadata)
+    except Exception:
+        pass
+
     try:
         (lesson_root / "lesson_manifest.json").write_text(json.dumps({
             "title": title,
@@ -571,6 +584,8 @@ def main() -> None:
             "lesson_mode": lesson_mode,
             "surface_variant": surface_variant,
             "tags": spec.get("tags", []) or [],
+            "categories": lesson_metadata,
+            "tag_games": tag_games,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
@@ -773,10 +788,13 @@ def main() -> None:
 
         quiz_dict = _rewrite_practice_media_urls(quiz_dict, card_url_by_stem, audio_url_by_rel)
 
+        payload_categories = infer_lesson_metadata(spec, theme=lesson_theme, publish_slug=publish_slug)
         payload = {
             "title": title,
             "slug": publish_slug,
             "tags": spec.get("tags", []) or [],
+            "categories": payload_categories,
+            "tag_games": tag_games,
             "vocab": items_remote,
             "sentences": sent_remote,
             "reading_block": reading_remote,
@@ -790,11 +808,13 @@ def main() -> None:
                 "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
                 "quiz_public_base": quiz_public_base,
                 "quiz_embed_mode": quiz_embed_mode,
+                "tags_public_base": os.getenv("TAGS_PUBLIC_BASE", "").strip(),
                 "theme_variant": lesson_theme,
                 "wp_group_path": wp_group_path,
                 "publish_slug": publish_slug,
                 "publish_slug_mode": publish_slug_mode,
                 "publish_rel_path": publish_rel_path,
+                "noindex_internal_catalog": True,
             },
         }
 

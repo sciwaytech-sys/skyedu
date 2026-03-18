@@ -17,6 +17,7 @@ from .prompt_templates import normalize_style
 from .image_specs import ImageSpec, build_specs_from_parsed_spec
 from .image_validation import ImageValidator
 from .fallback_cards import make_fallback_card
+from .scene_fallbacks import build_semantic_fallback
 
 
 def slugify(s: str) -> str:
@@ -283,17 +284,25 @@ def _retry_positive_prompt(img_spec: ImageSpec, attempt: int) -> str:
     base = (img_spec.positive_prompt or "").strip()
     if attempt <= 0:
         return base
+    semantic_class = str(getattr(img_spec, "semantic_class", "") or "").strip().lower()
     extras = [
         "literal child-friendly ESL card illustration",
         "show the target meaning directly",
         "avoid decorative substitutions",
         "make the main concept immediately recognizable",
     ]
+    if semantic_class in {"color", "number", "question_word", "preposition"}:
+        extras.extend([
+            "very clear educational layout",
+            "one obvious teaching scene",
+            "no visible words anywhere",
+        ])
     if attempt >= 2:
         extras.extend([
             "simple composition",
             "one main scene only",
             "obvious school or home context",
+            "no posters, no worksheets, no blackboard writing",
         ])
     return ", ".join([x for x in [base] + extras if x])
 
@@ -508,12 +517,22 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 last_err = f"{type(e).__name__}: {e}"
 
         if not accepted:
-            subtitle = img_spec.scene_type or img_spec.fallback_label or img_spec.word
-            make_fallback_card(img_spec, ai_png, subtitle=subtitle)
-            fallback_marker.write_text(last_err or "Fallback created", encoding="utf-8")
-            fail_marker.write_text(last_err or "Fallback created", encoding="utf-8")
-            row["status"] = "fallback"
-            row["fallback_reason"] = last_err or "AI image rejected"
+            semantic_img = build_semantic_fallback(img_spec, size=max(width, height, 768))
+            if semantic_img is not None:
+                ai_png.parent.mkdir(parents=True, exist_ok=True)
+                semantic_img.save(ai_png, format="PNG")
+                row["status"] = "semantic_fallback"
+                row["fallback_reason"] = last_err or "AI image rejected; semantic fallback illustration generated"
+                row["semantic_fallback"] = True
+                fallback_marker.write_text(last_err or "Semantic fallback created", encoding="utf-8")
+                fail_marker.write_text(last_err or "Semantic fallback created", encoding="utf-8")
+            else:
+                subtitle = img_spec.scene_type or img_spec.fallback_label or img_spec.word
+                make_fallback_card(img_spec, ai_png, subtitle=subtitle)
+                fallback_marker.write_text(last_err or "Fallback created", encoding="utf-8")
+                fail_marker.write_text(last_err or "Fallback created", encoding="utf-8")
+                row["status"] = "fallback"
+                row["fallback_reason"] = last_err or "AI image rejected"
 
         return row
 

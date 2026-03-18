@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import subprocess
 import sys
 import threading
@@ -24,8 +23,6 @@ try:
 except Exception:  # pragma: no cover
     def load_dotenv(*args, **kwargs):  # type: ignore
         return False
-
-from skyed.parser import parse_homework_text
 
 CONFIG_NAME = "gui_config.json"
 
@@ -118,21 +115,6 @@ class AppConfig:
     hf_token: str = ""
     hf_guidance: float = 6.0
 
-    # batch queue
-    batch_separator: str = "===NEXT==="
-    batch_continue_on_error: bool = False
-    batch_last_source_dir: str = ""
-
-
-@dataclass
-class BatchJob:
-    title: str
-    source_label: str
-    source_path: str = ""
-    text: str = ""
-    status: str = "Queued"
-    temp_input_path: str = ""
-
 
 def _default_config(root_dir: Path) -> AppConfig:
     # Known baseline defaults from your project snapshot
@@ -167,9 +149,6 @@ def _default_config(root_dir: Path) -> AppConfig:
         hf_image_endpoint_url="",
         hf_token="",
         hf_guidance=6.0,
-        batch_separator="===NEXT===",
-        batch_continue_on_error=False,
-        batch_last_source_dir="",
     )
 
 
@@ -276,9 +255,6 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
             data.get("hf_image_endpoint_url", data.get("hf_endpoint", base.hf_image_endpoint_url))),
         hf_token=_clean_env_value(data.get("hf_token", base.hf_token)),
         hf_guidance=float(data.get("hf_guidance", base.hf_guidance)),
-        batch_separator=str(data.get("batch_separator", base.batch_separator) or base.batch_separator),
-        batch_continue_on_error=bool(data.get("batch_continue_on_error", base.batch_continue_on_error)),
-        batch_last_source_dir=str(data.get("batch_last_source_dir", base.batch_last_source_dir)),
     )
 
     _autofill_cfg_from_env(cfg)
@@ -318,9 +294,6 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "hf_image_endpoint_url": str(cfg.hf_image_endpoint_url),
         "hf_token": str(cfg.hf_token),
         "hf_guidance": float(cfg.hf_guidance),
-        "batch_separator": str(cfg.batch_separator),
-        "batch_continue_on_error": bool(cfg.batch_continue_on_error),
-        "batch_last_source_dir": str(cfg.batch_last_source_dir),
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -706,7 +679,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cfg = cfg
         self.cfg_path = cfg_path
 
-        self.setWindowTitle("SkyEd Automation — Qt")
+        self.setWindowTitle("SkyEd Automation — Studio")
         self.resize(1600, 900)
 
         self.comfy_proc = ProcessHarness(self)
@@ -721,26 +694,57 @@ class MainWindow(QtWidgets.QMainWindow):
         self.voices_loaded.connect(self._apply_voice_lists)
         self.voices_failed.connect(self._on_voice_error)
 
-        self.batch_jobs: List[BatchJob] = []
-        self.batch_running = False
-        self.batch_mode = "generate"
-        self.batch_index = -1
-        self.batch_continue_on_error = bool(self.cfg.batch_continue_on_error)
-        self.batch_selected_theme = _normalize_theme_value(self.cfg.lesson_theme)
-        self.batch_selected_lesson_mode = "standard_homework"
-        self.batch_selected_surface_variant = "classic"
-        self.batch_run_input_dir: Optional[Path] = None
-
         self.status_timer = QtCore.QTimer(self)
         self.status_timer.setInterval(15000)
         self.status_timer.timeout.connect(self.refresh_comfy_status)
 
+        self._error_lines_seen: set[str] = set()
+        self._traceback_buffer: List[str] = []
+        self._traceback_active: bool = False
+
         self._build_ui()
+        self._apply_branding()
 
         self.load_default_editor_if_exists()
         self.update_comfy_status_polling(force_refresh=True)
         QtCore.QTimer.singleShot(450, self.load_voices_background)
         QtCore.QTimer.singleShot(0, self.apply_default_sizes)
+
+    def _apply_branding(self) -> None:
+        self.setStyleSheet("""
+        QMainWindow { background:#eef4ff; }
+        QTabWidget::pane { border:1px solid #d9e5f6; border-radius:16px; background:#f8fbff; }
+        QTabBar::tab { background:#eaf2ff; border:1px solid #d7e4f8; padding:10px 16px; margin-right:4px; border-top-left-radius:10px; border-top-right-radius:10px; font-weight:600; }
+        QTabBar::tab:selected { background:#ffffff; color:#123047; }
+        QGroupBox { font-weight:700; border:1px solid #dbe7f5; border-radius:16px; margin-top:12px; background:#ffffff; }
+        QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 6px; color:#22415f; }
+        QPushButton, QToolButton { background:#ffffff; border:1px solid #d7e3f4; border-radius:12px; padding:8px 12px; font-weight:600; }
+        QPushButton:hover, QToolButton:hover { border-color:#7cc7ff; }
+        QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background:#ffffff; border:1px solid #d7e3f4; border-radius:12px; padding:6px 8px; }
+        QStatusBar { background:#ffffff; border-top:1px solid #d7e3f4; }
+        """)
+
+    def _brand_panel(self, title: str, subtitle: str, chips: List[str]) -> QtWidgets.QFrame:
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet("QFrame{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #0f766e, stop:1 #38bdf8);border:0;border-radius:20px;color:white;} QLabel{color:white;} ")
+        lay = QtWidgets.QVBoxLayout(frame)
+        lay.setContentsMargins(18, 18, 18, 18)
+        ttl = QtWidgets.QLabel(title)
+        ttl.setStyleSheet("QLabel{font-size:16px;font-weight:800;color:white;}")
+        sub = QtWidgets.QLabel(subtitle)
+        sub.setWordWrap(True)
+        sub.setStyleSheet("QLabel{font-size:12px;color:rgba(255,255,255,0.92);}")
+        lay.addWidget(ttl)
+        lay.addWidget(sub)
+        chip_wrap = QtWidgets.QHBoxLayout()
+        chip_wrap.setSpacing(8)
+        for chip in chips:
+            lbl = QtWidgets.QLabel(chip)
+            lbl.setStyleSheet("QLabel{background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.22);border-radius:999px;padding:6px 10px;font-weight:700;color:white;}")
+            chip_wrap.addWidget(lbl)
+        chip_wrap.addStretch(1)
+        lay.addLayout(chip_wrap)
+        return frame
 
     def resolve_workflow_path(self) -> Path:
         raw = (self.cfg.comfy_workflow_path or "").strip()
@@ -896,7 +900,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setFont(QtGui.QFont("Consolas", 10))
+        self.log.setPlaceholderText("Live process log…")
         self.vsplit.addWidget(self.log)
+
+        self.error_box = QtWidgets.QPlainTextEdit()
+        self.error_box.setReadOnly(True)
+        self.error_box.setFont(QtGui.QFont("Consolas", 10))
+        self.error_box.setPlaceholderText("Generation errors and reasons will appear here…")
+        self.error_box.setStyleSheet("QPlainTextEdit { background:#fff7f7; border:1px solid #e7b4b4; color:#7a1212; }")
+        self.vsplit.addWidget(self.error_box)
 
         self.hsplit.addWidget(left)
 
@@ -906,7 +918,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
-        self.right_tabs.addTab(self._build_tab_batch(), "Batch Queue")
         self.hsplit.addWidget(self.right_tabs)
 
         self.status = QtWidgets.QStatusBar()
@@ -925,12 +936,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def apply_default_sizes(self) -> None:
         w = self.hsplit.width() or 1600
-        left_w = int(w * 0.45)
+        left_w = int(w * 0.42)
         self.hsplit.setSizes([left_w, max(200, w - left_w)])
         h = self.vsplit.height() or 900
-        editor_h = int(h * 0.78)
-        log_h = max(140, h - editor_h)
-        self.vsplit.setSizes([editor_h, log_h])
+        editor_h = int(h * 0.60)
+        log_h = int(h * 0.24)
+        error_h = max(130, h - editor_h - log_h)
+        self.vsplit.setSizes([editor_h, log_h, error_h])
 
     def _group_box(self, title: str) -> QtWidgets.QGroupBox:
         g = QtWidgets.QGroupBox(title)
@@ -940,6 +952,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_tab_quick_actions(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
+
+        lesson_host = (_clean_env_value(os.getenv("WP_BASE_URL") or os.getenv("WP_BASE") or "https://skyedu.fun")).rstrip("/") or "https://skyedu.fun"
+        quiz_host = _clean_env_value(os.getenv("QUIZ_PUBLIC_BASE") or "https://skyedu.fun/quiz")
+        tag_host = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
+        lay.addWidget(self._brand_panel("Sky Education Studio", "Generate, check, publish, and monitor lesson packages without changing the existing workflow.", [f"WordPress: {lesson_host}", f"Quiz: {quiz_host}", f"tag_s: {tag_host}"]))
 
         g1 = self._group_box("Pipeline")
         l1 = QtWidgets.QVBoxLayout(g1)
@@ -1137,391 +1154,6 @@ class MainWindow(QtWidgets.QMainWindow):
         lay.addStretch(0)
         return w
 
-    def _split_homework_stream(self, text: str, separator: str) -> List[str]:
-        sep = (separator or self.cfg.batch_separator or "===NEXT===").strip()
-        if not sep:
-            sep = "===NEXT==="
-        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-        parts = re.split(rf"^\s*{re.escape(sep)}\s*$", normalized, flags=re.MULTILINE)
-        return [p.strip() for p in parts if p.strip()]
-
-    def _batch_title_from_text(self, text: str, fallback: str) -> str:
-        try:
-            spec = parse_homework_text(text)
-            title = str(spec.get("title") or "").strip()
-            return title or fallback
-        except Exception:
-            return fallback
-
-    def _safe_batch_stem(self, text: str) -> str:
-        s = re.sub(r"[^A-Za-z0-9._-]+", "-", (text or "lesson").strip()).strip("-._")
-        return s or "lesson"
-
-    def _refresh_batch_table(self) -> None:
-        if not hasattr(self, "batch_table"):
-            return
-        self.batch_table.setRowCount(len(self.batch_jobs))
-        for row, job in enumerate(self.batch_jobs):
-            values = [str(row + 1), job.title, job.source_label, job.status]
-            for col, value in enumerate(values):
-                item = QtWidgets.QTableWidgetItem(value)
-                if col in (0, 1, 2, 3):
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
-                self.batch_table.setItem(row, col, item)
-        self.batch_table.resizeColumnsToContents()
-        if self.batch_table.columnWidth(2) < 220:
-            self.batch_table.setColumnWidth(2, 220)
-
-    def _append_batch_jobs(self, jobs: List[BatchJob]) -> None:
-        if not jobs:
-            return
-        self.batch_jobs.extend(jobs)
-        self._refresh_batch_table()
-        self.append_log(f"[Batch] added {len(jobs)} job(s). Total queued: {len(self.batch_jobs)}\n")
-
-    def batch_add_files(self) -> None:
-        start_dir = self.cfg.batch_last_source_dir or self.cfg.project_workdir
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            self,
-            "Add homework files",
-            start_dir,
-            "Text files (*.txt);;All files (*)",
-        )
-        if not files:
-            return
-        self.cfg.batch_last_source_dir = str(Path(files[0]).resolve().parent)
-        save_config(self.cfg_path, self.cfg)
-        jobs: List[BatchJob] = []
-        for fp in files:
-            p = Path(fp)
-            try:
-                text = p.read_text(encoding="utf-8", errors="ignore")
-            except Exception as e:
-                self.append_log(f"[Batch] failed to read {p}: {e}\n")
-                continue
-            title = self._batch_title_from_text(text, p.stem)
-            jobs.append(BatchJob(title=title, source_label=str(p.name), source_path=str(p)))
-        self._append_batch_jobs(jobs)
-
-    def batch_add_folder(self) -> None:
-        start_dir = self.cfg.batch_last_source_dir or self.cfg.project_workdir
-        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Add homework folder", start_dir)
-        if not folder:
-            return
-        root = Path(folder)
-        self.cfg.batch_last_source_dir = str(root)
-        save_config(self.cfg_path, self.cfg)
-        paths = sorted([p for p in root.glob("*.txt") if p.is_file()])
-        jobs: List[BatchJob] = []
-        for p in paths:
-            try:
-                text = p.read_text(encoding="utf-8", errors="ignore")
-            except Exception as e:
-                self.append_log(f"[Batch] failed to read {p}: {e}\n")
-                continue
-            title = self._batch_title_from_text(text, p.stem)
-            jobs.append(BatchJob(title=title, source_label=str(p.relative_to(root)), source_path=str(p)))
-        self._append_batch_jobs(jobs)
-
-    def batch_add_stream_file(self) -> None:
-        start_dir = self.cfg.batch_last_source_dir or self.cfg.project_workdir
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self,
-            "Add batch stream file",
-            start_dir,
-            "Text files (*.txt);;All files (*)",
-        )
-        if not file_path:
-            return
-        self.cfg.batch_last_source_dir = str(Path(file_path).resolve().parent)
-        save_config(self.cfg_path, self.cfg)
-        try:
-            text = Path(file_path).read_text(encoding="utf-8", errors="ignore")
-        except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "Batch file", str(e))
-            return
-        parts = self._split_homework_stream(text, self.edit_batch_separator.text().strip())
-        jobs: List[BatchJob] = []
-        for idx, part in enumerate(parts, start=1):
-            title = self._batch_title_from_text(part, f"lesson-{idx:02d}")
-            jobs.append(BatchJob(title=title, source_label=f"{Path(file_path).name}#{idx}", text=part))
-        self._append_batch_jobs(jobs)
-
-    def batch_add_from_editor(self) -> None:
-        text = self.editor.toPlainText().strip() if hasattr(self, "editor") else ""
-        if not text:
-            QtWidgets.QMessageBox.information(self, "Batch Queue", "The editor is empty.")
-            return
-        parts = self._split_homework_stream(text, self.edit_batch_separator.text().strip())
-        jobs: List[BatchJob] = []
-        for idx, part in enumerate(parts, start=1):
-            title = self._batch_title_from_text(part, f"editor-{idx:02d}")
-            jobs.append(BatchJob(title=title, source_label=f"Editor chunk {idx}", text=part))
-        self._append_batch_jobs(jobs)
-
-    def batch_remove_selected(self) -> None:
-        if not hasattr(self, "batch_table"):
-            return
-        rows = sorted({i.row() for i in self.batch_table.selectedIndexes()}, reverse=True)
-        if not rows:
-            return
-        for row in rows:
-            if 0 <= row < len(self.batch_jobs):
-                self.batch_jobs.pop(row)
-        self._refresh_batch_table()
-
-    def batch_clear(self) -> None:
-        if self.batch_running:
-            QtWidgets.QMessageBox.information(self, "Batch Queue", "Stop the batch run first.")
-            return
-        self.batch_jobs = []
-        self._refresh_batch_table()
-        self.append_log("[Batch] queue cleared\n")
-
-    def on_batch_separator_changed(self, _text: str) -> None:
-        self.cfg.batch_separator = self.edit_batch_separator.text().strip() or "===NEXT==="
-        save_config(self.cfg_path, self.cfg)
-
-    def on_batch_continue_changed(self, state: int) -> None:
-        self.cfg.batch_continue_on_error = bool(state)
-        self.batch_continue_on_error = bool(state)
-        save_config(self.cfg_path, self.cfg)
-
-    def _resolve_theme_and_modes(self, mode: str) -> Optional[Tuple[str, str, str]]:
-        selected_theme = _normalize_theme_value(self.cfg.lesson_theme)
-        selected_lesson_mode = "standard_homework"
-        selected_surface_variant = "classic"
-        if mode in ("generate_publish", "publish_only"):
-            dlg = PublishPresetDialog(parent=self, current_theme=selected_theme)
-            if dlg.exec() != int(QtWidgets.QDialog.DialogCode.Accepted):
-                self.append_log("[Publish] cancelled by user\n")
-                return None
-            selected_theme = dlg.selected_theme()
-        else:
-            if hasattr(self, "combo_lesson_theme"):
-                selected_theme = _normalize_theme_value(self.combo_lesson_theme.currentText().strip().lower())
-
-        if selected_theme == "sky_tiles":
-            selected_lesson_mode = "kid_homework"
-            selected_surface_variant = "tiles"
-        elif selected_theme == "strict_dark":
-            selected_lesson_mode = "reading_listening"
-            selected_surface_variant = "strict_dark"
-        else:
-            selected_lesson_mode = "standard_homework"
-            selected_surface_variant = "classic"
-
-        self.cfg.lesson_theme = selected_theme
-        if hasattr(self, "combo_lesson_theme"):
-            self.combo_lesson_theme.setCurrentText(selected_theme)
-        save_config(self.cfg_path, self.cfg)
-        return selected_theme, selected_lesson_mode, selected_surface_variant
-
-    def _build_pipeline_launch(self, mode: str, input_path: str, selected_theme: str, selected_lesson_mode: str, selected_surface_variant: str) -> Tuple[str, List[str], Dict[str, str]]:
-        script = self._pipeline_script_path()
-        args: List[str] = [
-            str(script),
-            "--input", input_path,
-            "--theme", selected_theme,
-            "--lesson-mode", selected_lesson_mode,
-            "--surface-variant", selected_surface_variant,
-        ]
-        if mode == "generate_publish":
-            args.append("--publish")
-        elif mode == "publish_only":
-            args.append("--publish-only")
-            args.append("--publish")
-
-        env = os.environ.copy()
-        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
-        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
-        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
-        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
-
-        self.cfg.picture_cards_type = self.combo_picture.currentText().strip() or self.cfg.picture_cards_type
-        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
-        self._capture_image_tab_settings()
-        save_config(self.cfg_path, self.cfg)
-
-        env["PICTURE_CARDS_TYPE"] = self.cfg.picture_cards_type
-        env["IMG_BACKEND"] = self.cfg.image_backend
-        env["IMG_WIDTH"] = str(int(self.cfg.img_width))
-        env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
-        env["IMG_STEPS"] = str(int(self.cfg.img_steps))
-        env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
-        env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
-        env["IMG_MAX_RETRIES"] = str(int(os.getenv("IMG_MAX_RETRIES", "2")))
-
-        _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
-        _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
-        _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
-        _set_env_if_nonempty(env, "HF_IMAGE_ENDPOINT_URL", self.cfg.hf_image_endpoint_url or "")
-        _set_env_if_nonempty(env, "HF_TOKEN", self.cfg.hf_token)
-        env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
-
-        wf = self.resolve_workflow_path()
-        env["COMFY_URL"] = str(self.cfg.comfy_url)
-        env["COMFY_WORKFLOW"] = str(wf)
-
-        return str(script), args, env
-
-    def _start_pipeline_launch(self, mode: str, input_path: str, selected_theme: str, selected_lesson_mode: str, selected_surface_variant: str) -> None:
-        script, args, env = self._build_pipeline_launch(mode, input_path, selected_theme, selected_lesson_mode, selected_surface_variant)
-        self.append_log(f"[Images] COMFY_WORKFLOW={self.resolve_workflow_path()} exists={self.resolve_workflow_path().exists()}\n")
-        self.append_log(
-            f"[Images] BACKEND={self.cfg.image_backend} STYLE={self.cfg.picture_cards_type} "
-            f"W={self.cfg.img_width} H={self.cfg.img_height} STEPS={self.cfg.img_steps} "
-            f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency}\n"
-        )
-        self.append_log(f"[Publish] THEME={selected_theme} MODE={selected_lesson_mode} SURFACE={selected_surface_variant}\n")
-        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
-
-    def _ensure_batch_input_dir(self) -> Path:
-        if self.batch_run_input_dir is None:
-            self.batch_run_input_dir = (self.root_dir / "output" / "_batch_inputs" / _timestamp()).resolve()
-            self.batch_run_input_dir.mkdir(parents=True, exist_ok=True)
-        return self.batch_run_input_dir
-
-    def _batch_input_path(self, job: BatchJob, index: int) -> str:
-        if job.source_path:
-            return job.source_path
-        if job.temp_input_path:
-            return job.temp_input_path
-        base_dir = self._ensure_batch_input_dir()
-        stem = self._safe_batch_stem(job.title or f"lesson-{index + 1:02d}")
-        out = base_dir / f"{index + 1:03d}_{stem}.txt"
-        out.write_text(job.text or "", encoding="utf-8")
-        job.temp_input_path = str(out)
-        return job.temp_input_path
-
-    def batch_start(self, mode: str) -> None:
-        if self.pipe_proc.is_running():
-            QtWidgets.QMessageBox.information(self, "Batch Queue", "The pipeline is already running.")
-            return
-        if not self.batch_jobs:
-            QtWidgets.QMessageBox.information(self, "Batch Queue", "The batch queue is empty.")
-            return
-        resolved = self._resolve_theme_and_modes(mode)
-        if not resolved:
-            return
-        self.batch_selected_theme, self.batch_selected_lesson_mode, self.batch_selected_surface_variant = resolved
-        self.batch_mode = mode
-        self.batch_index = -1
-        self.batch_running = True
-        self.batch_continue_on_error = bool(self.check_batch_continue.isChecked()) if hasattr(self, "check_batch_continue") else bool(self.cfg.batch_continue_on_error)
-        self.batch_run_input_dir = None
-        for job in self.batch_jobs:
-            job.status = "Queued"
-            job.temp_input_path = ""
-        self._refresh_batch_table()
-        self.append_log(f"[Batch] starting {len(self.batch_jobs)} job(s) with mode={mode}\n")
-        self._start_next_batch_job()
-
-    def _start_next_batch_job(self) -> None:
-        self.batch_index += 1
-        if self.batch_index >= len(self.batch_jobs):
-            self.batch_running = False
-            self.append_log("[Batch] completed all jobs\n")
-            return
-        job = self.batch_jobs[self.batch_index]
-        job.status = "Running"
-        self._refresh_batch_table()
-        input_path = self._batch_input_path(job, self.batch_index)
-        self.append_log(f"[Batch] ({self.batch_index + 1}/{len(self.batch_jobs)}) {job.title} <- {job.source_label}\n")
-        self._start_pipeline_launch(
-            self.batch_mode,
-            input_path,
-            self.batch_selected_theme,
-            self.batch_selected_lesson_mode,
-            self.batch_selected_surface_variant,
-        )
-
-    def stop_batch(self) -> None:
-        self.batch_running = False
-        self.batch_index = -1
-        self.pipe_proc.terminate()
-        self.append_log("[Batch] stop requested\n")
-
-    def _build_tab_batch(self) -> QtWidgets.QWidget:
-        w = QtWidgets.QWidget()
-        lay = QtWidgets.QVBoxLayout(w)
-
-        src_box = self._group_box("Batch source")
-        src_lay = QtWidgets.QVBoxLayout(src_box)
-        note = QtWidgets.QLabel(
-            "Queue many homework files and run them one after another. This is sequential batch processing inside the dashboard, which is safer than running several lessons in parallel. "
-            "Use unique #Title values so output folders and publish slugs do not collide."
-        )
-        note.setWordWrap(True)
-        src_lay.addWidget(note)
-
-        sep_row = QtWidgets.QHBoxLayout()
-        sep_row.addWidget(QtWidgets.QLabel("Stream separator:"))
-        self.edit_batch_separator = QtWidgets.QLineEdit(self.cfg.batch_separator or "===NEXT===")
-        self.edit_batch_separator.setPlaceholderText("===NEXT===")
-        self.edit_batch_separator.textChanged.connect(self.on_batch_separator_changed)
-        sep_row.addWidget(self.edit_batch_separator, 1)
-        src_lay.addLayout(sep_row)
-
-        btn_row = QtWidgets.QHBoxLayout()
-        btn_add_files = QtWidgets.QPushButton("Add Files…")
-        btn_add_folder = QtWidgets.QPushButton("Add Folder…")
-        btn_add_stream_file = QtWidgets.QPushButton("Add Stream File…")
-        btn_add_editor = QtWidgets.QPushButton("Add From Editor Stream")
-        btn_add_files.clicked.connect(self.batch_add_files)
-        btn_add_folder.clicked.connect(self.batch_add_folder)
-        btn_add_stream_file.clicked.connect(self.batch_add_stream_file)
-        btn_add_editor.clicked.connect(self.batch_add_from_editor)
-        for b in (btn_add_files, btn_add_folder, btn_add_stream_file, btn_add_editor):
-            b.setMinimumHeight(34)
-            btn_row.addWidget(b)
-        src_lay.addLayout(btn_row)
-
-        self.check_batch_continue = QtWidgets.QCheckBox("Continue on error")
-        self.check_batch_continue.setChecked(bool(self.cfg.batch_continue_on_error))
-        self.check_batch_continue.stateChanged.connect(self.on_batch_continue_changed)
-        src_lay.addWidget(self.check_batch_continue)
-
-        lay.addWidget(src_box)
-
-        queue_box = self._group_box("Queued homeworks")
-        queue_lay = QtWidgets.QVBoxLayout(queue_box)
-        self.batch_table = QtWidgets.QTableWidget(0, 4)
-        self.batch_table.setHorizontalHeaderLabels(["#", "Title", "Source", "Status"])
-        self.batch_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        self.batch_table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.batch_table.horizontalHeader().setStretchLastSection(True)
-        self.batch_table.verticalHeader().setVisible(False)
-        queue_lay.addWidget(self.batch_table)
-
-        queue_btn_row = QtWidgets.QHBoxLayout()
-        btn_remove = QtWidgets.QPushButton("Remove Selected")
-        btn_clear = QtWidgets.QPushButton("Clear Queue")
-        btn_remove.clicked.connect(self.batch_remove_selected)
-        btn_clear.clicked.connect(self.batch_clear)
-        queue_btn_row.addWidget(btn_remove)
-        queue_btn_row.addWidget(btn_clear)
-        queue_btn_row.addStretch(1)
-        queue_lay.addLayout(queue_btn_row)
-
-        lay.addWidget(queue_box, 1)
-
-        run_box = self._group_box("Batch run")
-        run_lay = QtWidgets.QHBoxLayout(run_box)
-        btn_batch_generate = QtWidgets.QPushButton("Batch Generate")
-        btn_batch_publish = QtWidgets.QPushButton("Batch Generate + Publish")
-        btn_batch_stop = QtWidgets.QPushButton("Stop Batch")
-        btn_batch_generate.clicked.connect(lambda: self.batch_start("generate"))
-        btn_batch_publish.clicked.connect(lambda: self.batch_start("generate_publish"))
-        btn_batch_stop.clicked.connect(self.stop_batch)
-        for b in (btn_batch_generate, btn_batch_publish, btn_batch_stop):
-            b.setMinimumHeight(38)
-            run_lay.addWidget(b)
-        lay.addWidget(run_box)
-
-        self._refresh_batch_table()
-        return w
-
     def _build_tab_publish(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
@@ -1529,7 +1161,13 @@ class MainWindow(QtWidgets.QMainWindow):
         g = self._group_box("WordPress")
         fl = QtWidgets.QFormLayout(g)
 
-        lbl_base = QtWidgets.QLabel("Base URL: https://course.skyedu.fun")
+        wp_base = (_clean_env_value(os.getenv("WP_BASE_URL") or os.getenv("WP_BASE") or "https://skyedu.fun")).rstrip("/") or "https://skyedu.fun"
+        quiz_base = _clean_env_value(os.getenv("QUIZ_PUBLIC_BASE") or "https://skyedu.fun/quiz")
+        tags_base = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
+
+        lay.addWidget(self._brand_panel("Publishing Surface", "The ECS migration target is now the main Sky Education domain. Keep publish defaults aligned with the live server before pushing lessons.", [f"Site: {wp_base}", f"Quiz base: {quiz_base}", f"tag_s base: {tags_base}"]))
+
+        lbl_base = QtWidgets.QLabel(f"Base URL: {wp_base}")
         lbl_base.setWordWrap(True)
         fl.addRow(lbl_base)
 
@@ -1691,21 +1329,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_pipeline_finished(self, exit_code: int) -> None:
         self.append_log(f"[Pipeline] FINISHED exit_code={exit_code}\n")
         QtCore.QTimer.singleShot(200, self.refresh_image_preview)
-
-        if not self.batch_running:
-            return
-
-        if 0 <= self.batch_index < len(self.batch_jobs):
-            job = self.batch_jobs[self.batch_index]
-            job.status = "Done" if int(exit_code) == 0 else f"Failed ({int(exit_code)})"
-            self._refresh_batch_table()
-
-        if int(exit_code) != 0 and not self.batch_continue_on_error:
-            self.batch_running = False
-            self.append_log("[Batch] stopped on first error. Enable 'Continue on error' to keep going.\n")
-            return
-
-        QtCore.QTimer.singleShot(150, self._start_next_batch_job)
 
     def append_log(self, text: str, prefix: str = "") -> None:
         if not text:
@@ -2087,6 +1710,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def run_pipeline(self, mode: str) -> None:
         self.editor_save_default()
+        self._clear_error_box()
         script = self._pipeline_script_path()
         if not script.exists():
             QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")

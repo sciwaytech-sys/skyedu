@@ -14,7 +14,7 @@ class SFTPConfig:
     user: str
     password: str = ""
     key_path: str = ""
-    remote_root: str = ""  # e.g. /home/USER/course.skyedu.fun/quiz
+    remote_root: str = ""  # e.g. /var/www/html/quiz
 
 
 def load_sftp_config_from_env() -> SFTPConfig:
@@ -30,7 +30,7 @@ def load_sftp_config_from_env() -> SFTPConfig:
     if not user:
         raise RuntimeError("SFTP_USER is missing")
     if not remote_root:
-        raise RuntimeError("SFTP_REMOTE_ROOT is missing (server path like /home/xxx/course.skyedu.fun/quiz)")
+        raise RuntimeError("SFTP_REMOTE_ROOT is missing (server path like /var/www/html/quiz)")
     if not password and not key_path:
         raise RuntimeError("Provide either SFTP_PASS or SFTP_KEY_PATH")
 
