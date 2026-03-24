@@ -697,6 +697,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setWindowTitle("SkyEd Automation — Qt")
         self.resize(1600, 900)
+        self.setMinimumSize(1440, 900)
         self.asset_batcher_window = None
         logo_icon = (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
         if logo_icon.exists():
@@ -728,7 +729,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.load_default_editor_if_exists()
         self.update_comfy_status_polling(force_refresh=True)
         QtCore.QTimer.singleShot(450, self.load_voices_background)
+        QtCore.QTimer.singleShot(0, self._start_full_window_mode)
         QtCore.QTimer.singleShot(0, self.apply_default_sizes)
+
+    def _start_full_window_mode(self) -> None:
+        self.setWindowState(self.windowState() | QtCore.Qt.WindowMaximized)
+        self.showMaximized()
+        self.raise_()
+        self.activateWindow()
 
     def resolve_workflow_path(self) -> Path:
         raw = (self.cfg.comfy_workflow_path or "").strip()
@@ -960,13 +968,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
     def apply_default_sizes(self) -> None:
-        w = self.hsplit.width() or 1600
-        left_w = int(w * 0.42)
-        self.hsplit.setSizes([left_w, max(200, w - left_w)])
-        h = self.vsplit.height() or 900
-        editor_h = int(h * 0.60)
-        log_h = int(h * 0.24)
-        error_h = max(130, h - editor_h - log_h)
+        w = self.hsplit.width() or max(self.width(), 1600)
+        left_w = max(700, int(w * 0.44))
+        self.hsplit.setSizes([left_w, max(420, w - left_w)])
+        h = self.vsplit.height() or max(self.height(), 900)
+        editor_h = int(h * 0.58)
+        log_h = max(180, int(h * 0.20))
+        error_h = max(160, h - editor_h - log_h)
         self.vsplit.setSizes([editor_h, log_h, error_h])
 
     def _group_box(self, title: str) -> QtWidgets.QGroupBox:
@@ -1001,7 +1009,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 self.asset_batcher_window.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
                 self.asset_batcher_window.destroyed.connect(self._on_asset_batcher_closed)
-            self.asset_batcher_window.show()
+            self.asset_batcher_window.showMaximized()
             self.asset_batcher_window.raise_()
             self.asset_batcher_window.activateWindow()
         except Exception as exc:
