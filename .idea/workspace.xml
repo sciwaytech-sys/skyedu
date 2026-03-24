@@ -4,21 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.0Beta Final release. Operational example">
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.4 Beta 24/03/2026 Integrated asset butcher. Waiting for further new theme logic addition and cached files reuse integration.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/image_specs.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_specs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/image_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_validation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/prompt_templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/prompt_templates.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/quiz_index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/quiz_index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -158,7 +145,7 @@
       <workItem from="1773578811209" duration="2198000" />
       <workItem from="1773592508789" duration="8213000" />
       <workItem from="1774334132215" duration="139000" />
-      <workItem from="1774334425227" duration="992000" />
+      <workItem from="1774334425227" duration="3436000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -320,7 +307,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773607688891</updated>
     </task>
-    <option name="localTasksCounter" value="21" />
+    <task id="LOCAL-00021" summary="4.4 Beta 24/03/2026 Integrated asset butcher. Waiting for further new theme logic addition and cached files reuse integration.">
+      <option name="closed" value="true" />
+      <created>1774338686117</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1774338686117</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -342,7 +337,8 @@
     <MESSAGE value="3.2 Updates with themes" />
     <MESSAGE value="3.2.8 Theme logic uploaded. Stream generation added" />
     <MESSAGE value="4.0Beta Final release. Operational example" />
-    <option name="LAST_COMMIT_MESSAGE" value="4.0Beta Final release. Operational example" />
+    <MESSAGE value="4.4 Beta 24/03/2026 Integrated asset butcher. Waiting for further new theme logic addition and cached files reuse integration." />
+    <option name="LAST_COMMIT_MESSAGE" value="4.4 Beta 24/03/2026 Integrated asset butcher. Waiting for further new theme logic addition and cached files reuse integration." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774338522964" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
