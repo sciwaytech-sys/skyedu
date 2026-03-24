@@ -13,10 +13,10 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import json
 
 from .image_backends import ImageGenRequest, backend_from_env
+from .asset_library import default_asset_library_root, find_loose_file_asset
 from .prompt_templates import normalize_style
 from .image_specs import ImageSpec, build_specs_from_parsed_spec
 from .image_validation import ImageValidator
-from .fallback_cards import make_fallback_card
 from .scene_fallbacks import render_deterministic_scene
 
 
@@ -130,6 +130,36 @@ def _make_placeholder_panel(en: str, w: int, h: int, font_path: Optional[str]) -
 
     return img
 
+def _save_png_optimized(img: Image.Image, out_path: Path) -> None:
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, format="PNG", optimize=True, compress_level=9)
+
+
+def _save_rgba_png_optimized(img: Image.Image, out_path: Path) -> None:
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, format="PNG", optimize=True, compress_level=9)
+
+
+def _local_asset_library_root() -> Path:
+    project_root = os.environ.get("SKYED_PROJECT_ROOT", "").strip() or None
+    return default_asset_library_root(project_root)
+
+
+def _materialize_local_asset_png(target: str, out_path: Path) -> Optional[Path]:
+    root = _local_asset_library_root()
+    match = find_loose_file_asset(root, target=target)
+    if match is None or not match.exists():
+        return None
+    try:
+        img = Image.open(match).convert("RGB")
+        _save_png_optimized(img, out_path)
+        return match
+    except Exception:
+        return None
+
+
 def make_flashcard(
     en: str,
     zh: str,
@@ -187,7 +217,7 @@ def make_flashcard(
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    bg.save(out_path, format="PNG")
+    _save_png_optimized(bg, out_path)
 
 
 def _normalize_vocab(spec: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -233,7 +263,7 @@ def _contain_fit(img: Image.Image, target_w: int, target_h: int, *, bg=(238, 244
 
 
 def make_website_illustration(en: str, font_path: Optional[str], out_path: Path, *, ai_image: Optional[Image.Image] = None) -> None:
-    W, H = 1024, 768
+    W, H = 800, 600
     canvas = Image.new("RGB", (W, H), (245, 248, 252))
     d = ImageDraw.Draw(canvas)
     d.rounded_rectangle((20, 20, W - 20, H - 20), radius=32, fill=(245, 248, 252), outline=(220, 229, 241), width=3)
@@ -241,7 +271,7 @@ def make_website_illustration(en: str, font_path: Optional[str], out_path: Path,
     fitted = _contain_fit(art, W - 80, H - 120, bg=(245, 248, 252))
     canvas.paste(fitted, (40, 40))
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(out_path, format="PNG")
+    _save_png_optimized(canvas, out_path)
 
 
 def _render_mode_for_image_spec(spec: ImageSpec) -> str:
@@ -267,14 +297,58 @@ def _retry_positive_prompt(img_spec: ImageSpec, attempt: int) -> str:
         "show the target meaning directly",
         "avoid decorative substitutions",
         "make the main concept immediately recognizable",
+        "no writing anywhere in the image",
+        "no labels on clothes, walls, books, posters, or signs",
     ]
     if attempt >= 2:
         extras.extend([
             "simple composition",
             "one main scene only",
             "obvious school or home context",
+            "remove all poster-like or sign-like details",
         ])
     return ", ".join([x for x in [base] + extras if x])
+
+
+def _compact_cloudflare_prompt(positive: str, negative: str) -> str:
+    pos = (positive or "").strip()
+    neg_lc = (negative or "").lower()
+    pos_lc = pos.lower()
+    forced_positive = [
+        "NO TEXT ON THE PICTURE",
+        "NO LETTERS ON THE PICTURE",
+        "NO NUMBERS ON THE PICTURE",
+        "NO CHINESE CHARACTERS ON THE PICTURE",
+        "NO ENGLISH WORDS ON THE PICTURE",
+        "NO LABELS OR SIGNBOARDS",
+    ]
+    promoted: list[str] = []
+    high_value = [
+        "no text",
+        "no letters",
+        "no numbers",
+        "no chinese characters",
+        "no english words",
+        "no labels",
+        "no signboards",
+        "no watermark",
+        "no logo",
+        "no caption",
+        "no handwriting",
+        "no poster writing",
+        "no gibberish text",
+    ]
+    for token in high_value:
+        if token in neg_lc and token not in pos_lc:
+            promoted.append(token)
+    if "gibberish typography" in neg_lc and "no gibberish text" not in pos_lc:
+        promoted.append("no gibberish text")
+    parts = []
+    if pos:
+        parts.append(pos)
+    parts.extend(forced_positive)
+    parts.extend(promoted)
+    return ", ".join(list(dict.fromkeys([p for p in parts if p])))
 
 
 def _retry_negative_prompt(img_spec: ImageSpec, attempt: int) -> str:
@@ -306,6 +380,35 @@ def _retry_negative_prompt(img_spec: ImageSpec, attempt: int) -> str:
     return ", ".join(dict.fromkeys(x.strip() for x in negatives if x and x.strip()))
 
 
+def _save_clean_placeholder(label: str, out_path: Path, font_path: Optional[str]) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ph = _make_placeholder_panel(label, 768, 768, font_path)
+    _save_png_optimized(ph, out_path)
+
+
+def _should_use_local_cost_saver(img_spec: ImageSpec, backend_name: str) -> bool:
+    if backend_name != "cloudflare_flux":
+        return False
+    if os.getenv("SKYED_CF_SMART_LOCAL", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+        return False
+    word = (img_spec.word or "").strip().lower()
+    pos = (img_spec.pos or "").strip().lower()
+    scene_type = (img_spec.scene_type or "").strip().lower()
+    render_mode = (img_spec.render_mode or "").strip().lower()
+    if pos in {"number", "preposition", "pronoun", "question_word"}:
+        return True
+    if pos == "adjective" and (
+        word in {"happy", "sad", "angry", "tired", "sick", "scared", "hungry", "thirsty", "hot", "cold", "full"}
+        or word in {"red", "blue", "green", "yellow", "purple", "orange", "brown", "black", "white", "pink"}
+    ):
+        return True
+    if render_mode in {"counting_scene", "relation_scene", "guided_scene", "symbolic_card"}:
+        return True
+    if "emotion" in scene_type or "colour" in scene_type or "color" in scene_type:
+        return True
+    return False
+
+
 def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir: Path) -> List[Path]:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -318,17 +421,20 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     backend, backend_name = backend_from_env()
 
     if backend_name == "cloudflare_flux":
-        default_steps = 4
+        default_steps = 1
         default_timeout = 180
-        default_concurrency = 4
+        default_concurrency = 1
+        default_retries = 0
     elif backend_name == "hf_endpoint":
         default_steps = 20
         default_timeout = 240
         default_concurrency = 4
+        default_retries = 1
     else:
         default_steps = 28
         default_timeout = 600
         default_concurrency = 1
+        default_retries = 2
 
     width = _int_env("IMG_WIDTH", 768)
     height = _int_env("IMG_HEIGHT", 768)
@@ -362,12 +468,22 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
     results: List[Path] = []
     report_rows: List[Dict[str, Any]] = []
 
+    def _int_env2(name: str, default: int) -> int:
+        try:
+            return int(str(os.environ.get(name, "")).strip() or default)
+        except Exception:
+            return default
+
+    max_retries = _int_env2("IMG_MAX_RETRIES", default_retries)
+
     lines: List[str] = []
-    lines.append("AI IMAGE GEN: ENABLED")
+    lines.append("AI IMAGE GEN: DISABLED (LOCAL ASSETS ONLY)" if backend_name == "local_assets_only" else "AI IMAGE GEN: ENABLED")
     lines.append(f"BACKEND={backend_name}")
     lines.append(f"STYLE={style}")
     lines.append("SOURCE_OF_TRUTH=image_specs")
     lines.append(f"IMG_WIDTH={width} IMG_HEIGHT={height} IMG_STEPS={steps} IMG_TIMEOUT_S={timeout_s} IMG_CONCURRENCY={concurrency}")
+    lines.append(f"IMG_MAX_RETRIES={max_retries}")
+    lines.append(f"LOCAL_ASSET_LIBRARY_DIR={_local_asset_library_root()}")
     if backend_name == "comfyui":
         lines.append(f"COMFY_URL={comfy_url}")
         lines.append(f"COMFY_WORKFLOW={workflow_path} exists={workflow_path.exists()}")
@@ -375,6 +491,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         lines.append(f"CF_ACCOUNT_ID={os.environ.get('CF_ACCOUNT_ID','')}")
         lines.append(f"CF_MODEL={os.environ.get('CF_MODEL','@cf/black-forest-labs/flux-1-schnell')}")
         lines.append(f"CF_API_TOKEN_SET={'yes' if os.environ.get('CF_API_TOKEN') else 'no'}")
+        lines.append("CF_NOTE=Cloudflare FLUX runs in economy mode by default here: explicit width/height are sent when accepted by the API, negative_prompt is promoted into the positive prompt, and default steps are clamped to 1 unless you override IMG_STEPS manually.")
     elif backend_name == "hf_endpoint":
         lines.append(f"HF_IMAGE_ENDPOINT_URL={os.environ.get('HF_IMAGE_ENDPOINT_URL', os.environ.get('HF_ENDPOINT',''))}")
         lines.append(f"HF_TOKEN_SET={'yes' if os.environ.get('HF_TOKEN') else 'no'}")
@@ -394,14 +511,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
             return var < 1.0
         except Exception:
             return False
-
-    def _int_env2(name: str, default: int) -> int:
-        try:
-            return int(str(os.environ.get(name, "")).strip() or default)
-        except Exception:
-            return default
-
-    max_retries = _int_env2("IMG_MAX_RETRIES", 2)
 
     def _gen_one(entry: Dict[str, str]) -> Dict[str, Any]:
         en_word = str(entry.get("en") or "").strip()
@@ -436,9 +545,37 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         accepted = False
         last_err: Optional[str] = None
 
+        if backend_name == "local_assets_only":
+            local_match = _materialize_local_asset_png(en_word, ai_png)
+            if local_match is not None:
+                row["status"] = "local_asset_match"
+                row["local_asset_path"] = str(local_match)
+                row["final_prompt"] = "LOCAL_ASSET_ONLY"
+                return row
+            deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
+            if deterministic is not None:
+                row["status"] = "local_asset_missing_deterministic_fallback"
+                row["fallback_reason"] = "No matching local asset"
+                row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+                return row
+            _save_clean_placeholder(img_spec.word or en_word, ai_png, font_path)
+            row["status"] = "local_asset_missing_placeholder"
+            row["fallback_reason"] = "No matching local asset"
+            row["final_prompt"] = "LOCAL_PLACEHOLDER"
+            return row
+
+        if _should_use_local_cost_saver(img_spec, backend_name):
+            deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
+            if deterministic is not None:
+                row["status"] = "deterministic_local_no_cost"
+                row["smart_local"] = True
+                row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+                return row
+
         for attempt in range(0, max(0, max_retries) + 1):
             positive = _retry_positive_prompt(img_spec, attempt)
             negative = _retry_negative_prompt(img_spec, attempt)
+            effective_positive = _compact_cloudflare_prompt(positive, negative) if backend_name == "cloudflare_flux" else positive
             req = ImageGenRequest(
                 subject=img_spec.word,
                 style=style,
@@ -447,13 +584,14 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 height=height,
                 steps=steps,
                 seed=seed_base + attempt,
-                positive_prompt=positive,
+                positive_prompt=effective_positive,
                 negative_prompt=negative,
             )
             attempt_row: Dict[str, Any] = {
                 "attempt": attempt,
                 "render_mode": req.render_mode,
                 "positive_prompt": positive,
+                "effective_positive_prompt": effective_positive,
                 "negative_prompt": negative,
             }
             try:
@@ -465,17 +603,21 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                     last_err = "Blank/near-blank output detected"
                     continue
                 ai_png.write_bytes(png_bytes)
-                validation = validator.validate(ai_png, img_spec, used_prompt=positive)
+                validation = validator.validate(ai_png, img_spec, used_prompt=effective_positive)
                 attempt_row["validation"] = {
                     "accepted": validation.accepted,
                     "score": validation.score,
                     "reasons": list(validation.reasons),
+                    "ocr_checked": validation.ocr_checked,
+                    "ocr_error": validation.ocr_error,
+                    "detected_text": list(validation.detected_text),
                 }
                 row["attempts"].append(attempt_row)
                 if validation.accepted:
                     accepted = True
                     row["status"] = "accepted"
-                    row["final_prompt"] = positive
+                    row["final_prompt"] = effective_positive
+                    row["source_positive_prompt"] = positive
                     row["final_negative_prompt"] = negative
                     if fail_marker.exists():
                         fail_marker.unlink(missing_ok=True)
@@ -483,6 +625,10 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                         fallback_marker.unlink(missing_ok=True)
                     break
                 last_err = "; ".join(validation.reasons) or "Validation rejected image"
+                if validation.ocr_error:
+                    row["ocr_error"] = validation.ocr_error
+                if any(r.startswith("Text validation unavailable:") for r in validation.reasons):
+                    break
             except Exception as e:
                 attempt_row["accepted"] = False
                 attempt_row["error"] = f"{type(e).__name__}: {e}"
@@ -490,7 +636,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 last_err = f"{type(e).__name__}: {e}"
 
         if not accepted:
-            deterministic = render_deterministic_scene(img_spec, ai_png)
+            deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
             if deterministic is not None:
                 fallback_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
                 fail_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
@@ -498,11 +644,10 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 row["fallback_reason"] = last_err or "AI image rejected"
                 row["deterministic_fallback"] = True
             else:
-                subtitle = img_spec.scene_type or img_spec.fallback_label or img_spec.word
-                make_fallback_card(img_spec, ai_png, subtitle=subtitle)
-                fallback_marker.write_text(last_err or "Fallback created", encoding="utf-8")
-                fail_marker.write_text(last_err or "Fallback created", encoding="utf-8")
-                row["status"] = "fallback"
+                _save_clean_placeholder(img_spec.word or en_word, ai_png, font_path)
+                fallback_marker.write_text(last_err or "Clean placeholder created", encoding="utf-8")
+                fail_marker.write_text(last_err or "Clean placeholder created", encoding="utf-8")
+                row["status"] = "clean_placeholder"
                 row["fallback_reason"] = last_err or "AI image rejected"
 
         return row

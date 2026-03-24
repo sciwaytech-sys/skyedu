@@ -18,6 +18,9 @@ class ValidationResult:
     score: float
     reasons: list[str] = field(default_factory=list)
     image_path: str = ""
+    ocr_checked: bool = False
+    ocr_error: str = ""
+    detected_text: list[str] = field(default_factory=list)
 
 
 class ImageValidationError(RuntimeError):
@@ -34,6 +37,7 @@ class ImageValidator:
     - use softer thresholds for easy single-object/counting scenes
     - treat prompt contamination separately from real image blankness problems
     - reject OCR-detected gibberish/text artifacts so lesson images do not ship with nonsense writing
+    - do not silently pretend text validation ran when OCR is unavailable
     """
 
     _CJK_RE = re.compile(r"[一-鿿]")
@@ -73,10 +77,19 @@ class ImageValidator:
             reasons.append(f"Image too gray/flat: gray_ratio={gray_ratio:.2f}")
             score -= 0.28
 
-        detected_text = self._ocr_detected_text(img, spec, allow_supported_text=self._allow_image_text())
-        if detected_text:
-            reasons.append(f"Generated image contains text-like artifacts: {', '.join(detected_text[:4])}")
-            score -= 0.24
+        allow_image_text = self._allow_image_text()
+        detected_text, ocr_checked, ocr_error = self._ocr_detected_text(
+            img,
+            spec,
+            allow_supported_text=allow_image_text,
+        )
+        has_forbidden_text = bool(detected_text) and not allow_image_text
+        if has_forbidden_text:
+            reasons.append(f"Generated image contains text-like artifacts: {', '.join(detected_text[:6])}")
+            score -= 0.75
+        elif self._require_text_validation() and not allow_image_text and not ocr_checked:
+            reasons.append(f"Text validation unavailable: {ocr_error or 'Tesseract OCR missing or not working'}")
+            score -= 0.45
 
         if used_prompt:
             prompt_lc = used_prompt.lower()
@@ -121,8 +134,16 @@ class ImageValidator:
                 reasons.append("Used prompt missing strong no-text guardrails")
                 score -= 0.08
 
-        accepted = score >= 0.60 and not any("too small" in r.lower() for r in reasons)
-        return ValidationResult(accepted=accepted, score=max(0.0, round(score, 3)), reasons=reasons, image_path=str(path))
+        accepted = score >= 0.60 and not any("too small" in r.lower() for r in reasons) and not has_forbidden_text
+        return ValidationResult(
+            accepted=accepted,
+            score=max(0.0, round(score, 3)),
+            reasons=reasons,
+            image_path=str(path),
+            ocr_checked=ocr_checked,
+            ocr_error=ocr_error or "",
+            detected_text=list(detected_text),
+        )
 
     def _semantic_prompt_only(self, prompt_lc: str) -> str:
         tokens = []
@@ -170,31 +191,85 @@ class ImageValidator:
     def _allow_image_text(self) -> bool:
         return os.getenv("SKYED_ALLOW_IMAGE_TEXT", "").strip().lower() in {"1", "true", "yes", "on"}
 
-    def _ocr_detected_text(self, img: Image.Image, spec: ImageSpec, *, allow_supported_text: bool) -> list[str]:
+    def _require_text_validation(self) -> bool:
+        raw = os.getenv("SKYED_REQUIRE_TEXT_VALIDATION", "").strip().lower()
+        if raw:
+            return raw in {"1", "true", "yes", "on"}
+        backend = (os.getenv("IMG_BACKEND") or "").strip().lower()
+        return backend in {"cloudflare", "cloudflare_flux", "cf", "flux", "hf", "hf_endpoint", "huggingface", "hugging_face"}
+
+    def _ocr_detected_text(
+        self,
+        img: Image.Image,
+        spec: ImageSpec,
+        *,
+        allow_supported_text: bool,
+    ) -> tuple[list[str], bool, str]:
         try:
             import pytesseract  # type: ignore
-        except Exception:
-            return []
+        except Exception as exc:
+            return [], False, f"pytesseract import failed: {exc}"
 
         try:
-            scan = self._prepare_for_text_scan(img)
-            data = pytesseract.image_to_data(scan, lang="eng", config="--psm 6", output_type=pytesseract.Output.DICT)
-        except Exception:
-            return []
+            _ = pytesseract.get_tesseract_version()
+        except Exception as exc:
+            return [], False, f"tesseract executable unavailable: {exc}"
 
+        scans = [self._prepare_for_text_scan(img), self._prepare_for_soft_text_scan(img)]
         allowed = self._allowed_text_tokens(spec) if allow_supported_text else set()
         found: list[str] = []
         seen = set()
-        n = len(data.get("text", []))
-        for i in range(n):
-            raw = str(data["text"][i] or "").strip()
+        errors: list[str] = []
+        checked = False
+
+        langs = ["eng"]
+        try:
+            available_langs = {str(x).strip() for x in (pytesseract.get_languages(config="") or [])}
+            if {"eng", "chi_sim"}.issubset(available_langs):
+                langs.insert(0, "eng+chi_sim")
+        except Exception:
+            pass
+
+        for scan in scans:
+            for lang in langs:
+                for psm in (6, 11):
+                    try:
+                        data = pytesseract.image_to_data(
+                            scan,
+                            lang=lang,
+                            config=f"--psm {psm}",
+                            output_type=pytesseract.Output.DICT,
+                        )
+                        checked = True
+                    except Exception as exc:
+                        errors.append(f"lang={lang} psm={psm}: {exc}")
+                        continue
+                    self._collect_ocr_tokens(data, allowed, allow_supported_text, seen, found)
+                    if len(found) >= 8:
+                        return found, True, ""
+        return found, checked, "; ".join(errors[:3])
+
+    def _collect_ocr_tokens(
+        self,
+        data: object,
+        allowed: set[str],
+        allow_supported_text: bool,
+        seen: set[str],
+        found: list[str],
+    ) -> None:
+        if not isinstance(data, dict):
+            return
+        texts = list(data.get("text", []) or [])
+        confs = list(data.get("conf", []) or [])
+        for i, raw_val in enumerate(texts):
+            raw = str(raw_val or "").strip()
             if not raw:
                 continue
             try:
-                conf = float(str(data.get("conf", ["0"])[i]))
+                conf = float(str(confs[i] if i < len(confs) else "0"))
             except Exception:
                 conf = 0.0
-            if conf < 42:
+            if conf < 22:
                 continue
             for token in re.findall(r"[A-Za-z]{3,}|[一-鿿]{2,}", raw):
                 norm = self._normalize_token(token)
@@ -204,7 +279,6 @@ class ImageValidator:
                     continue
                 seen.add(norm)
                 found.append(norm)
-        return found
 
     @staticmethod
     def _prepare_for_text_scan(img: Image.Image) -> Image.Image:
@@ -213,6 +287,14 @@ class ImageValidator:
         if max(w, h) < 900:
             gray = gray.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
         return gray.point(lambda p: 255 if p > 170 else 0)
+
+    @staticmethod
+    def _prepare_for_soft_text_scan(img: Image.Image) -> Image.Image:
+        gray = ImageOps.autocontrast(img.convert("L"))
+        w, h = gray.size
+        if max(w, h) < 900:
+            gray = gray.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
+        return gray
 
     def _allowed_text_tokens(self, spec: ImageSpec) -> set[str]:
         allowed: set[str] = set()

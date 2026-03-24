@@ -101,7 +101,7 @@ class AppConfig:
     ocr_device: str = "cpu"
 
     # image generation backend
-    image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
+    image_backend: str = "local_assets_only"  # local_assets_only | comfyui | cloudflare_flux | hf_endpoint
     img_width: int = 768
     img_height: int = 768
     img_steps: int = 28
@@ -117,6 +117,21 @@ class AppConfig:
     hf_image_endpoint_url: str = ""
     hf_token: str = ""
     hf_guidance: float = 6.0
+
+    # batch generation
+    batch_input_dir: str = ""
+    batch_mode: str = "generate"
+    batch_recursive: bool = False
+    batch_continue_on_error: bool = True
+
+    # special lesson routing
+    special_audio_enabled: bool = False
+    special_audio_dir: str = ""
+    special_audio_title: str = "Extra Audio"
+
+    # thematic background helper
+    picture_bg_source_image: str = ""
+    picture_bg_transparency: int = 76
 
 
 def _default_config(root_dir: Path) -> AppConfig:
@@ -143,7 +158,7 @@ def _default_config(root_dir: Path) -> AppConfig:
         ocr_backend="auto",
         ocr_device="cpu",
 
-        image_backend="comfyui",
+        image_backend="local_assets_only",
         img_width=768,
         img_height=768,
         img_steps=28,
@@ -155,6 +170,15 @@ def _default_config(root_dir: Path) -> AppConfig:
         hf_image_endpoint_url="",
         hf_token="",
         hf_guidance=6.0,
+        batch_input_dir="",
+        batch_mode="generate",
+        batch_recursive=False,
+        batch_continue_on_error=True,
+        special_audio_enabled=False,
+        special_audio_dir="",
+        special_audio_title="Extra Audio",
+        picture_bg_source_image="",
+        picture_bg_transparency=76,
     )
 
 
@@ -264,6 +288,15 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
             data.get("hf_image_endpoint_url", data.get("hf_endpoint", base.hf_image_endpoint_url))),
         hf_token=_clean_env_value(data.get("hf_token", base.hf_token)),
         hf_guidance=float(data.get("hf_guidance", base.hf_guidance)),
+        batch_input_dir=str(data.get("batch_input_dir", base.batch_input_dir)),
+        batch_mode=str(data.get("batch_mode", base.batch_mode) or base.batch_mode),
+        batch_recursive=bool(data.get("batch_recursive", base.batch_recursive)),
+        batch_continue_on_error=bool(data.get("batch_continue_on_error", base.batch_continue_on_error)),
+        special_audio_enabled=bool(data.get("special_audio_enabled", base.special_audio_enabled)),
+        special_audio_dir=str(data.get("special_audio_dir", base.special_audio_dir)),
+        special_audio_title=str(data.get("special_audio_title", base.special_audio_title)),
+        picture_bg_source_image=str(data.get("picture_bg_source_image", base.picture_bg_source_image)),
+        picture_bg_transparency=int(data.get("picture_bg_transparency", base.picture_bg_transparency)),
     )
 
     _autofill_cfg_from_env(cfg)
@@ -309,6 +342,15 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "hf_image_endpoint_url": str(cfg.hf_image_endpoint_url),
         "hf_token": str(cfg.hf_token),
         "hf_guidance": float(cfg.hf_guidance),
+        "batch_input_dir": str(cfg.batch_input_dir),
+        "batch_mode": str(cfg.batch_mode),
+        "batch_recursive": bool(cfg.batch_recursive),
+        "batch_continue_on_error": bool(cfg.batch_continue_on_error),
+        "special_audio_enabled": bool(cfg.special_audio_enabled),
+        "special_audio_dir": str(cfg.special_audio_dir),
+        "special_audio_title": str(cfg.special_audio_title),
+        "picture_bg_source_image": str(cfg.picture_bg_source_image),
+        "picture_bg_transparency": int(cfg.picture_bg_transparency),
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -699,6 +741,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(1600, 900)
         self.setMinimumSize(1440, 900)
         self.asset_batcher_window = None
+        self.card_cutter_window = None
         logo_icon = (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
         if logo_icon.exists():
             self.setWindowIcon(QtGui.QIcon(str(logo_icon)))
@@ -822,10 +865,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         tb.addWidget(QtWidgets.QLabel("Backend:"))
         self.combo_backend = QtWidgets.QComboBox()
-        self.combo_backend.addItems(["ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
+        self.combo_backend.addItems(["Local assets only", "ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
         # map config -> UI
-        _b = (self.cfg.image_backend or "comfyui").lower().strip()
-        if _b in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+        _b = (self.cfg.image_backend or "local_assets_only").lower().strip()
+        if _b in ("local_assets_only", "local_assets", "local", "offline"):
+            self.combo_backend.setCurrentText("Local assets only")
+        elif _b in ("cloudflare", "cloudflare_flux", "cf", "flux"):
             self.combo_backend.setCurrentText("Cloudflare FLUX")
         elif _b in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
             self.combo_backend.setCurrentText("HF Endpoint")
@@ -873,6 +918,7 @@ class MainWindow(QtWidgets.QMainWindow):
         add_btn("Generate", lambda: self.run_pipeline(mode="generate"))
         add_btn("Generate + Publish", lambda: self.run_pipeline(mode="generate_publish"))
         add_btn("Asset Batcher", self.open_asset_batcher)
+        add_btn("Card Cutter", self.open_card_cutter)
 
         spacer = QtWidgets.QWidget()
         spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
@@ -949,6 +995,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_quick_actions(), "Quick")
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
+        self.right_tabs.addTab(self._build_tab_batch(), "Batch")
+        self.right_tabs.addTab(self._build_tab_special_lessons(), "Special Lessons")
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
         self.right_tabs.addTab(self._build_tab_picture_reader(), "Picture Reader")
         self.hsplit.addWidget(self.right_tabs)
@@ -981,6 +1029,20 @@ class MainWindow(QtWidgets.QMainWindow):
         g = QtWidgets.QGroupBox(title)
         g.setStyleSheet("QGroupBox { font-weight: 600; }")
         return g
+
+    def _setup_form_layout(self, form: QtWidgets.QFormLayout) -> None:
+        form.setContentsMargins(14, 14, 14, 14)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
+        form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
+        form.setLabelAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        form.setFormAlignment(QtCore.Qt.AlignTop)
+
+    def _set_min_control_height(self, *widgets: QtWidgets.QWidget, height: int = 34) -> None:
+        for widget in widgets:
+            if widget is None:
+                continue
+            widget.setMinimumHeight(height)
 
     def _logo_path(self) -> Path:
         return (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
@@ -1022,6 +1084,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_asset_batcher_closed(self, *_args) -> None:
         self.asset_batcher_window = None
+
+    def open_card_cutter(self) -> None:
+        try:
+            if self.card_cutter_window is None:
+                from skyed_card_cutter.app import MainWindow as CardCutterMainWindow
+
+                self.card_cutter_window = CardCutterMainWindow(root_dir=self.root_dir)
+                self.card_cutter_window.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
+                self.card_cutter_window.destroyed.connect(self._on_card_cutter_closed)
+            self.card_cutter_window.showMaximized()
+            self.card_cutter_window.raise_()
+            self.card_cutter_window.activateWindow()
+        except Exception as exc:
+            self.append_log(f"[Card Cutter] launch failed: {type(exc).__name__}: {exc}\n")
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Card Cutter",
+                f"Could not open Card Cutter.\n\n{type(exc).__name__}: {exc}",
+            )
+
+    def _on_card_cutter_closed(self, *_args) -> None:
+        self.card_cutter_window = None
 
     def _apply_branding(self) -> None:
         self.setWindowTitle("SkyEd Automation — Studio")
@@ -1106,40 +1190,34 @@ class MainWindow(QtWidgets.QMainWindow):
         btn1 = QtWidgets.QPushButton("Generate")
         btn2 = QtWidgets.QPushButton("Generate + Publish")
         btn3 = QtWidgets.QPushButton("Publish Only")
-        btn4 = QtWidgets.QPushButton("Picture → Publish")
-        btn5 = QtWidgets.QPushButton("Stop Pipeline")
-        for b in (btn1, btn2, btn3, btn4, btn5):
+        btn4 = QtWidgets.QPushButton("Run Folder Batch")
+        btn5 = QtWidgets.QPushButton("Picture → Publish")
+        btn6 = QtWidgets.QPushButton("Stop Pipeline")
+        for b in (btn1, btn2, btn3, btn4, btn5, btn6):
             b.setMinimumHeight(36)
             l1.addWidget(b)
         btn1.clicked.connect(self.run_generate)
         btn2.clicked.connect(self.run_generate_publish)
         btn3.clicked.connect(self.run_publish_only)
-        btn4.clicked.connect(self.run_picture_reader_publish)
-        btn5.clicked.connect(self.stop_pipeline)
-
-        g2 = self._group_box("ComfyUI")
-        l2 = QtWidgets.QVBoxLayout(g2)
-        bR = QtWidgets.QPushButton("Refresh status")
-        bO = QtWidgets.QPushButton("Open UI")
-        bS = QtWidgets.QPushButton("Start ComfyUI")
-        bT = QtWidgets.QPushButton("Stop ComfyUI")
-        for b in (bR, bO, bS, bT):
-            b.setMinimumHeight(34)
-            l2.addWidget(b)
-        bR.clicked.connect(self.refresh_comfy_status)
-        bO.clicked.connect(lambda: webbrowser.open(self.cfg.comfy_url))
-        bS.clicked.connect(self.start_comfy)
-        bT.clicked.connect(self.stop_comfy)
+        btn4.clicked.connect(self.run_batch_folder)
+        btn5.clicked.connect(self.run_picture_reader_publish)
+        btn6.clicked.connect(self.stop_pipeline)
 
         g3 = self._group_box("Mini apps")
         l3 = QtWidgets.QVBoxLayout(g3)
         btn_batcher = QtWidgets.QPushButton("Open Asset Batcher")
-        btn_batcher.setMinimumHeight(36)
+        btn_card_cutter = QtWidgets.QPushButton("Open Card Cutter")
+        for b in (btn_batcher, btn_card_cutter):
+            b.setMinimumHeight(36)
+            l3.addWidget(b)
         btn_batcher.clicked.connect(self.open_asset_batcher)
-        l3.addWidget(btn_batcher)
+        btn_card_cutter.clicked.connect(self.open_card_cutter)
+        mini_note = QtWidgets.QLabel("ComfyUI controls were moved off the dashboard. Use the More menu when you need Start / Stop / Open UI without taking dashboard space away from mini apps.")
+        mini_note.setWordWrap(True)
+        mini_note.setStyleSheet("color:#5A6D82;")
+        l3.addWidget(mini_note)
 
         lay.addWidget(g1)
-        lay.addWidget(g2)
         lay.addWidget(g3)
         lay.addStretch(1)
         return w
@@ -1180,114 +1258,211 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_tab_images(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
 
         g = self._group_box("Images")
         l = QtWidgets.QVBoxLayout(g)
+        l.setContentsMargins(16, 18, 16, 16)
+        l.setSpacing(12)
 
         wf = self.resolve_workflow_path()
+        info_wrap = QtWidgets.QFrame()
+        info_wrap.setStyleSheet("QFrame{background:#F8FBFF;border:1px solid #D9E7F5;border-radius:12px;} QLabel{background:transparent;border:0;color:#35506B;}")
+        info_lay = QtWidgets.QVBoxLayout(info_wrap)
+        info_lay.setContentsMargins(12, 10, 12, 10)
+        info_lay.setSpacing(4)
         info = QtWidgets.QLabel(
             "Workflow used:\n"
             f"{wf}\n\n"
-            "Preview shows the latest generated vocab card PNGs from output/<lesson>/cards.\n"
+            "Preview shows the latest generated vocab card PNGs from output/<lesson>/cards. "
             "Run Generate first if empty."
         )
         info.setWordWrap(True)
-        l.addWidget(info)
+        info_lay.addWidget(info)
+        l.addWidget(info_wrap)
 
-        # Generator settings (ComfyUI / Cloudflare Flux / HF Endpoint)
-        cfg_box = self._group_box("Generator settings")
-        fl = QtWidgets.QFormLayout(cfg_box)
+        backend_box = self._group_box("Picture source")
+        backend_fl = QtWidgets.QFormLayout(backend_box)
+        self._setup_form_layout(backend_fl)
 
         self.combo_backend2 = QtWidgets.QComboBox()
-        self.combo_backend2.addItems(["ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
+        self.combo_backend2.addItems(["Local assets only", "ComfyUI", "Cloudflare FLUX", "HF Endpoint"])
         self.combo_backend2.setCurrentText(self._backend_ui_from_key(self.cfg.image_backend))
         self.combo_backend2.currentTextChanged.connect(self.on_backend2_changed)
-        fl.addRow("Backend:", self.combo_backend2)
+        self._set_min_control_height(self.combo_backend2, height=36)
+        backend_fl.addRow("Backend:", self.combo_backend2)
+
+        self.lbl_local_assets_mode = QtWidgets.QLabel(
+            "Local assets only mode looks in asset_library/Pictures and asset_library/Flashcards, skips AI image generation completely, and still publishes optimized lesson images."
+        )
+        self.lbl_local_assets_mode.setWordWrap(True)
+        self.lbl_local_assets_mode.setStyleSheet("QLabel{color:#4A6178;}")
+        backend_fl.addRow("Mode:", self.lbl_local_assets_mode)
+        l.addWidget(backend_box)
+
+        self.box_ai_common = self._group_box("AI generator settings")
+        common_fl = QtWidgets.QFormLayout(self.box_ai_common)
+        self._setup_form_layout(common_fl)
 
         self.spin_img_w = QtWidgets.QSpinBox()
         self.spin_img_w.setRange(256, 2048)
         self.spin_img_w.setValue(int(self.cfg.img_width))
         self.spin_img_w.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("Width:", self.spin_img_w)
 
         self.spin_img_h = QtWidgets.QSpinBox()
         self.spin_img_h.setRange(256, 2048)
         self.spin_img_h.setValue(int(self.cfg.img_height))
         self.spin_img_h.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("Height:", self.spin_img_h)
+
+        size_row = QtWidgets.QHBoxLayout()
+        size_row.setSpacing(10)
+        size_row.addWidget(self.spin_img_w)
+        size_row.addWidget(self.spin_img_h)
+        common_fl.addRow("Width / Height:", size_row)
 
         self.spin_img_steps = QtWidgets.QSpinBox()
         self.spin_img_steps.setRange(1, 100)
         self.spin_img_steps.setValue(int(self.cfg.img_steps))
         self.spin_img_steps.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("Steps:", self.spin_img_steps)
 
         self.spin_img_timeout = QtWidgets.QSpinBox()
         self.spin_img_timeout.setRange(30, 3600)
         self.spin_img_timeout.setValue(int(self.cfg.img_timeout_s))
         self.spin_img_timeout.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("Timeout (s):", self.spin_img_timeout)
 
         self.spin_img_conc = QtWidgets.QSpinBox()
         self.spin_img_conc.setRange(1, 16)
         self.spin_img_conc.setValue(int(self.cfg.img_concurrency))
         self.spin_img_conc.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("Concurrency:", self.spin_img_conc)
 
-        # Cloudflare Flux
+        runtime_row = QtWidgets.QHBoxLayout()
+        runtime_row.setSpacing(10)
+        runtime_row.addWidget(self.spin_img_steps)
+        runtime_row.addWidget(self.spin_img_timeout)
+        runtime_row.addWidget(self.spin_img_conc)
+        common_fl.addRow("Steps / Timeout / Concurrency:", runtime_row)
+        self._set_min_control_height(self.spin_img_w, self.spin_img_h, self.spin_img_steps, self.spin_img_timeout, self.spin_img_conc, height=34)
+        l.addWidget(self.box_ai_common)
+
+        self.box_cf_backend = self._group_box("Cloudflare FLUX")
+        cf_fl = QtWidgets.QFormLayout(self.box_cf_backend)
+        self._setup_form_layout(cf_fl)
+
         self.edit_cf_account = QtWidgets.QLineEdit(self.cfg.cf_account_id)
         self.edit_cf_account.textChanged.connect(lambda _t: self.on_image_settings_changed())
-        fl.addRow("CF Account ID:", self.edit_cf_account)
-
         self.edit_cf_model = QtWidgets.QLineEdit(self.cfg.cf_model)
         self.edit_cf_model.textChanged.connect(lambda _t: self.on_image_settings_changed())
-        fl.addRow("CF Model:", self.edit_cf_model)
-
         self.edit_cf_token = QtWidgets.QLineEdit(self.cfg.cf_api_token)
         self.edit_cf_token.setEchoMode(QtWidgets.QLineEdit.Password)
         self.edit_cf_token.textChanged.connect(lambda _t: self.on_image_settings_changed())
-        fl.addRow("CF API Token:", self.edit_cf_token)
+        self._set_min_control_height(self.edit_cf_account, self.edit_cf_model, self.edit_cf_token, height=34)
+        cf_fl.addRow("CF Account ID:", self.edit_cf_account)
+        cf_fl.addRow("CF Model:", self.edit_cf_model)
+        cf_fl.addRow("CF API Token:", self.edit_cf_token)
+        l.addWidget(self.box_cf_backend)
 
-        # Hugging Face endpoint
+        self.box_hf_backend = self._group_box("Hugging Face endpoint")
+        hf_fl = QtWidgets.QFormLayout(self.box_hf_backend)
+        self._setup_form_layout(hf_fl)
+
         self.edit_hf_url = QtWidgets.QLineEdit(self.cfg.hf_image_endpoint_url or "")
         self.edit_hf_url.setPlaceholderText("https://<your-endpoint>/")
         self.edit_hf_url.textChanged.connect(lambda _t: self.on_image_settings_changed())
-        fl.addRow("HF Endpoint URL:", self.edit_hf_url)
 
         self.edit_hf_token = QtWidgets.QLineEdit(self.cfg.hf_token)
         self.edit_hf_token.setEchoMode(QtWidgets.QLineEdit.Password)
         self.edit_hf_token.textChanged.connect(lambda _t: self.on_image_settings_changed())
-        fl.addRow("HF Token:", self.edit_hf_token)
 
         self.spin_hf_guidance = QtWidgets.QDoubleSpinBox()
         self.spin_hf_guidance.setRange(1.0, 20.0)
         self.spin_hf_guidance.setSingleStep(0.5)
         self.spin_hf_guidance.setValue(float(self.cfg.hf_guidance))
         self.spin_hf_guidance.valueChanged.connect(lambda _v: self.on_image_settings_changed())
-        fl.addRow("HF Guidance:", self.spin_hf_guidance)
+        self._set_min_control_height(self.edit_hf_url, self.edit_hf_token, self.spin_hf_guidance, height=34)
+        hf_fl.addRow("HF Endpoint URL:", self.edit_hf_url)
+        hf_fl.addRow("HF Token:", self.edit_hf_token)
+        hf_fl.addRow("HF Guidance:", self.spin_hf_guidance)
+        l.addWidget(self.box_hf_backend)
 
-        l.addWidget(cfg_box)
+        bg_box = self._group_box("Thematic background from picture")
+        bg_fl = QtWidgets.QFormLayout(bg_box)
+        self._setup_form_layout(bg_fl)
 
-        row = QtWidgets.QHBoxLayout()
+        self.edit_bg_source_image = QtWidgets.QLineEdit(self.cfg.picture_bg_source_image)
+        self.edit_bg_source_image.setPlaceholderText("Picture to OCR and convert into a soft thematic background")
+        self.edit_bg_source_image.textChanged.connect(self.on_background_settings_changed)
+        btn_bg_browse = QtWidgets.QPushButton("Browse Image")
+        btn_bg_browse.setMinimumHeight(36)
+        btn_bg_browse.setMinimumWidth(140)
+        btn_bg_browse.clicked.connect(self.browse_background_source_image)
+        row_bg = QtWidgets.QHBoxLayout()
+        row_bg.setSpacing(10)
+        row_bg.addWidget(self.edit_bg_source_image, 1)
+        row_bg.addWidget(btn_bg_browse)
+        bg_fl.addRow("Source image:", row_bg)
+
+        self.combo_bg_ocr_backend = QtWidgets.QComboBox()
+        self.combo_bg_ocr_backend.addItems(["auto", "tesseract", "easyocr", "paddle"])
+        self.combo_bg_ocr_backend.setCurrentText((self.cfg.ocr_backend or "auto").strip().lower())
+        self.combo_bg_ocr_backend.currentTextChanged.connect(self.on_background_settings_changed)
+
+        self.combo_bg_ocr_device = QtWidgets.QComboBox()
+        self.combo_bg_ocr_device.addItems(["cpu", "cuda"])
+        self.combo_bg_ocr_device.setCurrentText((self.cfg.ocr_device or "cpu").strip().lower())
+        self.combo_bg_ocr_device.currentTextChanged.connect(self.on_background_settings_changed)
+
+        ocr_row = QtWidgets.QHBoxLayout()
+        ocr_row.setSpacing(10)
+        ocr_row.addWidget(self.combo_bg_ocr_backend)
+        ocr_row.addWidget(self.combo_bg_ocr_device)
+        bg_fl.addRow("OCR backend / device:", ocr_row)
+
+        self.spin_bg_transparency = QtWidgets.QSpinBox()
+        self.spin_bg_transparency.setRange(60, 90)
+        self.spin_bg_transparency.setSuffix(" %")
+        self.spin_bg_transparency.setValue(int(self.cfg.picture_bg_transparency))
+        self.spin_bg_transparency.valueChanged.connect(lambda _v: self.on_background_settings_changed())
+        self._set_min_control_height(self.edit_bg_source_image, self.combo_bg_ocr_backend, self.combo_bg_ocr_device, self.spin_bg_transparency, height=34)
+        bg_fl.addRow("Background transparency:", self.spin_bg_transparency)
+
+        btn_bg_generate = QtWidgets.QPushButton("OCR → Generate Background")
+        btn_bg_generate.setMinimumHeight(40)
+        btn_bg_generate.clicked.connect(self.generate_thematic_background)
+        bg_fl.addRow("Action:", btn_bg_generate)
+
+        self.text_bg_summary = QtWidgets.QPlainTextEdit()
+        self.text_bg_summary.setReadOnly(True)
+        self.text_bg_summary.setPlaceholderText("OCR lines, guessed theme, and saved output paths will appear here.")
+        self.text_bg_summary.setMinimumHeight(120)
+        self.text_bg_summary.setMaximumHeight(160)
+        bg_fl.addRow("Result:", self.text_bg_summary)
+        l.addWidget(bg_box)
+
+        action_wrap = QtWidgets.QWidget()
+        action_grid = QtWidgets.QGridLayout(action_wrap)
+        action_grid.setContentsMargins(0, 0, 0, 0)
+        action_grid.setHorizontalSpacing(10)
+        action_grid.setVerticalSpacing(10)
+
         btn_refresh = QtWidgets.QPushButton("Refresh Preview")
         btn_open = QtWidgets.QPushButton("Open Latest Output Folder")
         btn_specs = QtWidgets.QPushButton("Open Latest Image Specs")
         btn_report = QtWidgets.QPushButton("Open Latest Image Report")
         btn_clear = QtWidgets.QPushButton("Clear Latest Image Cache")
-        for b in (btn_refresh, btn_open, btn_specs, btn_report, btn_clear):
-            b.setMinimumHeight(34)
+        for idx, b in enumerate((btn_refresh, btn_open, btn_specs, btn_report, btn_clear)):
+            b.setMinimumHeight(36)
+            row_i, col_i = divmod(idx, 3)
+            action_grid.addWidget(b, row_i, col_i)
+        action_grid.setColumnStretch(0, 1)
+        action_grid.setColumnStretch(1, 1)
+        action_grid.setColumnStretch(2, 1)
         btn_refresh.clicked.connect(self.refresh_image_preview)
         btn_open.clicked.connect(self.open_latest_output_folder)
         btn_specs.clicked.connect(self.open_latest_image_specs)
         btn_report.clicked.connect(self.open_latest_image_report)
         btn_clear.clicked.connect(self.clear_latest_image_cache)
-        row.addWidget(btn_refresh)
-        row.addWidget(btn_open)
-        row.addWidget(btn_specs)
-        row.addWidget(btn_report)
-        row.addWidget(btn_clear)
-        row.addStretch(1)
-        l.addLayout(row)
+        l.addWidget(action_wrap)
 
         self.images_scroll = QtWidgets.QScrollArea()
         self.images_scroll.setWidgetResizable(True)
@@ -1303,7 +1478,90 @@ class MainWindow(QtWidgets.QMainWindow):
         l.addWidget(self.images_scroll, 1)
 
         lay.addWidget(g, 1)
-        lay.addStretch(0)
+        self._update_image_backend_ui_state()
+        return w
+
+    def _build_tab_batch(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+
+        g = self._group_box("Folder batch")
+        fl = QtWidgets.QFormLayout(g)
+
+        self.edit_batch_dir = QtWidgets.QLineEdit(self.cfg.batch_input_dir)
+        self.edit_batch_dir.setPlaceholderText("Folder containing homework .txt files")
+        self.edit_batch_dir.textChanged.connect(self.on_batch_settings_changed)
+        btn_browse_batch = QtWidgets.QPushButton("Browse Folder")
+        btn_browse_batch.setMinimumHeight(34)
+        btn_browse_batch.clicked.connect(self.browse_batch_input_dir)
+        row_dir = QtWidgets.QHBoxLayout()
+        row_dir.addWidget(self.edit_batch_dir, 1)
+        row_dir.addWidget(btn_browse_batch)
+        fl.addRow("Input folder:", row_dir)
+
+        self.combo_batch_mode = QtWidgets.QComboBox()
+        self.combo_batch_mode.addItems(["generate", "generate_publish", "publish_only"])
+        self.combo_batch_mode.setCurrentText(self.cfg.batch_mode if self.cfg.batch_mode in {"generate", "generate_publish", "publish_only"} else "generate")
+        self.combo_batch_mode.currentTextChanged.connect(self.on_batch_settings_changed)
+        fl.addRow("Mode:", self.combo_batch_mode)
+
+        self.check_batch_recursive = QtWidgets.QCheckBox("Include subfolders")
+        self.check_batch_recursive.setChecked(bool(self.cfg.batch_recursive))
+        self.check_batch_recursive.toggled.connect(self.on_batch_settings_changed)
+        fl.addRow(self.check_batch_recursive)
+
+        self.check_batch_continue = QtWidgets.QCheckBox("Continue on error")
+        self.check_batch_continue.setChecked(bool(self.cfg.batch_continue_on_error))
+        self.check_batch_continue.toggled.connect(self.on_batch_settings_changed)
+        fl.addRow(self.check_batch_continue)
+
+        note = QtWidgets.QLabel("Runs the normal lesson pipeline on every .txt file in the selected folder, using the current backend and lesson theme.")
+        note.setWordWrap(True)
+        fl.addRow(note)
+
+        btn_run_batch = QtWidgets.QPushButton("Start Folder Batch")
+        btn_run_batch.setMinimumHeight(38)
+        btn_run_batch.clicked.connect(self.run_batch_folder)
+        fl.addRow(btn_run_batch)
+
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
+
+    def _build_tab_special_lessons(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+
+        g = self._group_box("Special lesson audio routing")
+        fl = QtWidgets.QFormLayout(g)
+
+        self.check_special_audio = QtWidgets.QCheckBox("Enable manual extra-audio routing")
+        self.check_special_audio.setChecked(bool(self.cfg.special_audio_enabled))
+        self.check_special_audio.toggled.connect(self.on_special_audio_settings_changed)
+        fl.addRow(self.check_special_audio)
+
+        self.edit_special_audio_dir = QtWidgets.QLineEdit(self.cfg.special_audio_dir)
+        self.edit_special_audio_dir.setPlaceholderText("Folder containing teacher-provided audio files")
+        self.edit_special_audio_dir.textChanged.connect(self.on_special_audio_settings_changed)
+        btn_browse_special_audio = QtWidgets.QPushButton("Browse Folder")
+        btn_browse_special_audio.setMinimumHeight(34)
+        btn_browse_special_audio.clicked.connect(self.browse_special_audio_dir)
+        row_dir = QtWidgets.QHBoxLayout()
+        row_dir.addWidget(self.edit_special_audio_dir, 1)
+        row_dir.addWidget(btn_browse_special_audio)
+        fl.addRow("Audio folder:", row_dir)
+
+        self.edit_special_audio_title = QtWidgets.QLineEdit(self.cfg.special_audio_title)
+        self.edit_special_audio_title.setPlaceholderText("Section title shown on the lesson page")
+        self.edit_special_audio_title.textChanged.connect(self.on_special_audio_settings_changed)
+        fl.addRow("Section title:", self.edit_special_audio_title)
+
+        note = QtWidgets.QLabel("Supported local formats: mp3, wav, ogg, m4a, aac. When enabled, files are copied into the lesson package and published as an Extra Audio section.")
+        note.setWordWrap(True)
+        fl.addRow(note)
+
+        lay.addWidget(g)
+        lay.addStretch(1)
         return w
 
     def _build_tab_publish(self) -> QtWidgets.QWidget:
@@ -1659,6 +1917,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _backend_key_from_ui(self, txt: str) -> str:
         t = (txt or "").strip().lower()
+        if "local assets" in t or t in ("local", "offline"):
+            return "local_assets_only"
         if "cloudflare" in t or "flux" in t:
             return "cloudflare_flux"
         if "hf" in t or "hugging" in t:
@@ -1667,21 +1927,45 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _backend_ui_from_key(self, key: str) -> str:
         k = (key or "").strip().lower()
+        if k in ("local_assets_only", "local_assets", "local", "offline"):
+            return "Local assets only"
         if k in ("cloudflare", "cloudflare_flux", "cf", "flux"):
             return "Cloudflare FLUX"
         if k in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
             return "HF Endpoint"
         return "ComfyUI"
 
+    def _update_image_backend_ui_state(self) -> None:
+        backend = (self.cfg.image_backend or "local_assets_only").lower().strip()
+        ai_enabled = backend != "local_assets_only"
+        is_cf = backend in ("cloudflare", "cloudflare_flux", "cf", "flux")
+        is_hf = backend in ("hf", "hf_endpoint", "huggingface", "hugging_face")
+        is_comfy = backend in ("comfyui", "comfy")
+        for name in (
+            "spin_img_w", "spin_img_h", "spin_img_steps", "spin_img_timeout", "spin_img_conc",
+            "edit_cf_account", "edit_cf_model", "edit_cf_token",
+            "edit_hf_url", "edit_hf_token", "spin_hf_guidance",
+        ):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setEnabled(ai_enabled)
+        if hasattr(self, "box_ai_common"):
+            self.box_ai_common.setVisible(ai_enabled)
+        if hasattr(self, "box_cf_backend"):
+            self.box_cf_backend.setVisible(is_cf)
+        if hasattr(self, "box_hf_backend"):
+            self.box_hf_backend.setVisible(is_hf)
+        if hasattr(self, "lbl_local_assets_mode"):
+            self.lbl_local_assets_mode.setVisible(not ai_enabled)
+        if hasattr(self, "btn_apply_picture"):
+            self.btn_apply_picture.setEnabled(is_comfy)
+
     def on_backend_changed(self, _txt: str) -> None:
         # toolbar change → config + sync image tab widgets
         self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
         save_config(self.cfg_path, self.cfg)
 
-        # enable/disable workflow patch button
-        b = (self.cfg.image_backend or "comfyui").lower().strip()
-        if hasattr(self, "btn_apply_picture"):
-            self.btn_apply_picture.setEnabled(b in ("comfyui", "comfy"))
+        self._update_image_backend_ui_state()
 
         # sync secondary combo if present
         if hasattr(self, "combo_backend2"):
@@ -1756,6 +2040,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_image_settings_changed(self) -> None:
         self._capture_image_tab_settings()
+        save_config(self.cfg_path, self.cfg)
+
+    def on_background_settings_changed(self) -> None:
+        if hasattr(self, "edit_bg_source_image"):
+            self.cfg.picture_bg_source_image = self.edit_bg_source_image.text().strip()
+        if hasattr(self, "spin_bg_transparency"):
+            self.cfg.picture_bg_transparency = int(self.spin_bg_transparency.value())
+        if hasattr(self, "combo_bg_ocr_backend"):
+            self.cfg.ocr_backend = self.combo_bg_ocr_backend.currentText().strip().lower() or self.cfg.ocr_backend
+        if hasattr(self, "combo_bg_ocr_device"):
+            self.cfg.ocr_device = self.combo_bg_ocr_device.currentText().strip().lower() or self.cfg.ocr_device
+        save_config(self.cfg_path, self.cfg)
+
+    def on_batch_settings_changed(self, *_args) -> None:
+        if hasattr(self, "edit_batch_dir"):
+            self.cfg.batch_input_dir = self.edit_batch_dir.text().strip()
+        if hasattr(self, "combo_batch_mode"):
+            self.cfg.batch_mode = self.combo_batch_mode.currentText().strip() or "generate"
+        if hasattr(self, "check_batch_recursive"):
+            self.cfg.batch_recursive = bool(self.check_batch_recursive.isChecked())
+        if hasattr(self, "check_batch_continue"):
+            self.cfg.batch_continue_on_error = bool(self.check_batch_continue.isChecked())
+        save_config(self.cfg_path, self.cfg)
+
+    def on_special_audio_settings_changed(self, *_args) -> None:
+        if hasattr(self, "check_special_audio"):
+            self.cfg.special_audio_enabled = bool(self.check_special_audio.isChecked())
+        if hasattr(self, "edit_special_audio_dir"):
+            self.cfg.special_audio_dir = self.edit_special_audio_dir.text().strip()
+        if hasattr(self, "edit_special_audio_title"):
+            self.cfg.special_audio_title = self.edit_special_audio_title.text().strip() or "Extra Audio"
         save_config(self.cfg_path, self.cfg)
 
     def on_lesson_theme_changed(self, _txt: str) -> None:
@@ -1895,6 +2210,11 @@ class MainWindow(QtWidgets.QMainWindow):
         env["IMG_STEPS"] = str(int(self.cfg.img_steps))
         env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
         env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
+        env["SKYED_PROJECT_ROOT"] = str(Path(self.cfg.project_workdir).resolve())
+        env["SKYED_LOCAL_ASSET_LIBRARY_DIR"] = str((Path(self.cfg.project_workdir) / "asset_library").resolve())
+        env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
+        env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
+        env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
 
         _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
         _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
@@ -1956,6 +2276,139 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Apply failed", str(e))
 
 
+    def browse_batch_input_dir(self) -> None:
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select batch input folder", self.cfg.batch_input_dir or str(self.root_dir))
+        if path:
+            self.edit_batch_dir.setText(path)
+            self.on_batch_settings_changed()
+
+    def browse_special_audio_dir(self) -> None:
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select special lesson audio folder", self.cfg.special_audio_dir or str(self.root_dir))
+        if path:
+            self.edit_special_audio_dir.setText(path)
+            self.on_special_audio_settings_changed()
+
+    def browse_background_source_image(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select picture for OCR background generation",
+            str(self.root_dir),
+            "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"
+        )
+        if path:
+            self.edit_bg_source_image.setText(path)
+            self.on_background_settings_changed()
+
+    def generate_thematic_background(self) -> None:
+        self._capture_image_tab_settings()
+        self.on_background_settings_changed()
+        image_path = Path(self.cfg.picture_bg_source_image).expanduser()
+        if not image_path.exists():
+            QtWidgets.QMessageBox.warning(self, "Background generator", "Select an existing source image first.")
+            return
+        out_dir = (self.root_dir / "output" / "_background_lab" / f"{image_path.stem}_{_timestamp()}").resolve()
+        try:
+            from skyed.thematic_backgrounds import generate_thematic_background
+
+            result = generate_thematic_background(
+                image_path,
+                out_dir,
+                account_id=self.cfg.cf_account_id,
+                api_token=self.cfg.cf_api_token,
+                model=self.cfg.cf_model,
+                ocr_backend=(self.combo_bg_ocr_backend.currentText().strip().lower() if hasattr(self, "combo_bg_ocr_backend") else self.cfg.ocr_backend),
+                ocr_device=(self.combo_bg_ocr_device.currentText().strip().lower() if hasattr(self, "combo_bg_ocr_device") else self.cfg.ocr_device),
+                width=int(self.cfg.img_width),
+                height=int(self.cfg.img_height),
+                transparency_percent=int(self.cfg.picture_bg_transparency),
+            )
+            summary = (
+                f"Theme: {result.get('theme','')}\n"
+                f"OCR backend: {result.get('ocr_backend','')}\n"
+                f"OCR text: {result.get('joined_text','')}\n\n"
+                f"Prompt: {result.get('prompt','')}\n\n"
+                f"Solid: {result.get('solid_path','')}\n"
+                f"Transparent: {result.get('transparent_path','')}\n"
+                f"Debug: {result.get('debug_path','')}\n"
+            )
+            self.text_bg_summary.setPlainText(summary)
+            self.append_log(f"[Images] Thematic background created: {result.get('transparent_path','')}\n")
+            try:
+                os.startfile(str(out_dir))  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        except Exception as exc:
+            self.append_log(f"[Images] background generation failed: {type(exc).__name__}: {exc}\n")
+            QtWidgets.QMessageBox.critical(self, "Background generator", f"{type(exc).__name__}: {exc}")
+
+    def run_batch_folder(self) -> None:
+        self.on_batch_settings_changed()
+        input_dir = Path(self.cfg.batch_input_dir).expanduser()
+        if not input_dir.exists() or not input_dir.is_dir():
+            QtWidgets.QMessageBox.warning(self, "Folder batch", "Select an existing folder with homework .txt files first.")
+            return
+        script = (Path(self.cfg.project_workdir) / "batch_runner.py").resolve()
+        if not script.exists():
+            QtWidgets.QMessageBox.critical(self, "Missing batch runner", f"Not found:\n{script}")
+            return
+        selected_theme = _normalize_theme_value(self.cfg.lesson_theme)
+        if selected_theme == "sky_tiles":
+            selected_lesson_mode = "kid_homework"
+            selected_surface_variant = "tiles"
+        elif selected_theme == "strict_dark":
+            selected_lesson_mode = "reading_listening"
+            selected_surface_variant = "strict_dark"
+        else:
+            selected_lesson_mode = "standard_homework"
+            selected_surface_variant = "classic"
+
+        env = os.environ.copy()
+        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
+        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
+        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
+        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
+        self.cfg.picture_cards_type = self.combo_picture.currentText().strip() or self.cfg.picture_cards_type
+        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
+        self._capture_image_tab_settings()
+        save_config(self.cfg_path, self.cfg)
+        env["PICTURE_CARDS_TYPE"] = self.cfg.picture_cards_type
+        env["IMG_BACKEND"] = self.cfg.image_backend
+        env["IMG_WIDTH"] = str(int(self.cfg.img_width))
+        env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
+        env["IMG_STEPS"] = str(int(self.cfg.img_steps))
+        env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
+        env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
+        env["SKYED_PROJECT_ROOT"] = str(Path(self.cfg.project_workdir).resolve())
+        env["SKYED_LOCAL_ASSET_LIBRARY_DIR"] = str((Path(self.cfg.project_workdir) / "asset_library").resolve())
+        env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
+        env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
+        env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
+        _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
+        _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
+        _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
+        _set_env_if_nonempty(env, "HF_IMAGE_ENDPOINT_URL", self.cfg.hf_image_endpoint_url or "")
+        _set_env_if_nonempty(env, "HF_TOKEN", self.cfg.hf_token)
+        env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
+        env["COMFY_URL"] = str(self.cfg.comfy_url)
+        env["COMFY_WORKFLOW"] = str(self.resolve_workflow_path())
+
+        args = [
+            str(script),
+            "--input-dir", str(input_dir),
+            "--mode", self.cfg.batch_mode or "generate",
+            "--theme", selected_theme,
+            "--lesson-mode", selected_lesson_mode,
+            "--surface-variant", selected_surface_variant,
+            "--pipeline-script", str(self._pipeline_script_path()),
+        ]
+        if bool(self.cfg.batch_recursive):
+            args.append("--recursive")
+        if bool(self.cfg.batch_continue_on_error):
+            args.append("--continue-on-error")
+
+        self.append_log(f"[Batch] DIR={input_dir} MODE={self.cfg.batch_mode} THEME={selected_theme}\n")
+        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
+
     def browse_reader_image(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
@@ -1996,6 +2449,11 @@ class MainWindow(QtWidgets.QMainWindow):
         wf = self.resolve_workflow_path()
         env["COMFY_URL"] = str(self.cfg.comfy_url)
         env["COMFY_WORKFLOW"] = str(wf)
+        env["SKYED_PROJECT_ROOT"] = str(Path(self.cfg.project_workdir).resolve())
+        env["SKYED_LOCAL_ASSET_LIBRARY_DIR"] = str((Path(self.cfg.project_workdir) / "asset_library").resolve())
+        env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
+        env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
+        env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
 
         selected_surface_variant = "classic"
         if selected_theme == "sky_tiles":
@@ -2082,10 +2540,22 @@ class MainWindow(QtWidgets.QMainWindow):
         env["IMG_BACKEND"] = self.cfg.image_backend
         env["IMG_WIDTH"] = str(int(self.cfg.img_width))
         env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
-        env["IMG_STEPS"] = str(int(self.cfg.img_steps))
+        backend_key = (self.cfg.image_backend or "").strip().lower()
+        effective_steps = int(self.cfg.img_steps)
+        if backend_key in ("cloudflare", "cloudflare_flux", "cf", "flux") and effective_steps == 4:
+            effective_steps = 1
+        env["IMG_STEPS"] = str(int(effective_steps))
         env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
         env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
-        env["IMG_MAX_RETRIES"] = str(int(os.getenv("IMG_MAX_RETRIES", "2")))
+        if backend_key in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+            default_img_retries = 0
+            env.setdefault("SKYED_REQUIRE_TEXT_VALIDATION", "1")
+        elif backend_key in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
+            default_img_retries = 1
+            env.setdefault("SKYED_REQUIRE_TEXT_VALIDATION", "1")
+        else:
+            default_img_retries = 2
+        env["IMG_MAX_RETRIES"] = str(int(default_img_retries))
 
         _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
         _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
@@ -2099,13 +2569,20 @@ class MainWindow(QtWidgets.QMainWindow):
         wf = self.resolve_workflow_path()
         env["COMFY_URL"] = str(self.cfg.comfy_url)
         env["COMFY_WORKFLOW"] = str(wf)
+        env["SKYED_PROJECT_ROOT"] = str(Path(self.cfg.project_workdir).resolve())
+        env["SKYED_LOCAL_ASSET_LIBRARY_DIR"] = str((Path(self.cfg.project_workdir) / "asset_library").resolve())
+        env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
+        env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
+        env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
 
         self.append_log(f"[Images] COMFY_WORKFLOW={wf} exists={wf.exists()}\n")
         self.append_log(
             f"[Images] BACKEND={self.cfg.image_backend} STYLE={self.cfg.picture_cards_type} "
             f"W={self.cfg.img_width} H={self.cfg.img_height} STEPS={self.cfg.img_steps} "
-            f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency}\n"
+            f"TIMEOUT={self.cfg.img_timeout_s}s CONCURRENCY={self.cfg.img_concurrency} RETRIES={env.get('IMG_MAX_RETRIES','')}\n"
         )
+        if backend_key in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+            self.append_log("[Images] Cloudflare FLUX economy mode: legacy 4-step configs are normalized to 1 step, width/height are sent when the API accepts them, and negative_prompt bans are promoted into the positive prompt.\n")
         self.append_log(f"[Publish] THEME={selected_theme} MODE={selected_lesson_mode} SURFACE={selected_surface_variant}\n")
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
@@ -2124,6 +2601,12 @@ def main() -> None:
 
     # Robust load (repairs config if needed)
     cfg = load_config(cfg_path, root_dir=root_dir)
+    if (cfg.image_backend or "").strip().lower() in ("cloudflare", "cloudflare_flux", "cf", "flux") and int(getattr(cfg, "img_steps", 0) or 0) == 4:
+        cfg.img_steps = 1
+        try:
+            save_config(cfg_path, cfg)
+        except Exception:
+            pass
     if not Path(cfg.project_workdir).exists():
         cfg.project_workdir = str(root_dir)
     if not Path(cfg.project_python).exists():

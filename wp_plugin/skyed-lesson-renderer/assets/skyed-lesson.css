@@ -808,3 +808,25 @@ body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; 
 .skyed-pron__btn--record{ background:#1d4ed8; color:#fff; }
 .skyed-pron__btn--close{ background:#eef2ff; color:#0f172a; }
 .skyed-pron__result{ margin-top:.75rem; color:#334155; font-size:.95rem; line-height:1.45; }
+
+/* --- Extra audio --- */
+.skyed-extra-audio{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:1rem;
+}
+.skyed-extra-audio__track{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:1rem;
+  box-shadow:var(--shadow-soft);
+}
+.skyed-extra-audio__label{
+  font-weight:800;
+  color:var(--ink);
+  margin-bottom:.65rem;
+}
+.skyed-extra-audio__track audio{
+  width:100%;
+}

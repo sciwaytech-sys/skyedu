@@ -91,23 +91,41 @@ class CloudflareFluxBackend(BaseImageBackend):
         pos, _neg = render_prompts(req.style, req.subject, req.render_mode)
         if req.positive_prompt:
             pos = req.positive_prompt
-        # Flux API does not document negative_prompt/size params; keep prompt compact.
-        payload: Dict[str, Any] = {
+        # Cloudflare pricing is tile-based, and the current docs/pricing reference image tiles and
+        # model parameters including image dimensions in the full schema. We therefore send width/height
+        # explicitly instead of relying on the provider default canvas size. Some schema variants may reject
+        # these extra keys, so we fall back to the minimal prompt/steps/seed payload on 4xx validation errors.
+        base_payload: Dict[str, Any] = {
             "prompt": pos,
             "steps": steps,
             "seed": int(seed),
         }
+        w = int(req.width) if req.width else 768
+        h = int(req.height) if req.height else 768
+        w = max(256, min(2048, w))
+        h = max(256, min(2048, h))
+        payload_with_size: Dict[str, Any] = dict(base_payload)
+        payload_with_size["width"] = w
+        payload_with_size["height"] = h
 
         url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
         headers = {"Authorization": f"Bearer {self.api_token}"}
 
-        r = requests.post(url, headers=headers, json=payload, timeout=timeout_s)
+        def _post(payload: Dict[str, Any]) -> requests.Response:
+            return requests.post(url, headers=headers, json=payload, timeout=timeout_s)
+
+        r = _post(payload_with_size)
         if r.status_code >= 400:
             body = r.text[:1200] if hasattr(r, "text") else ""
-            raise requests.HTTPError(
-                f"Cloudflare image request failed: {r.status_code} {r.reason}. Body: {body}",
-                response=r,
-            )
+            lowered = body.lower()
+            if r.status_code in (400, 422) and any(tok in lowered for tok in ["width", "height", "unknown field", "additional properties"]):
+                r = _post(base_payload)
+            if r.status_code >= 400:
+                body = r.text[:1200] if hasattr(r, "text") else ""
+                raise requests.HTTPError(
+                    f"Cloudflare image request failed: {r.status_code} {r.reason}. Body: {body}",
+                    response=r,
+                )
         obj = r.json()
         raw = _decode_cf_image_json(obj)
         return _ensure_png_bytes(raw)
@@ -204,6 +222,15 @@ class ComfyUIBackend(BaseImageBackend):
         )
 
 
+class LocalAssetsOnlyBackend(BaseImageBackend):
+    """Sentinel backend used when the user wants all AI image logic disabled."""
+
+    name = "local_assets_only"
+
+    def generate_png(self, req: ImageGenRequest, *, timeout_s: int = 180) -> bytes:
+        raise RuntimeError("Local assets only backend does not generate images")
+
+
 class NoopBackend(BaseImageBackend):
     """Debug backend: returns a placeholder PNG.
 
@@ -231,6 +258,9 @@ class NoopBackend(BaseImageBackend):
 
 def backend_from_env() -> Tuple[BaseImageBackend, str]:
     name = (os.environ.get("IMG_BACKEND") or "comfyui").strip().lower()
+    if name in ("local_assets_only", "local_assets", "local", "offline"):
+        b = LocalAssetsOnlyBackend()
+        return b, b.name
     if name in ("none", "noop", "debug"):
         b = NoopBackend()
         return b, b.name

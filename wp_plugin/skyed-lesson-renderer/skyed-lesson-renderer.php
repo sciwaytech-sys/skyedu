@@ -433,6 +433,40 @@ class SkyEd_Lesson_Renderer {
         </section>
         <?php return ob_get_clean();
     }
+    private static function render_extra_audio_section(array $items) : string {
+        if (empty($items)) {
+            return '';
+        }
+        $section_title = 'Extra Audio';
+        foreach ($items as $item) {
+            if (!is_array($item)) { continue; }
+            $candidate = isset($item['title']) ? trim((string)$item['title']) : '';
+            if ($candidate !== '') {
+                $section_title = $candidate;
+                break;
+            }
+        }
+        ob_start(); ?>
+        <section class="skyed-section skyed-section--extra-audio">
+          <div class="skyed-section__head">
+            <div>
+              <div class="skyed-section__eyebrow">Special lesson</div>
+              <h2 class="skyed-section__title"><?php echo self::esc($section_title); ?></h2>
+            </div>
+            <div class="skyed-section__note">Teacher-routed local audio added for this lesson.</div>
+          </div>
+          <div class="skyed-extra-audio">
+            <?php foreach ($items as $item): if (!is_array($item)) { continue; } $url = isset($item['url']) ? (string)$item['url'] : ''; if ($url === '') { continue; } $label = isset($item['label']) ? (string)$item['label'] : $section_title; ?>
+              <article class="skyed-extra-audio__track">
+                <div class="skyed-extra-audio__label"><?php echo self::esc($label); ?></div>
+                <audio controls preload="none" src="<?php echo self::escu($url); ?>"></audio>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </section>
+        <?php return ob_get_clean();
+    }
+
     private static function render_picture_reader(array $payload, string $theme, string $title, array $tags, array $categories, array $tag_games) : string {
         $sentences = isset($payload['sentences']) && is_array($payload['sentences']) ? $payload['sentences'] : [];
         $reader = isset($payload['picture_reader']) && is_array($payload['picture_reader']) ? $payload['picture_reader'] : [];
@@ -564,6 +598,7 @@ class SkyEd_Lesson_Renderer {
         $categories = isset($payload['categories']) && is_array($payload['categories']) ? $payload['categories'] : [];
         $tag_games  = isset($payload['tag_games']) && is_array($payload['tag_games']) ? $payload['tag_games'] : [];
         $page_kind  = isset($payload['page_kind']) && is_string($payload['page_kind']) ? $payload['page_kind'] : 'lesson';
+        $extra_audio = isset($payload['extra_audio']) && is_array($payload['extra_audio']) ? $payload['extra_audio'] : [];
 
         $practice = [];
         if (isset($payload['practice']) && is_array($payload['practice'])) {
@@ -655,6 +690,8 @@ class SkyEd_Lesson_Renderer {
                 <?php foreach ($sentences as $i => $it) { echo self::render_sentence_row($it, $theme, $i); } ?>
               </div>
             </section>
+
+            <?php echo self::render_extra_audio_section($extra_audio); ?>
 
             <section class="skyed-section skyed-section--practice">
               <div class="skyed-section__head">

@@ -10,3 +10,5 @@ uvicorn[standard]
 
 pytesseract
 huggingface_hub>=0.30
+opencv-python
+PyMuPDF

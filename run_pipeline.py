@@ -52,6 +52,7 @@ def build_lesson_html(
     *,
     quiz_embed_mode: str = "embed",  # embed | link | off
     quiz_note: str = "",
+    extra_audio_items: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     """
     LMS-style lesson page:
@@ -101,6 +102,9 @@ def build_lesson_html(
       .btn-ghost{background:#fff;color:#0f172a;border:1px solid var(--stroke);}
       .warn{background:#fff7ed;border:1px solid rgba(249,115,22,.25);color:#9a3412;border-radius:14px;padding:10px 12px;}
       iframe{width:100%;height:900px;border:0;border-radius:16px;box-shadow:var(--shadow);background:#fff;}
+      .extraaud{display:flex;flex-direction:column;gap:10px;}
+      .extraaud .track{background:var(--card);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:12px;}
+      .extraaud .track b{display:block;margin-bottom:8px;color:#0f172a;}
     </style>
     """
 
@@ -181,6 +185,24 @@ def build_lesson_html(
     if embed and link_ok:
         quiz_block.append(f'<iframe src="{_hu(q_url)}" loading="lazy"></iframe>')
 
+    extra_audio_block: List[str] = []
+    if extra_audio_items:
+        section_title = "Extra Audio"
+        for item in extra_audio_items:
+            candidate_title = str(item.get("title") or "").strip()
+            if candidate_title:
+                section_title = candidate_title
+                break
+        extra_audio_block.append(f'<div class="h3">{_h(section_title)}</div>')
+        extra_audio_block.append('<div class="extraaud">')
+        for item in extra_audio_items:
+            label = _h(str(item.get("label") or section_title))
+            url = _hu(str(item.get("url") or ""))
+            if not url:
+                continue
+            extra_audio_block.append(f'<div class="track"><b>{label}</b><audio controls src="{url}"></audio></div>')
+        extra_audio_block.append('</div>')
+
     html_out = f"""{css}
     <div class="wrap">
       <div class="hero">
@@ -198,6 +220,8 @@ def build_lesson_html(
       <div class="sentwrap">
         {''.join(sent_cards)}
       </div>
+
+      {''.join(extra_audio_block)}
 
       <div class="h3">Practice</div>
       {''.join(quiz_block)}
@@ -317,6 +341,49 @@ def _audio_rel_key(audio_root: Path, f: Path) -> str:
     except Exception:
         # fallback (shouldn't normally happen)
         return f.name
+
+
+AUDIO_FILE_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac"}
+
+
+def _copy_special_audio_assets_from_env(lesson_root: Path) -> List[Dict[str, str]]:
+    enabled = (os.environ.get("SKYED_SPECIAL_AUDIO_ENABLED", "0") or "0").strip().lower() in {"1", "true", "yes", "on"}
+    if not enabled:
+        return []
+    src_dir_raw = (os.environ.get("SKYED_SPECIAL_AUDIO_DIR", "") or "").strip()
+    if not src_dir_raw:
+        return []
+    src_dir = Path(src_dir_raw).expanduser()
+    if not src_dir.exists() or not src_dir.is_dir():
+        raise RuntimeError(f"Special lesson audio folder not found: {src_dir}")
+    dst_dir = ensure_dir(Path(lesson_root) / "audio" / "manual")
+    title_default = (os.environ.get("SKYED_SPECIAL_AUDIO_TITLE", "Extra Audio") or "Extra Audio").strip() or "Extra Audio"
+    items: List[Dict[str, str]] = []
+    for src in sorted(src_dir.iterdir(), key=lambda p: p.name.lower()):
+        if not src.is_file() or src.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
+            continue
+        safe_name = ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in src.name)
+        dst = dst_dir / safe_name
+        shutil.copy2(src, dst)
+        label = src.stem.replace('_', ' ').replace('-', ' ').strip() or title_default
+        items.append({
+            "label": label,
+            "title": title_default,
+            "url": str(dst.relative_to(lesson_root)).replace('\\', '/'),
+        })
+    return items
+
+
+def _map_special_audio_items(items: List[Dict[str, str]], audio_url_by_rel: Dict[str, str]) -> List[Dict[str, str]]:
+    mapped: List[Dict[str, str]] = []
+    for item in items or []:
+        rel = str(item.get("url") or "").strip()
+        mapped.append({
+            "label": str(item.get("label") or "Extra Audio").strip() or "Extra Audio",
+            "title": str(item.get("title") or "Extra Audio").strip() or "Extra Audio",
+            "url": audio_url_by_rel.get(rel, rel),
+        })
+    return mapped
 
 
 def _extract_day_number(title: str) -> str:
@@ -549,6 +616,8 @@ def main() -> None:
     except Exception:
         pass
 
+    special_audio_items_local: List[Dict[str, str]] = []
+
     # publish-only mode: skip generation and just publish using existing files
     if args.publish_only:
         if not lesson_root.exists():
@@ -640,6 +709,11 @@ def main() -> None:
                     except Exception:
                         pass
 
+            try:
+                special_audio_items_local = _copy_special_audio_assets_from_env(lesson_root)
+            except Exception as exc:
+                raise RuntimeError(f"Failed to route special lesson audio: {exc}")
+
             _ = (card_files, audio_files)
 
             t_quiz = perf_counter()
@@ -656,6 +730,18 @@ def main() -> None:
 
             if quiz_json_path.name != "quiz.json":
                 shutil.copy2(quiz_json_path, lesson_root / "quiz.json")
+
+    if not special_audio_items_local:
+        manual_dir = lesson_root / "audio" / "manual"
+        if manual_dir.exists():
+            for f in sorted(manual_dir.iterdir(), key=lambda p: p.name.lower()):
+                if not f.is_file() or f.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
+                    continue
+                special_audio_items_local.append({
+                    "label": f.stem.replace("_", " ").replace("-", " ").strip() or "Extra Audio",
+                    "title": (os.environ.get("SKYED_SPECIAL_AUDIO_TITLE", "Extra Audio") or "Extra Audio").strip() or "Extra Audio",
+                    "url": str(f.relative_to(lesson_root)).replace('\\', '/'),
+                })
 
     categories = infer_categories(spec, page_kind=page_kind, theme=lesson_theme, lesson_mode=lesson_mode, surface_variant=surface_variant)
     tag_games = discover_tag_games(spec.get("tags", []) or [], theme=lesson_theme)
@@ -727,6 +813,7 @@ def main() -> None:
             quiz_url="index.html",
             quiz_embed_mode="embed",
             quiz_note="",
+            extra_audio_items=special_audio_items_local,
         )
     print(f"[TIME] lesson_html={perf_counter() - t_lesson_html:.2f}s")
     (lesson_root / "lesson.html").write_text(lesson_html_local, encoding="utf-8")
@@ -836,7 +923,9 @@ def main() -> None:
     if audio_dir.exists():
         t_upload_audio = perf_counter()
         audio_count = 0
-        for f in audio_dir.rglob("*.mp3"):
+        for f in sorted(audio_dir.rglob("*")):
+            if not f.is_file() or f.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
+                continue
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
@@ -900,6 +989,7 @@ def main() -> None:
 
     reading_remote = map_block_audio(spec.get("reading_block") or {})
     listening_remote = map_block_audio(spec.get("listening_block") or {})
+    special_audio_items_remote = _map_special_audio_items(special_audio_items_local, audio_url_by_rel)
 
     # Remote practice URL:
     # If QUIZ_PUBLIC_BASE is configured to a real static host, use it.
@@ -924,6 +1014,7 @@ def main() -> None:
                 quiz_url,
                 quiz_embed_mode=quiz_embed_mode,
                 quiz_note=quiz_note,
+                extra_audio_items=special_audio_items_remote,
             )
 
         t_create_post = perf_counter()
@@ -964,6 +1055,7 @@ def main() -> None:
             "sentences": sent_remote,
             "reading_block": reading_remote,
             "listening_block": listening_remote,
+            "extra_audio": special_audio_items_remote,
             "comprehension_questions": spec.get("comprehension_questions", []) or [],
             "quiz": quiz_dict,
             "practice": quiz_dict,

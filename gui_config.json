@@ -23,10 +23,10 @@
   "picture_reader_theme": "fun_mission",
   "ocr_backend": "auto",
   "ocr_device": "cpu",
-  "image_backend": "cloudflare_flux",
+  "image_backend": "local_assets_only",
   "img_width": 768,
   "img_height": 768,
-  "img_steps": 4,
+  "img_steps": 1,
   "img_timeout_s": 600,
   "img_concurrency": 1,
   "cf_account_id": "de056911d1f7e46abfa67f8610cf2914",
@@ -34,5 +34,14 @@
   "cf_model": "@cf/black-forest-labs/flux-1-schnell",
   "hf_image_endpoint_url": "",
   "hf_token": "",
-  "hf_guidance": 6.0
+  "hf_guidance": 6.0,
+  "batch_input_dir": "",
+  "batch_mode": "generate",
+  "batch_recursive": false,
+  "batch_continue_on_error": true,
+  "special_audio_enabled": false,
+  "special_audio_dir": "",
+  "special_audio_title": "Extra Audio",
+  "picture_bg_source_image": "",
+  "picture_bg_transparency": 76
 }
