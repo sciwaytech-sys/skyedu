@@ -4,7 +4,22 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="Version 4.1                                                                                           1. Parser normalization for prefixed vocabulary items and EN/ZH sentence pairing.&#10;2. Image prompt, semantic plan, validator, and deterministic fallback improvements.&#10;3. WordPress renderer updates for Sky Tiles visible text, phone-friendly quiz replay/scroll, categories, related tag_s, and a site-wide pronunciation widget shell.&#10;4. ECS migration default updates for publish URLs and SFTP examples.&#10;5. GUI branding refresh without changing the existing workflow or tabs." />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.0Beta Final release. Operational example">
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/image_specs.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_specs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/image_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_validation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/prompt_templates.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/prompt_templates.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/quiz_index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/quiz_index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -52,33 +67,33 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.55.executor": "Run",
-    "Python.app_gui.executor": "Run",
-    "Python.comfy_client.executor": "Run",
-    "Python.pyside_gui.executor": "Run",
-    "Python.tts_edge.executor": "Run",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "C:/Users/user/PycharmProjects/skyed_automation",
-    "node.js.detected.package.eslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.55.executor&quot;: &quot;Run&quot;,
+    &quot;Python.app_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.comfy_client.executor&quot;: &quot;Run&quot;,
+    &quot;Python.pyside_gui.executor&quot;: &quot;Run&quot;,
+    &quot;Python.tts_edge.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/user/PycharmProjects/skyed_automation/skyed&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\user\PycharmProjects\skyed_automation\skyed" />
@@ -142,7 +157,8 @@
       <workItem from="1773416343200" duration="12917000" />
       <workItem from="1773578811209" duration="2198000" />
       <workItem from="1773592508789" duration="8213000" />
-      <workItem from="1773796621431" duration="328000" />
+      <workItem from="1774334132215" duration="139000" />
+      <workItem from="1774334425227" duration="992000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -304,15 +320,7 @@
       <option name="project" value="LOCAL" />
       <updated>1773607688891</updated>
     </task>
-    <task id="LOCAL-00021" summary="Version 4.1                                                                                           1. Parser normalization for prefixed vocabulary items and EN/ZH sentence pairing.&#10;2. Image prompt, semantic plan, validator, and deterministic fallback improvements.&#10;3. WordPress renderer updates for Sky Tiles visible text, phone-friendly quiz replay/scroll, categories, related tag_s, and a site-wide pronunciation widget shell.&#10;4. ECS migration default updates for publish URLs and SFTP examples.&#10;5. GUI branding refresh without changing the existing workflow or tabs.">
-      <option name="closed" value="true" />
-      <created>1773796930718</created>
-      <option name="number" value="00021" />
-      <option name="presentableId" value="LOCAL-00021" />
-      <option name="project" value="LOCAL" />
-      <updated>1773796930718</updated>
-    </task>
-    <option name="localTasksCounter" value="22" />
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -334,10 +342,10 @@
     <MESSAGE value="3.2 Updates with themes" />
     <MESSAGE value="3.2.8 Theme logic uploaded. Stream generation added" />
     <MESSAGE value="4.0Beta Final release. Operational example" />
-    <MESSAGE value="Version 4.1                                                                                           1. Parser normalization for prefixed vocabulary items and EN/ZH sentence pairing.&#10;2. Image prompt, semantic plan, validator, and deterministic fallback improvements.&#10;3. WordPress renderer updates for Sky Tiles visible text, phone-friendly quiz replay/scroll, categories, related tag_s, and a site-wide pronunciation widget shell.&#10;4. ECS migration default updates for publish URLs and SFTP examples.&#10;5. GUI branding refresh without changing the existing workflow or tabs." />
-    <option name="LAST_COMMIT_MESSAGE" value="Version 4.1                                                                                           1. Parser normalization for prefixed vocabulary items and EN/ZH sentence pairing.&#10;2. Image prompt, semantic plan, validator, and deterministic fallback improvements.&#10;3. WordPress renderer updates for Sky Tiles visible text, phone-friendly quiz replay/scroll, categories, related tag_s, and a site-wide pronunciation widget shell.&#10;4. ECS migration default updates for publish URLs and SFTP examples.&#10;5. GUI branding refresh without changing the existing workflow or tabs." />
+    <option name="LAST_COMMIT_MESSAGE" value="4.0Beta Final release. Operational example" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1773604498935" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774338522964" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$ff.coverage" NAME="ff Coverage Results" MODIFIED="1774037894426" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

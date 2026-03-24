@@ -17,7 +17,7 @@ from .prompt_templates import normalize_style
 from .image_specs import ImageSpec, build_specs_from_parsed_spec
 from .image_validation import ImageValidator
 from .fallback_cards import make_fallback_card
-from .scene_fallbacks import build_semantic_fallback
+from .scene_fallbacks import render_deterministic_scene
 
 
 def slugify(s: str) -> str:
@@ -98,14 +98,13 @@ def _hash_color_triplet(key: str) -> Tuple[Tuple[int,int,int], Tuple[int,int,int
 def _make_placeholder_panel(en: str, w: int, h: int, font_path: Optional[str]) -> Image.Image:
     """
     Deterministic fallback art when AI image is missing.
-    Goal: never ship a blank panel.
+    Goal: never ship a blank panel, and avoid turning the image area into a text card.
     """
     en_t = (en or "").strip()
     c1, c2, c3 = _hash_color_triplet(en_t.lower())
     img = Image.new("RGB", (max(64, int(w)), max(64, int(h))), (238, 244, 252))
     d = ImageDraw.Draw(img)
 
-    # simple vertical gradient
     for y in range(img.size[1]):
         t = y / max(1, img.size[1] - 1)
         r = int(c1[0] * (1 - t) + c2[0] * t)
@@ -114,34 +113,20 @@ def _make_placeholder_panel(en: str, w: int, h: int, font_path: Optional[str]) -
         d.line([(0, y), (img.size[0], y)], fill=(r, g, b))
 
     pad = int(min(img.size) * 0.08)
-    d.rounded_rectangle(
-        (pad, pad, img.size[0] - pad, img.size[1] - pad),
-        radius=int(min(img.size) * 0.09),
-        outline=(255, 255, 255),
-        width=3,
-    )
+    d.rounded_rectangle((pad, pad, img.size[0] - pad, img.size[1] - pad), radius=int(min(img.size) * 0.09), outline=(255, 255, 255), width=3)
+    d.rounded_rectangle((int(img.size[0] * 0.12), int(img.size[1] * 0.18), int(img.size[0] * 0.88), int(img.size[1] * 0.82)), radius=32, fill=(255, 255, 255, 120))
 
-    cx = int(img.size[0] * 0.72)
+    # friendly abstract scene pieces
+    cx = int(img.size[0] * 0.68)
     cy = int(img.size[1] * 0.38)
-    cr = int(min(img.size) * 0.18)
+    cr = int(min(img.size) * 0.16)
     d.ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=c3)
-
-    # small dots
+    d.rounded_rectangle((int(img.size[0] * 0.18), int(img.size[1] * 0.48), int(img.size[0] * 0.48), int(img.size[1] * 0.72)), radius=24, fill=c2)
+    d.rounded_rectangle((int(img.size[0] * 0.50), int(img.size[1] * 0.56), int(img.size[0] * 0.80), int(img.size[1] * 0.72)), radius=24, fill=c1)
     for i in range(8):
-        x = int(img.size[0] * (0.15 + (i % 4) * 0.07))
-        y = int(img.size[1] * (0.25 + (i // 4) * 0.12))
-        d.ellipse((x, y, x + 8, y + 8), fill=(255, 255, 255))
-
-    # centered word (inside panel)
-    f = _load_font(int(min(img.size) * 0.16), font_path)
-    text = (en_t[:20] if en_t else "?")
-    bbox = d.textbbox((0, 0), text, font=f)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    tx = (img.size[0] - tw) // 2
-    ty = int(img.size[1] * 0.60)
-
-    d.text((tx + 2, ty + 2), text, fill=(0, 0, 0), font=f)
-    d.text((tx, ty), text, fill=(255, 255, 255), font=f)
+        x = int(img.size[0] * (0.14 + (i % 4) * 0.09))
+        y = int(img.size[1] * (0.22 + (i // 4) * 0.12))
+        d.ellipse((x, y, x + 10, y + 10), fill=(255, 255, 255))
 
     return img
 
@@ -255,13 +240,6 @@ def make_website_illustration(en: str, font_path: Optional[str], out_path: Path,
     art = ai_image if ai_image is not None else _make_placeholder_panel(en, W - 80, H - 120, font_path)
     fitted = _contain_fit(art, W - 80, H - 120, bg=(245, 248, 252))
     canvas.paste(fitted, (40, 40))
-    label_font = _load_font(26, font_path)
-    text = (en or "").strip()
-    if text:
-        bbox = d.textbbox((0, 0), text, font=label_font)
-        tw = bbox[2] - bbox[0]
-        d.rounded_rectangle((W - tw - 64, 24, W - 24, 64), radius=18, fill=(255, 255, 255))
-        d.text((W - tw - 44, 32), text, fill=(51, 65, 85), font=label_font)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out_path, format="PNG")
 
@@ -284,25 +262,17 @@ def _retry_positive_prompt(img_spec: ImageSpec, attempt: int) -> str:
     base = (img_spec.positive_prompt or "").strip()
     if attempt <= 0:
         return base
-    semantic_class = str(getattr(img_spec, "semantic_class", "") or "").strip().lower()
     extras = [
         "literal child-friendly ESL card illustration",
         "show the target meaning directly",
         "avoid decorative substitutions",
         "make the main concept immediately recognizable",
     ]
-    if semantic_class in {"color", "number", "question_word", "preposition"}:
-        extras.extend([
-            "very clear educational layout",
-            "one obvious teaching scene",
-            "no visible words anywhere",
-        ])
     if attempt >= 2:
         extras.extend([
             "simple composition",
             "one main scene only",
             "obvious school or home context",
-            "no posters, no worksheets, no blackboard writing",
         ])
     return ", ".join([x for x in [base] + extras if x])
 
@@ -322,6 +292,9 @@ def _retry_negative_prompt(img_spec: ImageSpec, attempt: int) -> str:
             "english words",
             "label",
             "caption",
+            "gibberish typography",
+            "misspelled text",
+            "broken words",
         ])
     if attempt >= 2:
         negatives.extend([
@@ -517,15 +490,13 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 last_err = f"{type(e).__name__}: {e}"
 
         if not accepted:
-            semantic_img = build_semantic_fallback(img_spec, size=max(width, height, 768))
-            if semantic_img is not None:
-                ai_png.parent.mkdir(parents=True, exist_ok=True)
-                semantic_img.save(ai_png, format="PNG")
-                row["status"] = "semantic_fallback"
-                row["fallback_reason"] = last_err or "AI image rejected; semantic fallback illustration generated"
-                row["semantic_fallback"] = True
-                fallback_marker.write_text(last_err or "Semantic fallback created", encoding="utf-8")
-                fail_marker.write_text(last_err or "Semantic fallback created", encoding="utf-8")
+            deterministic = render_deterministic_scene(img_spec, ai_png)
+            if deterministic is not None:
+                fallback_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
+                fail_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
+                row["status"] = "deterministic_fallback"
+                row["fallback_reason"] = last_err or "AI image rejected"
+                row["deterministic_fallback"] = True
             else:
                 subtitle = img_spec.scene_type or img_spec.fallback_label or img_spec.word
                 make_fallback_card(img_spec, ai_png, subtitle=subtitle)

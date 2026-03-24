@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .image_specs import ImageSpec
 
@@ -27,45 +28,19 @@ class ImageValidator:
     """
     Lightweight validator.
 
-    Important behavior:
-    - validate semantic anchors against the semantic part of the prompt only
-    - never punish explicit no-text safety clauses as if they were semantic content
-    - use softer thresholds for easy literal items and stricter ones for relation/comparison scenes
+    Key rules:
+    - judge semantic anchors against the semantic prompt only
+    - ignore safety clauses like 'no text' when checking forbidden tokens
+    - use softer thresholds for easy single-object/counting scenes
+    - treat prompt contamination separately from real image blankness problems
+    - reject OCR-detected gibberish/text artifacts so lesson images do not ship with nonsense writing
     """
 
     _CJK_RE = re.compile(r"[一-鿿]")
     _SAFETY_CLAUSE_RE = re.compile(
-        r"^(?:no\s+|without\s+)(text|letters|numbers|readable numbers|chinese characters|english words|labels?|captions?|signboards?|watermark|logo)",
+        r"(?:^|,|;)\s*(?:no\s+|without\s+)(text|letters|numbers|chinese characters|english words|labels?|captions?|signboards?|watermark|logo)",
         flags=re.IGNORECASE,
     )
-    _GENERIC_ANCHORS = {
-        "child",
-        "plain background",
-        "single obvious concept",
-        "clear action",
-        "clear relation",
-        "clear count",
-        "clear question context",
-        "clear meaning",
-        "person or group",
-        "simple objects",
-        "two items",
-        "three items",
-        "daily life",
-        "single child or object",
-    }
-    _GENERIC_FORBIDDEN = {
-        "text",
-        "letters",
-        "numbers",
-        "numbers drawn as labels",
-        "label",
-        "caption",
-        "english words",
-        "chinese characters",
-        "watermark",
-        "logo",
-    }
 
     def __init__(self, min_side: int = 256, min_entropy: float = 2.0, max_gray_ratio: float = 0.92) -> None:
         self.min_side = min_side
@@ -78,7 +53,6 @@ class ImageValidator:
         score = 1.0
         if not path.exists():
             raise ImageValidationError(f"Image not found: {path}")
-
         try:
             img = Image.open(path).convert("RGB")
         except Exception as exc:
@@ -97,7 +71,12 @@ class ImageValidator:
         gray_ratio = self._gray_ratio(img)
         if gray_ratio > self.max_gray_ratio:
             reasons.append(f"Image too gray/flat: gray_ratio={gray_ratio:.2f}")
-            score -= 0.30
+            score -= 0.28
+
+        detected_text = self._ocr_detected_text(img, spec, allow_supported_text=self._allow_image_text())
+        if detected_text:
+            reasons.append(f"Generated image contains text-like artifacts: {', '.join(detected_text[:4])}")
+            score -= 0.24
 
         if used_prompt:
             prompt_lc = used_prompt.lower()
@@ -110,16 +89,16 @@ class ImageValidator:
                     reasons.append(
                         f"Used prompt missed too many required semantic anchors ({core_hits}/{required_checks}; needed >= {min_hits})"
                     )
-                    score -= 0.18
+                    score -= 0.20
 
             forbidden_hits = self._forbidden_semantic_hits(spec, semantic_prompt)
             if forbidden_hits:
                 reasons.append(f"Used semantic prompt contains forbidden anchors: {', '.join(forbidden_hits[:5])}")
-                score -= 0.14
+                score -= 0.18
 
-            if self._CJK_RE.search(prompt_lc):
-                reasons.append("Used prompt contains Chinese characters; image prompts should avoid accidental language leakage")
-                score -= 0.12
+            if self._CJK_RE.search(used_prompt):
+                reasons.append("Used prompt contains Chinese characters; image prompts should avoid language leakage")
+                score -= 0.15
 
             banned_prompt_markers = [
                 "chinese target meaning:",
@@ -129,90 +108,152 @@ class ImageValidator:
                 "adjective:",
                 "verb:",
                 "question_word:",
+                "number:",
             ]
             found_markers = [m for m in banned_prompt_markers if m in semantic_prompt]
             if found_markers:
                 reasons.append(f"Used semantic prompt contains teaching/meta markers: {', '.join(found_markers)}")
-                score -= 0.14
+                score -= 0.16
+
+            text_guard_tokens = ["no text", "no letters", "no numbers"]
+            guard_hits = sum(1 for tok in text_guard_tokens if tok in prompt_lc)
+            if guard_hits < 2 and (spec.render_mode not in {"symbolic_card"}):
+                reasons.append("Used prompt missing strong no-text guardrails")
+                score -= 0.08
 
         accepted = score >= 0.60 and not any("too small" in r.lower() for r in reasons)
-        return ValidationResult(
-            accepted=accepted,
-            score=max(0.0, min(1.0, score)),
-            reasons=reasons,
-            image_path=str(path),
-        )
+        return ValidationResult(accepted=accepted, score=max(0.0, round(score, 3)), reasons=reasons, image_path=str(path))
 
     def _semantic_prompt_only(self, prompt_lc: str) -> str:
-        clauses = [c.strip() for c in re.split(r"[,\n]+", prompt_lc) if c.strip()]
-        semantic_clauses: list[str] = []
-        for clause in clauses:
-            if self._SAFETY_CLAUSE_RE.search(clause):
+        tokens = []
+        for raw in re.split(r"[,;]", prompt_lc or ""):
+            frag = raw.strip()
+            if not frag:
                 continue
-            semantic_clauses.append(clause)
-        return ", ".join(semantic_clauses)
-
-    def _count_anchor_hits(self, spec: ImageSpec, semantic_prompt: str) -> tuple[int, int]:
-        core_hits = 0
-        required_checks = 0
-        for token in list(spec.must_include[:6]):
-            token_lc = str(token or "").strip().lower()
-            if not token_lc:
+            if self._SAFETY_CLAUSE_RE.search(frag):
                 continue
-            if not any(ch.isalpha() for ch in token_lc):
-                continue
-            if token_lc in self._GENERIC_FORBIDDEN or token_lc in self._GENERIC_ANCHORS:
-                continue
-            required_checks += 1
-            if token_lc in semantic_prompt:
-                core_hits += 1
-        return core_hits, required_checks
-
-    def _forbidden_semantic_hits(self, spec: ImageSpec, semantic_prompt: str) -> list[str]:
-        out: list[str] = []
-        for token in spec.must_exclude:
-            token_lc = str(token or "").strip().lower()
-            if not token_lc or token_lc in self._GENERIC_FORBIDDEN:
-                continue
-            if token_lc in semantic_prompt:
-                out.append(token_lc)
-        return out
+            tokens.append(frag)
+        return ", ".join(tokens)
 
     def _anchor_policy(self, spec: ImageSpec, required_checks: int) -> tuple[int, float]:
-        render_mode = str(getattr(spec, "render_mode", "") or "").strip().lower()
-        pos = str(getattr(spec, "pos", "") or "").strip().lower()
-        scene_type = str(getattr(spec, "scene_type", "") or "").strip().lower()
+        scene_type = (spec.scene_type or "").lower()
+        render_mode = (spec.render_mode or "").lower()
+        if render_mode in {"single_object", "counting_scene"}:
+            return (1 if required_checks <= 2 else 2, 0.34)
+        if "comparison" in scene_type or render_mode in {"relation_scene", "contrast_pair"}:
+            return (max(2, math.ceil(required_checks * 0.45)), 0.40)
+        if render_mode in {"guided_scene", "action_scene", "attribute_scene"}:
+            return (max(2, math.ceil(required_checks * 0.34)), 0.34)
+        return (max(1, math.ceil(required_checks * 0.34)), 0.34)
 
-        if render_mode in {"single_object", "object", "single"} or scene_type in {"literal_object_scene"}:
-            return (1 if required_checks >= 1 else 0, 0.25)
-        if render_mode in {"attribute_scene", "icon_card", "text_card", "portrait_scene"} or pos in {"noun", "adjective", "pronoun"}:
-            return (1 if required_checks >= 1 else 0, 0.28)
-        if render_mode in {"action_scene", "routine_scene", "counting_scene", "question_scene"} or pos in {"verb", "phrase", "expression", "number", "question_word"}:
-            return (min(2, required_checks), 0.34)
-        if render_mode in {"relation_scene", "contrast_pair", "comparison_scene"} or pos in {"preposition"}:
-            return (min(2, required_checks), 0.40)
-        return (1 if required_checks >= 1 else 0, 0.30)
+    def _count_anchor_hits(self, spec: ImageSpec, semantic_prompt: str) -> tuple[int, int]:
+        must_include = [self._normalize_token(x) for x in (spec.must_include or []) if self._normalize_token(x)]
+        required_checks = len(must_include)
+        hits = 0
+        for token in must_include:
+            if token and token in semantic_prompt:
+                hits += 1
+        return hits, required_checks
+
+    def _forbidden_semantic_hits(self, spec: ImageSpec, semantic_prompt: str) -> list[str]:
+        forbidden = []
+        for token in (spec.must_exclude or []):
+            norm = self._normalize_token(token)
+            if not norm:
+                continue
+            if norm in {"text", "letters", "numbers", "english words", "chinese characters", "labels", "label"}:
+                continue
+            if norm in semantic_prompt:
+                forbidden.append(norm)
+        return forbidden
+
+    def _allow_image_text(self) -> bool:
+        return os.getenv("SKYED_ALLOW_IMAGE_TEXT", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _ocr_detected_text(self, img: Image.Image, spec: ImageSpec, *, allow_supported_text: bool) -> list[str]:
+        try:
+            import pytesseract  # type: ignore
+        except Exception:
+            return []
+
+        try:
+            scan = self._prepare_for_text_scan(img)
+            data = pytesseract.image_to_data(scan, lang="eng", config="--psm 6", output_type=pytesseract.Output.DICT)
+        except Exception:
+            return []
+
+        allowed = self._allowed_text_tokens(spec) if allow_supported_text else set()
+        found: list[str] = []
+        seen = set()
+        n = len(data.get("text", []))
+        for i in range(n):
+            raw = str(data["text"][i] or "").strip()
+            if not raw:
+                continue
+            try:
+                conf = float(str(data.get("conf", ["0"])[i]))
+            except Exception:
+                conf = 0.0
+            if conf < 42:
+                continue
+            for token in re.findall(r"[A-Za-z]{3,}|[一-鿿]{2,}", raw):
+                norm = self._normalize_token(token)
+                if not norm or norm in seen:
+                    continue
+                if allow_supported_text and self._token_allowed(norm, allowed):
+                    continue
+                seen.add(norm)
+                found.append(norm)
+        return found
+
+    @staticmethod
+    def _prepare_for_text_scan(img: Image.Image) -> Image.Image:
+        gray = ImageOps.autocontrast(img.convert("L"))
+        w, h = gray.size
+        if max(w, h) < 900:
+            gray = gray.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
+        return gray.point(lambda p: 255 if p > 170 else 0)
+
+    def _allowed_text_tokens(self, spec: ImageSpec) -> set[str]:
+        allowed: set[str] = set()
+        candidates = [spec.word] + list(spec.must_include or [])
+        for raw in candidates:
+            for token in re.findall(r"[A-Za-z]{2,}|[一-鿿]{2,}", raw or ""):
+                allowed.add(self._normalize_token(token))
+        return allowed
+
+    @staticmethod
+    def _token_allowed(token: str, allowed: set[str]) -> bool:
+        if token in allowed:
+            return True
+        return any(token in item or item in token for item in allowed if item)
+
+    @staticmethod
+    def _normalize_token(token: str) -> str:
+        t = (token or "").strip().lower()
+        t = re.sub(r"\s+", " ", t)
+        return t
 
     @staticmethod
     def _entropy(img: Image.Image) -> float:
-        histogram = img.convert("L").histogram()
-        total = sum(histogram)
-        if total == 0:
+        hist = img.convert("L").histogram()
+        total = sum(hist)
+        if total <= 0:
             return 0.0
-        probs = [value / total for value in histogram if value]
-        return -sum(p * math.log2(p) for p in probs)
+        entropy = 0.0
+        for count in hist:
+            if count <= 0:
+                continue
+            p = count / total
+            entropy -= p * math.log2(p)
+        return entropy
 
     @staticmethod
     def _gray_ratio(img: Image.Image) -> float:
-        rgb = img.convert("RGB")
-        pixels = list(rgb.getdata())
-        if not pixels:
-            return 1.0
-        gray_count = 0
-        for r, g, b in pixels:
-            if abs(r - g) <= 8 and abs(g - b) <= 8 and abs(r - b) <= 8:
-                gray_count += 1
-        return gray_count / len(pixels)
-
-
-__all__ = ["ImageValidator", "ValidationResult", "ImageValidationError"]
+        rgb = img.resize((128, 128)).convert("RGB")
+        gray_like = 0
+        total = 128 * 128
+        for r, g, b in list(rgb.getdata()):
+            if abs(r - g) < 9 and abs(r - b) < 9 and abs(g - b) < 9:
+                gray_like += 1
+        return gray_like / max(1, total)

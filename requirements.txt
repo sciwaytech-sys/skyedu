@@ -7,3 +7,6 @@ edge-tts
 PySide6
 fastapi
 uvicorn[standard]
+
+pytesseract
+huggingface_hub>=0.30

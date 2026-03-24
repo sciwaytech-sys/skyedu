@@ -580,55 +580,231 @@ body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; 
   scroll-margin-top: 16px;
 }
 
+/* --- Corrective patch: visible Sky Tiles text + metadata + picture reader --- */
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card__body--tile{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:.45rem;
+  padding: .9rem .9rem 1rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-tile-word{
+  font-size:1.28rem;
+  font-weight:900;
+  color:#0f172a;
+  text-align:center;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-tile-zh{
+  font-size:.98rem;
+  color:#475569;
+  text-align:center;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-card__badge--tile{
+  background:rgba(37,99,235,.10);
+  color:#1d4ed8;
+}
+.skyed-chip-row--meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.55rem;
+}
+.skyed-chip--meta{
+  background:rgba(14,165,233,.08);
+  color:#0f172a;
+}
+.skyed-tag-games{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:.9rem;
+}
+.skyed-tag-game{
+  display:block;
+  text-decoration:none;
+  border:1px solid rgba(37,99,235,.12);
+  border-radius:18px;
+  padding:1rem;
+  background:linear-gradient(180deg,#fff,#f8fbff);
+  box-shadow:0 10px 24px rgba(15,23,42,.06);
+}
+.skyed-tag-game__title{ font-weight:800; color:#0f172a; margin-bottom:.25rem; }
+.skyed-tag-game__meta{ color:#64748b; font-size:.92rem; }
+.skyed-q__audio--sticky{
+  position:sticky;
+  top:10px;
+  z-index:2;
+  padding:.45rem .55rem;
+  border-radius:14px;
+  background:rgba(255,255,255,.92);
+  backdrop-filter: blur(6px);
+}
+.skyed-shell--reader{ max-width:860px; }
+.skyed-reader-sheet{
+  border:1px solid rgba(37,99,235,.12);
+  border-radius:28px;
+  background:linear-gradient(180deg,#fff,#f8fbff);
+  box-shadow:0 16px 36px rgba(15,23,42,.08);
+  overflow:hidden;
+}
+.skyed-reader-sheet__top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:1rem;
+  padding:1rem 1.1rem .85rem;
+  border-bottom:1px solid rgba(37,99,235,.08);
+}
+.skyed-reader-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  padding:.45rem .9rem;
+  border-radius:999px;
+  background:rgba(37,99,235,.10);
+  color:#1d4ed8;
+  font-weight:800;
+}
+.skyed-reader-note{ font-size:.95rem; color:#64748b; }
+.skyed-reader-flow{ padding:.35rem 1rem .15rem; }
+.skyed-reader-line{
+  display:grid;
+  grid-template-columns:40px minmax(0,1fr) auto;
+  gap:.9rem;
+  width:100%;
+  align-items:flex-start;
+  text-align:left;
+  border:0;
+  background:transparent;
+  padding:1rem .1rem;
+  cursor:pointer;
+  border-radius:18px;
+  transition:background .15s ease, box-shadow .15s ease;
+}
+.skyed-reader-line + .skyed-reader-line{ border-top:1px dashed rgba(148,163,184,.24); }
+.skyed-reader-line:hover,
+.skyed-reader-line:focus-visible{ background:rgba(56,189,248,.06); outline:none; }
+.skyed-reader-line.is-playing{ background:rgba(37,99,235,.06); }
+.skyed-reader-line.is-speaking-en .skyed-reader-line__en,
+.skyed-reader-line.is-speaking-zh .skyed-reader-line__zh{
+  background:rgba(56,189,248,.18);
+  box-shadow:0 0 0 6px rgba(56,189,248,.12);
+  border-radius:10px;
+}
+.skyed-reader-line__idx{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  background:rgba(37,99,235,.10);
+  color:#1d4ed8;
+  font-size:.78rem;
+  font-weight:800;
+  margin-top:.15rem;
+}
+.skyed-reader-line__body{ min-width:0; }
+.skyed-reader-line__label{
+  display:block;
+  margin-bottom:.28rem;
+  font-size:.72rem;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#2563eb;
+}
+.skyed-reader-line__label--zh{
+  margin-top:.7rem;
+  color:#64748b;
+}
+.skyed-reader-line__en{
+  display:inline;
+  font-size:1.35rem;
+  font-weight:900;
+  color:#0f172a;
+  line-height:1.52;
+  padding:.04rem .12rem;
+  transition:background .15s ease, box-shadow .15s ease;
+}
+.skyed-reader-line__zh{
+  display:inline-block;
+  font-size:1.08rem;
+  color:#334155;
+  line-height:1.65;
+  padding:.04rem .12rem;
+  transition:background .15s ease, box-shadow .15s ease;
+}
+.skyed-reader-line__hint{
+  align-self:center;
+  white-space:nowrap;
+  font-size:.85rem;
+  color:#2563eb;
+  font-weight:800;
+}
+.skyed-reader-sheet__art{
+  padding:.2rem 1rem 1rem;
+}
+.skyed-reader-sheet__art img{
+  display:block;
+  width:100%;
+  max-height:260px;
+  object-fit:cover;
+  border-radius:20px;
+  border:1px solid rgba(37,99,235,.10);
+}
+@media (max-width:640px){
+  .skyed-reader-sheet__top{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:.55rem;
+  }
+  .skyed-reader-note{ font-size:.88rem; }
+  .skyed-reader-flow{ padding:.25rem .85rem .1rem; }
+  .skyed-reader-line{
+    grid-template-columns:32px minmax(0,1fr);
+    gap:.7rem;
+  }
+  .skyed-reader-line__hint{
+    grid-column:2;
+    font-size:.8rem;
+    color:#64748b;
+    margin-top:.15rem;
+  }
+  .skyed-reader-line__en{ font-size:1.18rem; }
+  .skyed-reader-line__zh{ font-size:1rem; }
+}
 
-/* --- SkyEd patch 2026-03-18 --- */
-.skyed-section--meta .skyed-section__note,
-.skyed-section--tag-games .skyed-section__note{max-width:680px}
-.skyed-category-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem}
-.skyed-category-box{border:1px solid var(--line);background:var(--surface-2);border-radius:20px;padding:.9rem 1rem}
-.skyed-category-box__label{font-size:.76rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
-.skyed-category-box__chips{display:flex;flex-wrap:wrap;gap:.45rem}
-.skyed-category-chip{display:inline-flex;align-items:center;border-radius:999px;padding:.34rem .7rem;background:var(--surface);border:1px solid var(--line);font-size:.78rem;font-weight:700;color:var(--ink)}
-.skyed-tag-games{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
-.skyed-tag-game{border-radius:22px;border:1px solid var(--line);background:linear-gradient(180deg,var(--surface),var(--surface-2));padding:1rem;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.7rem}
-.skyed-tag-game__meta{display:flex;gap:.4rem;flex-wrap:wrap}
-.skyed-tag-game__title{margin:0;font-size:1.06rem;line-height:1.25;color:var(--ink)}
-.skyed-tag-game__sub{font-size:.88rem;color:var(--muted)}
-.skyed-tag-game__link{align-self:flex-start}
-.skyed-card__badge--tile{display:inline-flex;margin-bottom:.35rem;background:var(--chip);color:var(--accent)}
-.skyed-tile-text{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:.18rem}
-.skyed-tile-word{font-size:1.22rem;font-weight:900;line-height:1.12;color:var(--ink)}
-.skyed-tile-zh{font-size:.98rem;font-weight:700;color:var(--muted)}
-.skyed-tile-caption{font-size:.84rem;font-weight:700;color:var(--accent);line-height:1.35}
-.skyed-card__body--tile{padding:1rem;display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem;align-items:start}
-.skyed-tile-actions{display:flex;gap:.55rem;flex-wrap:wrap}
-.skyed-practice__toolbar{position:sticky;top:12px;z-index:8;padding:.2rem 0 .45rem;background:linear-gradient(180deg,var(--surface),rgba(255,255,255,.82))}
-.skyed-btn--replay{white-space:nowrap}
-.skyed-pron{position:fixed;right:18px;bottom:18px;z-index:99998;display:flex;flex-direction:column;align-items:flex-end;gap:.7rem}
-.skyed-pron__fab{border:0;border-radius:999px;padding:.92rem 1.15rem;background:linear-gradient(135deg,#0f766e,#22d3ee);color:#fff;font-weight:900;box-shadow:0 16px 32px rgba(15,118,110,.28);cursor:pointer}
-.skyed-pron__panel{width:min(360px,calc(100vw - 24px));border-radius:24px;padding:1rem;background:#fff;border:1px solid rgba(16,32,51,.12);box-shadow:0 20px 36px rgba(16,32,51,.18);display:flex;flex-direction:column;gap:.75rem}
-.skyed-pron__title{font-size:1.05rem;font-weight:900;color:#102033}.skyed-pron__sub{font-size:.88rem;color:#607089}
-.skyed-pron__field{display:flex;flex-direction:column;gap:.35rem;font-size:.82rem;font-weight:700;color:#44556b}
-.skyed-pron__input,.skyed-pron__select{width:100%;border:1px solid rgba(16,32,51,.14);border-radius:14px;padding:.72rem .85rem;font:inherit;background:#f8fbff;color:#102033}
-.skyed-pron__actions{display:flex;gap:.65rem;flex-wrap:wrap}.skyed-pron__actions .skyed-btn{flex:1 1 140px}
-.skyed-pron__status{font-size:.86rem;color:#607089}.skyed-pron__result{display:flex;flex-direction:column;gap:.42rem}.skyed-pron__score{font-size:1rem;color:#102033}.skyed-pron__line{font-size:.88rem;color:#43566c}
-@media (max-width: 991.98px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr 1fr}}
-@media (max-width: 640px){.skyed-category-grid,.skyed-tag-games{grid-template-columns:1fr}.skyed-practice__toolbar{top:6px}.skyed-pron{right:10px;left:10px;align-items:stretch}.skyed-pron__panel{width:auto}.skyed-pron__fab{align-self:flex-end}}
-
-.skyed-lesson--reader .skyed-reader-shell{max-width:980px}
-.skyed-reader-hero{background:linear-gradient(120deg,#2563eb,#38bdf8);border-radius:28px;padding:22px;color:#fff;box-shadow:0 18px 40px rgba(15,23,42,.10);margin-bottom:18px}
-.skyed-reader-frame{background:rgba(255,255,255,.82);border:1px solid rgba(37,99,235,.12);border-radius:28px;padding:14px;backdrop-filter:blur(8px);box-shadow:0 18px 40px rgba(15,23,42,.08)}
-.skyed-reader-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.skyed-reader-pill{display:inline-flex;align-items:center;border-radius:999px;background:#dbeafe;color:#1d4ed8;padding:8px 12px;font-weight:800}
-.skyed-reader-note{color:#64748b;font-size:13px}
-.skyed-reader-list{display:flex;flex-direction:column;gap:12px}
-.skyed-reader-line{width:100%;text-align:left;position:relative;border:1px solid #dbe7ff;border-radius:20px;background:linear-gradient(180deg,#fff,#f8fbff);padding:16px;transition:.18s ease;cursor:pointer}
-.skyed-reader-line:hover,.skyed-reader-line:focus-visible{transform:translateY(-1px);box-shadow:0 12px 26px rgba(37,99,235,.12);border-color:#93c5fd}
-.skyed-reader-line.is-playing{border-color:#2563eb;box-shadow:0 16px 28px rgba(37,99,235,.18)}
-.skyed-reader-line__num{position:absolute;top:12px;right:12px;display:flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-weight:800;font-size:13px}
-.skyed-reader-line__en{font-size:clamp(18px,2.2vw,26px);line-height:1.45;font-weight:800;color:#0f172a;padding-right:42px}
-.skyed-reader-line__zh{font-size:clamp(15px,1.8vw,21px);line-height:1.65;color:#334155;margin-top:8px}
-.skyed-reader-line__meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
-.skyed-reader-line__play{display:inline-flex;align-items:center;border-radius:999px;background:#eff6ff;color:#1d4ed8;padding:7px 11px;font-weight:800;font-size:13px}
-.skyed-reader-line__hint{color:#64748b;font-size:13px}
-@media (max-width:640px){.skyed-reader-hero{border-radius:22px;padding:16px}.skyed-reader-frame{border-radius:22px;padding:10px}.skyed-reader-line{border-radius:16px;padding:14px}}
+/* --- Pronunciation launcher --- */
+.skyed-pron{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  z-index:9999;
+}
+.skyed-pron__fab,
+.skyed-pron__btn{
+  border:0;
+  border-radius:999px;
+  padding:.8rem 1rem;
+  font-weight:800;
+  cursor:pointer;
+}
+.skyed-pron__fab{
+  background:linear-gradient(135deg,#1d4ed8,#38bdf8);
+  color:#fff;
+  box-shadow:0 14px 30px rgba(15,23,42,.18);
+}
+.skyed-pron__panel{
+  width:min(360px,calc(100vw - 24px));
+  margin-top:.6rem;
+  padding:1rem;
+  border-radius:20px;
+  border:1px solid rgba(37,99,235,.14);
+  background:#fff;
+  box-shadow:0 18px 40px rgba(15,23,42,.18);
+}
+.skyed-pron__title{ font-size:1rem; font-weight:900; margin-bottom:.55rem; }
+.skyed-pron__text{ width:100%; min-height:96px; border-radius:14px; border:1px solid rgba(15,23,42,.12); padding:.8rem; resize:vertical; }
+.skyed-pron__actions{ display:flex; gap:.65rem; margin-top:.75rem; }
+.skyed-pron__btn--record{ background:#1d4ed8; color:#fff; }
+.skyed-pron__btn--close{ background:#eef2ff; color:#0f172a; }
+.skyed-pron__result{ margin-top:.75rem; color:#334155; font-size:.95rem; line-height:1.45; }

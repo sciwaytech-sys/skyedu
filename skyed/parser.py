@@ -27,11 +27,11 @@ class MCQItem:
 
 
 SECTION_ALIASES = {
-    "title": ["name", "title", "lesson", "homework", "标题", "作业"],
+    "title": ["title", "lesson", "homework", "name", "标题", "作业"],
+    "tags": ["tags", "tag", "标签"],
     "vocab": ["vocabulary", "vocab", "words", "word bank", "theme words", "词汇", "单词"],
     "sentences": ["sentences", "sentence pattern", "useful sentences", "句型", "重点句型"],
     "qa": ["questions and answers", "q&a", "qa", "问答"],
-    "tags": ["tags", "tag", "标签"],
     "reading_title": ["reading title", "passage title", "reading heading"],
     "reading_text": ["reading text", "reading", "passage"],
     "listening_title": ["listening title", "audio title"],
@@ -52,64 +52,44 @@ POS_ALIASES = {
     "preposition": "preposition",
     "pron": "pronoun",
     "pronoun": "pronoun",
+    "phr": "phrase",
+    "phrase": "phrase",
+    "expression": "phrase",
+    "expr": "phrase",
+    "question": "question_word",
+    "question_word": "question_word",
+    "question word": "question_word",
+    "qword": "question_word",
+    "word": "",
     "det": "determiner",
     "determiner": "determiner",
     "num": "number",
     "number": "number",
-    "question": "question_word",
-    "question word": "question_word",
-    "question_word": "question_word",
-    "wh": "question_word",
-    "word": "word",
-    "phrase": "phrase",
-    "expression": "expression",
-    "idiom": "expression",
     "time": "time",
 }
 
-QUESTION_WORDS = {
-    "who",
-    "what",
-    "where",
-    "when",
-    "why",
-    "how",
-    "whose",
-    "which",
-    "whom",
-    "how many",
-    "how much",
-    "how often",
-    "how old",
-    "how long",
-    "how far",
-    "how tall",
-}
-
+QUESTION_WORDS = {"what", "who", "where", "when", "which", "whose", "why", "how"}
 PREPOSITIONS = {
-    "in",
-    "on",
-    "under",
-    "behind",
-    "in front of",
-    "next to",
-    "between",
-    "by",
-    "near",
-    "at",
-    "into",
-    "onto",
-    "over",
-    "inside",
-    "outside",
+    "in", "on", "under", "behind", "in front of", "next to", "between", "near", "by", "at",
+    "into", "out of", "over", "below", "beside", "inside", "outside", "around",
+}
+PRONOUNS = {"i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them", "my", "your", "his", "its", "our", "their"}
+DETERMINERS = {"a", "an", "the", "this", "that", "these", "those", "some", "any", "my", "your", "his", "her", "our", "their"}
+NUMBER_WORDS = {
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
 }
 
-PRONOUNS = {
-    "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
-    "my", "your", "his", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs",
-}
-
-DETERMINERS = {"a", "an", "the", "this", "that", "these", "those", "some", "any", "many", "much"}
+HEADER_ONLY_RE = re.compile(r"^\s*#\s*(.+?)\s*$")
+ZH_PREFIX_RE = re.compile(r"^(?:ZH|CN|中文|Chinese)\s*:\s*(.*)$", re.IGNORECASE)
+EN_PREFIX_RE = re.compile(r"^(?:EN|English)\s*:\s*(.*)$", re.IGNORECASE)
+Q_RE = re.compile(r"^\s*Q\d*\s*[:：]\s*(.*)$", re.IGNORECASE)
+A_RE = re.compile(r"^\s*A\d*\s*[:：]\s*(.*)$", re.IGNORECASE)
+POS_LEADING_RE = re.compile(
+    r"^(n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition|pron|pronoun|phr|phrase|expression|expr|question word|question_word|qword|question|word|det|determiner|num|number|time)\s*:\s*(.+)$",
+    flags=re.IGNORECASE,
+)
 
 ZH_FALLBACK = {
     "table": "桌子",
@@ -130,12 +110,15 @@ ZH_FALLBACK = {
     "jump": "跳",
     "read": "读",
     "write": "写",
+    "who": "谁",
+    "where": "哪里",
+    "what": "什么",
+    "when": "什么时候",
+    "in": "在……里面",
+    "on": "在……上面",
+    "under": "在……下面",
+    "behind": "在……后面",
 }
-
-HEADER_ONLY_RE = re.compile(r"^\s*#\s*(.+?)\s*$")
-EN_PREFIX_RE = re.compile(r"^(EN|ENG|ENGLISH)\s*:\s*", re.IGNORECASE)
-ZH_PREFIX_RE = re.compile(r"^(CN|ZH|中文|汉语|CHINESE)\s*:\s*", re.IGNORECASE)
-PREFIXED_LABEL_RE = re.compile(r"^(?P<label>[A-Za-z][A-Za-z_ ]{0,40})\s*:\s*(?P<body>.+)$")
 
 
 def _norm_line(s: str) -> str:
@@ -144,33 +127,12 @@ def _norm_line(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.replace("＃", "#").replace("：", ":")
     s = s.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
-    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"[ \t]+", " ", s).strip()
     return s
 
 
 def _has_zh(s: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", s or ""))
-
-
-def _split_vocab_tokens(s: str) -> List[str]:
-    text = (s or "").strip()
-    if not text:
-        return []
-    parts = [p.strip() for p in re.split(r"[,，、]", text) if p.strip()]
-    return parts if parts else [text]
-
-
-def _norm_pos(p: str) -> str:
-    p = re.sub(r"\s+", " ", (p or "").strip().lower())
-    return POS_ALIASES.get(p, "")
-
-
-def _looks_like_section_label(label: str) -> bool:
-    lowered = re.sub(r"\s+", " ", (label or "").strip().lower())
-    for aliases in SECTION_ALIASES.values():
-        if lowered in aliases:
-            return True
-    return False
 
 
 def _match_section(line: str, key: str) -> Tuple[bool, str]:
@@ -182,129 +144,79 @@ def _match_section(line: str, key: str) -> Tuple[bool, str]:
     return False, ""
 
 
-def _split_en_zh(token: str) -> Tuple[str, str]:
-    work = (token or "").strip()
-    if not work:
-        return "", ""
-
-    if "-" in work:
-        left, right = work.split("-", 1)
-        if _has_zh(right):
-            return left.strip(), right.strip()
-
-    m = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", work)
-    if m and _has_zh(m.group(2) or ""):
-        return (m.group(1) or "").strip(), (m.group(2) or "").strip()
-
-    return work, ""
+def _normalize_pos(raw: str) -> str:
+    return POS_ALIASES.get((raw or "").strip().lower(), "")
 
 
-def _infer_pos_from_word(word: str) -> str:
-    clean = re.sub(r"\s+", " ", (word or "").strip().lower())
-    if not clean:
-        return ""
-    if clean in QUESTION_WORDS:
-        return "question_word"
-    if clean in PREPOSITIONS:
-        return "preposition"
-    if clean in PRONOUNS:
-        return "pronoun"
-    if clean in DETERMINERS:
-        return "determiner"
-    if re.fullmatch(r"\d+", clean):
-        return "number"
-    return ""
+def _split_vocab_tokens(s: str) -> List[str]:
+    if not s:
+        return []
+    parts = [p.strip() for p in re.split(r"[,，、]", s or "")]
+    return [p for p in parts if p]
 
 
-def _parse_vocab_token(tok: str) -> VocabItem:
-    t = (tok or "").strip().strip(";；")
+def _is_number_label(text: str) -> bool:
+    t = (text or "").strip().lower()
     if not t:
-        return VocabItem(en="", zh="")
-
-    label_pos = ""
-    body = t
-    m = PREFIXED_LABEL_RE.match(t)
-    if m and not _looks_like_section_label(m.group("label")):
-        label = _norm_pos(m.group("label"))
-        if label:
-            body = (m.group("body") or "").strip()
-            if label == "word":
-                label_pos = _infer_pos_from_word(_split_en_zh(body)[0]) or "word"
-            else:
-                label_pos = label
-        else:
-            raw_label = re.sub(r"\s+", " ", m.group("label").strip().lower())
-            if raw_label in {"word", "question"}:
-                body = (m.group("body") or "").strip()
-                label_pos = _infer_pos_from_word(_split_en_zh(body)[0])
-            else:
-                body = t
-
-    if not label_pos:
-        m = re.match(r"^(.+?)/(n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition|pron|pronoun|det|determiner|num|number|phrase|expression|time)$", body, flags=re.IGNORECASE)
-        if m:
-            body = (m.group(1) or "").strip()
-            label_pos = _norm_pos(m.group(2))
-
-    if not label_pos:
-        m = re.match(r"^(.+?)\s*[（(]\s*(n|noun|v|verb|adj|adjective|adv|adverb|prep|preposition|pron|pronoun|det|determiner|num|number|phrase|expression|time)\s*[）)]\s*$", body, flags=re.IGNORECASE)
-        if m:
-            body = (m.group(1) or "").strip()
-            label_pos = _norm_pos(m.group(2))
-
-    en_part, zh_part = _split_en_zh(body)
-    label_pos = label_pos or _infer_pos_from_word(en_part)
-
-    en_part = re.sub(r"\s+", " ", en_part).strip()
-    zh_part = re.sub(r"\s+", " ", zh_part).strip()
-
-    # Do not keep malformed explicit prefixes inside the English field.
-    second_pass = PREFIXED_LABEL_RE.match(en_part)
-    if second_pass:
-        maybe_label = _norm_pos(second_pass.group("label"))
-        if maybe_label:
-            label_pos = label_pos or maybe_label
-            en_part = (second_pass.group("body") or "").strip()
-        elif second_pass.group("label").strip().lower() in {"word", "question"}:
-            en_part = (second_pass.group("body") or "").strip()
-            label_pos = label_pos or _infer_pos_from_word(en_part)
-
-    return VocabItem(en=en_part, zh=zh_part, pos=label_pos)
+        return False
+    if re.fullmatch(r"\d+", t):
+        return True
+    return t in NUMBER_WORDS
 
 
 def _infer_pos(en: str, sentences_en: List[str]) -> str:
-    w = re.sub(r"\s+", " ", (en or "").strip().lower())
+    w = (en or "").strip().lower()
     if not w:
         return ""
-    lexical_guess = _infer_pos_from_word(w)
-    if lexical_guess:
-        return lexical_guess
+    if w in QUESTION_WORDS:
+        return "question_word"
+    if w in PREPOSITIONS:
+        return "preposition"
+    if w in PRONOUNS:
+        return "pronoun"
+    if w in DETERMINERS:
+        return "determiner"
+    if _is_number_label(w):
+        return "number"
+    if " " in w:
+        if any(p in w for p in PREPOSITIONS) and len(w.split()) <= 4:
+            return "phrase"
     for s in sentences_en:
         t = (s or "").lower().replace("’", "'")
-        if re.search(rf"\b(it\s*'?s|it\s+is|is|are|am)\s+{re.escape(w)}\b", t):
+        if re.search(rf"\b(it\s*'?s|it\s+is|is|are|am|looks|feels)\s+{re.escape(w)}\b", t):
             return "adjective"
     for s in sentences_en:
         t = (s or "").lower().replace("’", "'")
-        if re.search(rf"\b(can|to|will|want\s+to|like\s+to|likes\s+to)\s+{re.escape(w)}\b", t):
+        if re.search(rf"\b(can|to|will|want\s+to|like\s+to|likes\s+to|must|should)\s+{re.escape(w)}\b", t):
             return "verb"
         if re.search(rf"\b(i|we|you|they|he|she)\s+{re.escape(w)}\b", t):
             return "verb"
-    if " " in w:
-        return "phrase"
-    return "noun"
+    return "phrase" if " " in w else "noun"
 
 
-def _backfill_vocab(vocab: List[VocabItem], sentences: List[Dict[str, str]]) -> None:
-    sentences_en = []
-    for s in sentences:
-        en = (s.get("en") or "").strip()
-        if en:
-            sentences_en.append(en)
-    for item in vocab:
-        if not item.pos:
-            item.pos = _infer_pos(item.en, sentences_en)
-        if not item.zh:
-            item.zh = ZH_FALLBACK.get(item.en.strip().lower(), "")
+def _parse_vocab_token(tok: str) -> VocabItem:
+    t = (tok or "").strip().strip(";。")
+    if not t:
+        return VocabItem(en="", zh="", pos="")
+
+    pos = ""
+    work = t
+    m = POS_LEADING_RE.match(work)
+    if m:
+        pos = _normalize_pos(m.group(1))
+        work = (m.group(2) or "").strip()
+
+    zh = ""
+    if "-" in work:
+        left, right = work.split("-", 1)
+        if _has_zh(right):
+            work, zh = left.strip(), right.strip()
+    if not zh:
+        m = re.match(r"^(.*?)\s*[（(]\s*(.*?)\s*[）)]\s*$", work)
+        if m and _has_zh(m.group(2) or ""):
+            work, zh = (m.group(1) or "").strip(), (m.group(2) or "").strip()
+
+    return VocabItem(en=work.strip(), zh=zh.strip(), pos=pos)
 
 
 def _parse_comp_question_line(line: str) -> Optional[MCQItem]:
@@ -316,6 +228,22 @@ def _parse_comp_question_line(line: str) -> Optional[MCQItem]:
     if len(parts) < 6:
         return None
     return MCQItem(q=parts[0], choices=parts[1:5], answer=parts[-1])
+
+
+def _append_sentence(sentences: List[Dict[str, str]], en: str, zh: str) -> None:
+    en = (en or "").strip()
+    zh = (zh or "").strip()
+    if en or zh:
+        sentences.append({"en": en, "zh": zh})
+
+
+def _backfill_vocab(vocab: List[VocabItem], sentences: List[Dict[str, str]]) -> None:
+    sentences_en = [(s.get("en") or "").strip() for s in sentences if (s.get("en") or "").strip()]
+    for item in vocab:
+        if not item.pos:
+            item.pos = _infer_pos(item.en, sentences_en)
+        if not item.zh:
+            item.zh = ZH_FALLBACK.get(item.en.strip().lower(), "")
 
 
 def parse_homework_text(text: str) -> Dict:
@@ -338,13 +266,10 @@ def parse_homework_text(text: str) -> Dict:
     pending_en: Optional[str] = None
     pending_header_value: Optional[str] = None
 
-    re_q = re.compile(r"^\s*Q\d*\s*:\s*(.*)$", re.IGNORECASE)
-    re_a = re.compile(r"^\s*A\d*\s*:\s*(.*)$", re.IGNORECASE)
-
     def flush_pending_en() -> None:
         nonlocal pending_en
         if pending_en:
-            sentences.append({"en": pending_en, "zh": ""})
+            _append_sentence(sentences, pending_en, "")
             pending_en = None
 
     for ln in lines:
@@ -354,6 +279,7 @@ def parse_homework_text(text: str) -> Dict:
         header_only = HEADER_ONLY_RE.match(ln)
         if header_only:
             header_name = header_only.group(1).strip().lower()
+            matched_header = False
             for key, aliases in SECTION_ALIASES.items():
                 if header_name in aliases:
                     section = key
@@ -361,9 +287,9 @@ def parse_homework_text(text: str) -> Dict:
                     current_q = None
                     if key != "sentences":
                         flush_pending_en()
-                    header_name = ""
+                    matched_header = True
                     break
-            if not header_name:
+            if matched_header:
                 continue
 
         if pending_header_value:
@@ -378,184 +304,129 @@ def parse_homework_text(text: str) -> Dict:
             pending_header_value = None
             continue
 
-        matched, after = _match_section(ln, "title")
-        if matched:
-            if after:
-                title = after
-            else:
-                pending_header_value = "title"
-            section = None
+        for key in SECTION_ALIASES.keys():
+            matched, after = _match_section(ln, key)
+            if not matched:
+                continue
+            section = key
             current_q = None
-            flush_pending_en()
-            continue
-
-        matched, after = _match_section(ln, "tags")
-        if matched:
-            if after:
-                tags = [x.strip() for x in re.split(r"[,，、]", after) if x.strip()]
-            else:
-                pending_header_value = "tags"
-            section = None
-            continue
-
-        matched, after = _match_section(ln, "vocab")
-        if matched:
-            section = "vocab"
-            current_q = None
-            flush_pending_en()
-            if after:
+            if key != "sentences":
+                flush_pending_en()
+            if key == "title":
+                if after:
+                    title = after
+                else:
+                    pending_header_value = "title"
+            elif key == "tags":
+                if after:
+                    tags = [x.strip() for x in re.split(r"[,，、]", after) if x.strip()]
+                else:
+                    pending_header_value = "tags"
+            elif key == "vocab" and after:
                 for tok in _split_vocab_tokens(after):
-                    it = _parse_vocab_token(tok)
-                    if it.en:
-                        vocab.append(it)
-            continue
-
-        matched, after = _match_section(ln, "sentences")
-        if matched:
-            section = "sentences"
-            current_q = None
-            flush_pending_en()
-            if after:
-                pending_en = EN_PREFIX_RE.sub("", after).strip()
-            continue
-
-        matched, after = _match_section(ln, "qa")
-        if matched:
-            section = "qa"
-            current_q = None
-            flush_pending_en()
-            continue
-
-        matched, after = _match_section(ln, "reading_title")
-        if matched:
-            section = "reading_title"
-            current_q = None
-            flush_pending_en()
-            if after:
-                reading_title = after
-            else:
-                pending_header_value = "reading_title"
-            continue
-
-        matched, after = _match_section(ln, "reading_text")
-        if matched:
-            section = "reading_text"
-            current_q = None
-            flush_pending_en()
-            if after:
+                    item = _parse_vocab_token(tok)
+                    if item.en:
+                        vocab.append(item)
+            elif key == "sentences" and after:
+                pending_en = after
+            elif key == "reading_title":
+                if after:
+                    reading_title = after
+                else:
+                    pending_header_value = "reading_title"
+            elif key == "reading_text" and after:
                 reading_lines.append(after)
-            continue
-
-        matched, after = _match_section(ln, "listening_title")
-        if matched:
-            section = "listening_title"
-            current_q = None
-            flush_pending_en()
-            if after:
-                listening_title = after
-            else:
-                pending_header_value = "listening_title"
-            continue
-
-        matched, after = _match_section(ln, "listening_text")
-        if matched:
-            section = "listening_text"
-            current_q = None
-            flush_pending_en()
-            if after:
+            elif key == "listening_title":
+                if after:
+                    listening_title = after
+                else:
+                    pending_header_value = "listening_title"
+            elif key == "listening_text" and after:
                 listening_lines.append(after)
-            continue
-
-        matched, after = _match_section(ln, "comp_questions")
-        if matched:
-            section = "comp_questions"
-            current_q = None
-            flush_pending_en()
-            if after:
+            elif key == "comp_questions" and after:
                 item = _parse_comp_question_line(after)
                 if item:
                     comp_questions.append(item)
-            continue
+            break
+        else:
+            if section == "vocab":
+                toks = _split_vocab_tokens(ln) if re.search(r"[,，、]", ln) else [ln]
+                for tok in toks:
+                    item = _parse_vocab_token(tok)
+                    if item.en:
+                        vocab.append(item)
+                continue
 
-        if section == "vocab":
-            toks = _split_vocab_tokens(ln)
-            for tok in toks:
-                it = _parse_vocab_token(tok)
-                if it.en:
-                    vocab.append(it)
-            continue
-
-        if section == "sentences":
-            if ZH_PREFIX_RE.match(ln):
-                zh = ZH_PREFIX_RE.sub("", ln).strip()
+            if section == "sentences":
+                m_en = EN_PREFIX_RE.match(ln)
+                if m_en:
+                    if pending_en:
+                        _append_sentence(sentences, pending_en, "")
+                    pending_en = (m_en.group(1) or "").strip()
+                    continue
+                m_zh = ZH_PREFIX_RE.match(ln)
+                if m_zh:
+                    zh = (m_zh.group(1) or "").strip()
+                    if pending_en:
+                        _append_sentence(sentences, pending_en, zh)
+                        pending_en = None
+                    else:
+                        _append_sentence(sentences, "", zh)
+                    continue
+                if _has_zh(ln):
+                    if pending_en:
+                        _append_sentence(sentences, pending_en, ln)
+                        pending_en = None
+                    else:
+                        _append_sentence(sentences, "", ln)
+                    continue
                 if pending_en:
-                    sentences.append({"en": pending_en, "zh": zh})
-                    pending_en = None
-                else:
-                    sentences.append({"en": "", "zh": zh})
+                    _append_sentence(sentences, pending_en, "")
+                pending_en = ln
                 continue
 
-            if EN_PREFIX_RE.match(ln):
-                en_line = EN_PREFIX_RE.sub("", ln).strip()
-                if pending_en:
-                    sentences.append({"en": pending_en, "zh": ""})
-                pending_en = en_line
+            if section == "qa":
+                qm = Q_RE.match(ln)
+                if qm:
+                    current_q = (qm.group(1) or "").strip()
+                    continue
+                am = A_RE.match(ln)
+                if am and current_q:
+                    qa.append(QAItem(q=current_q, a=(am.group(1) or "").strip()))
+                    current_q = None
                 continue
 
-            if _has_zh(ln):
-                if pending_en:
-                    sentences.append({"en": pending_en, "zh": ln})
-                    pending_en = None
-                else:
-                    sentences.append({"en": "", "zh": ln})
+            if section == "reading_text":
+                reading_lines.append(ln)
                 continue
-
-            if pending_en:
-                sentences.append({"en": pending_en, "zh": ""})
-            pending_en = ln
-            continue
-
-        if section == "qa":
-            qm = re_q.match(ln)
-            if qm:
-                current_q = (qm.group(1) or "").strip()
+            if section == "listening_text":
+                listening_lines.append(ln)
                 continue
-            am = re_a.match(ln)
-            if am and current_q:
-                qa.append(QAItem(q=current_q, a=(am.group(1) or "").strip()))
-                current_q = None
-            continue
-
-        if section == "reading_text":
-            reading_lines.append(ln)
-            continue
-
-        if section == "listening_text":
-            listening_lines.append(ln)
-            continue
-
-        if section == "comp_questions":
-            item = _parse_comp_question_line(ln)
-            if item:
-                comp_questions.append(item)
-            continue
+            if section == "comp_questions":
+                item = _parse_comp_question_line(ln)
+                if item:
+                    comp_questions.append(item)
+                continue
 
     flush_pending_en()
 
-    seen = set()
     dedup_vocab: List[VocabItem] = []
+    seen_vocab = set()
     for v in vocab:
-        key = (v.en.lower(), v.zh, v.pos)
-        if key in seen:
+        key = (v.en.strip().lower(), v.zh.strip(), v.pos.strip())
+        if not v.en or key in seen_vocab:
             continue
-        seen.add(key)
+        seen_vocab.add(key)
         dedup_vocab.append(v)
 
     norm_sents: List[Dict[str, str]] = []
+    seen_sent = set()
     for s in sentences:
-        en = re.sub(r"\s+", " ", (s.get("en") or "")).strip()
-        zh = re.sub(r"\s+", " ", (s.get("zh") or "")).strip()
-        if en or zh:
+        en = (s.get("en") or "").strip()
+        zh = (s.get("zh") or "").strip()
+        key = (en, zh)
+        if (en or zh) and key not in seen_sent:
+            seen_sent.add(key)
             norm_sents.append({"en": en, "zh": zh})
 
     _backfill_vocab(dedup_vocab, norm_sents)

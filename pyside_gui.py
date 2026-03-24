@@ -67,7 +67,7 @@ NEG_ALWAYS = (
     "abstract, surreal, cubism, expressionism, glitch, noise, watercolor, oil painting, sketch, lineart, "
     "lowpoly, 3d render, blurry, low quality, worst quality, messy background, "
     "deformed, disfigured, mutated, extra limbs, bad anatomy, bad hands, "
-    "text, watermark, logo, letters, signature"
+    "text, watermark, logo, letters, signature, gibberish typography, misspelled text, nonsense letters"
 )
 
 
@@ -96,6 +96,9 @@ class AppConfig:
     comfy_workflow_path: str = "assets/comfy/workflow_api.json"
     picture_cards_type: str = "Realistic"  # Realistic | Cartoon
     lesson_theme: str = "sky"  # sky | sky_tiles | strict_dark | fun_mission (legacy app/strict/fun alias internally)
+    picture_reader_theme: str = "fun_mission"
+    ocr_backend: str = "auto"
+    ocr_device: str = "cpu"
 
     # image generation backend
     image_backend: str = "comfyui"  # comfyui | cloudflare_flux | hf_endpoint
@@ -136,6 +139,9 @@ def _default_config(root_dir: Path) -> AppConfig:
         comfy_workflow_path=str((root_dir / "assets" / "comfy" / "workflow_api.json").resolve()),
         picture_cards_type="Realistic",
         lesson_theme="sky",
+        picture_reader_theme="fun_mission",
+        ocr_backend="auto",
+        ocr_device="cpu",
 
         image_backend="comfyui",
         img_width=768,
@@ -242,6 +248,9 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         comfy_workflow_path=str(data.get("comfy_workflow_path", base.comfy_workflow_path)),
         picture_cards_type=str(data.get("picture_cards_type", base.picture_cards_type)),
         lesson_theme=str(data.get("lesson_theme", base.lesson_theme)).strip().lower() or base.lesson_theme,
+        picture_reader_theme=str(data.get("picture_reader_theme", base.picture_reader_theme)).strip().lower() or base.picture_reader_theme,
+        ocr_backend=str(data.get("ocr_backend", base.ocr_backend)).strip().lower() or base.ocr_backend,
+        ocr_device=str(data.get("ocr_device", base.ocr_device)).strip().lower() or base.ocr_device,
         image_backend=str(data.get("image_backend", base.image_backend)),
         img_width=int(data.get("img_width", base.img_width)),
         img_height=int(data.get("img_height", base.img_height)),
@@ -259,6 +268,9 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
 
     _autofill_cfg_from_env(cfg)
     cfg.lesson_theme = _normalize_theme_value(cfg.lesson_theme)
+    cfg.picture_reader_theme = _normalize_theme_value(cfg.picture_reader_theme)
+    cfg.ocr_backend = (cfg.ocr_backend or "auto").strip().lower() or "auto"
+    cfg.ocr_device = (cfg.ocr_device or "cpu").strip().lower() or "cpu"
 
     # Write back a repaired normalized config (important)
     save_config(path, cfg)
@@ -282,6 +294,9 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "comfy_workflow_path": str(cfg.comfy_workflow_path),
         "picture_cards_type": str(cfg.picture_cards_type),
         "lesson_theme": str(cfg.lesson_theme),
+        "picture_reader_theme": str(cfg.picture_reader_theme),
+        "ocr_backend": str(cfg.ocr_backend),
+        "ocr_device": str(cfg.ocr_device),
         "image_backend": str(cfg.image_backend),
         "img_width": int(cfg.img_width),
         "img_height": int(cfg.img_height),
@@ -396,7 +411,8 @@ class PublishPresetDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Publish lesson options")
         self.setModal(True)
-        self.resize(420, 190)
+        self.resize(460, 220)
+        self.setStyleSheet("QDialog{background:#fff7ed;} QLabel{color:#7c2d12;} QComboBox{background:white;border:1px solid #fdba74;border-radius:10px;padding:6px 10px;color:#7c2d12;} QComboBox QAbstractItemView{background:white;color:#7c2d12;selection-background-color:#fed7aa;selection-color:#7c2d12;border:1px solid #fdba74;} QPushButton{background:#fb923c;color:white;border:0;border-radius:10px;padding:7px 12px;font-weight:700;} QPushButton:hover{background:#f97316;}")
         lay = QtWidgets.QVBoxLayout(self)
 
         intro = QtWidgets.QLabel("Choose the lesson family and publish surface for this publish run.")
@@ -679,8 +695,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cfg = cfg
         self.cfg_path = cfg_path
 
-        self.setWindowTitle("SkyEd Automation — Studio")
+        self.setWindowTitle("SkyEd Automation — Qt")
         self.resize(1600, 900)
+        self.asset_batcher_window = None
+        logo_icon = (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
+        if logo_icon.exists():
+            self.setWindowIcon(QtGui.QIcon(str(logo_icon)))
 
         self.comfy_proc = ProcessHarness(self)
         self.pipe_proc = ProcessHarness(self)
@@ -710,42 +730,6 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(450, self.load_voices_background)
         QtCore.QTimer.singleShot(0, self.apply_default_sizes)
 
-    def _apply_branding(self) -> None:
-        self.setStyleSheet("""
-        QMainWindow { background:#eef4ff; }
-        QTabWidget::pane { border:1px solid #d9e5f6; border-radius:16px; background:#f8fbff; }
-        QTabBar::tab { background:#eaf2ff; border:1px solid #d7e4f8; padding:10px 16px; margin-right:4px; border-top-left-radius:10px; border-top-right-radius:10px; font-weight:600; }
-        QTabBar::tab:selected { background:#ffffff; color:#123047; }
-        QGroupBox { font-weight:700; border:1px solid #dbe7f5; border-radius:16px; margin-top:12px; background:#ffffff; }
-        QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 6px; color:#22415f; }
-        QPushButton, QToolButton { background:#ffffff; border:1px solid #d7e3f4; border-radius:12px; padding:8px 12px; font-weight:600; }
-        QPushButton:hover, QToolButton:hover { border-color:#7cc7ff; }
-        QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { background:#ffffff; border:1px solid #d7e3f4; border-radius:12px; padding:6px 8px; }
-        QStatusBar { background:#ffffff; border-top:1px solid #d7e3f4; }
-        """)
-
-    def _brand_panel(self, title: str, subtitle: str, chips: List[str]) -> QtWidgets.QFrame:
-        frame = QtWidgets.QFrame()
-        frame.setStyleSheet("QFrame{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #0f766e, stop:1 #38bdf8);border:0;border-radius:20px;color:white;} QLabel{color:white;} ")
-        lay = QtWidgets.QVBoxLayout(frame)
-        lay.setContentsMargins(18, 18, 18, 18)
-        ttl = QtWidgets.QLabel(title)
-        ttl.setStyleSheet("QLabel{font-size:16px;font-weight:800;color:white;}")
-        sub = QtWidgets.QLabel(subtitle)
-        sub.setWordWrap(True)
-        sub.setStyleSheet("QLabel{font-size:12px;color:rgba(255,255,255,0.92);}")
-        lay.addWidget(ttl)
-        lay.addWidget(sub)
-        chip_wrap = QtWidgets.QHBoxLayout()
-        chip_wrap.setSpacing(8)
-        for chip in chips:
-            lbl = QtWidgets.QLabel(chip)
-            lbl.setStyleSheet("QLabel{background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.22);border-radius:999px;padding:6px 10px;font-weight:700;color:white;}")
-            chip_wrap.addWidget(lbl)
-        chip_wrap.addStretch(1)
-        lay.addLayout(chip_wrap)
-        return frame
-
     def resolve_workflow_path(self) -> Path:
         raw = (self.cfg.comfy_workflow_path or "").strip()
         if not raw:
@@ -755,19 +739,55 @@ class MainWindow(QtWidgets.QMainWindow):
             return p
         return (self.root_dir / p).resolve()
 
+    def _choose_publish_theme(self) -> Optional[Tuple[str, str, str]]:
+        selected_theme = _normalize_theme_value(self.cfg.lesson_theme)
+        dlg = PublishPresetDialog(parent=self, current_theme=selected_theme)
+        dlg.raise_()
+        dlg.activateWindow()
+        if dlg.exec() != int(QtWidgets.QDialog.DialogCode.Accepted):
+            self.append_log("[Publish] cancelled by user\n")
+            return None
+        selected_theme = dlg.selected_theme()
+        if selected_theme == "sky_tiles":
+            selected_lesson_mode = "kid_homework"
+            selected_surface_variant = "tiles"
+        elif selected_theme == "strict_dark":
+            selected_lesson_mode = "reading_listening"
+            selected_surface_variant = "strict_dark"
+        else:
+            selected_lesson_mode = "standard_homework"
+            selected_surface_variant = "classic"
+        self.cfg.lesson_theme = selected_theme
+        if hasattr(self, "combo_lesson_theme"):
+            self.combo_lesson_theme.setCurrentText(selected_theme)
+        save_config(self.cfg_path, self.cfg)
+        return selected_theme, selected_lesson_mode, selected_surface_variant
+
+    def run_generate(self) -> None:
+        self.run_pipeline("generate")
+
+    def run_generate_publish(self) -> None:
+        self.run_pipeline("generate_publish")
+
+    def run_publish_only(self) -> None:
+        self.run_pipeline("publish_only")
+
     def _build_ui(self) -> None:
         tb = QtWidgets.QToolBar("Main")
+        tb.setObjectName("MainToolbar")
         tb.setMovable(False)
         tb.setIconSize(QtCore.QSize(18, 18))
         self.addToolBar(tb)
 
         tb.setStyleSheet(
             """
-            QToolBar { spacing: 6px; padding: 4px; }
-            QToolButton { padding: 6px 10px; font-size: 10pt; }
-            QComboBox { min-height: 28px; padding: 1px 6px; font-size: 10pt; }
+            QToolBar { spacing: 8px; padding: 8px 10px; background:#F4F8FC; border-bottom:1px solid #D9E7F5; }
+            QToolButton { background:#ffffff; border:1px solid #D7E5F2; border-radius:10px; padding:8px 12px; font-size:10pt; font-weight:700; color:#16324A; }
+            QToolButton:hover { border-color:#007BFF; background:#F8FBFF; }
+            QToolButton:pressed { background:#EAF4FF; }
+            QComboBox { min-height: 32px; padding: 2px 8px; font-size: 10pt; background:#ffffff; border:1px solid #D7E5F2; border-radius:10px; color:#16324A; }
             QSlider { min-height: 28px; }
-            QLabel { font-size: 10pt; }
+            QLabel { font-size: 10pt; color:#16324A; }
             """
         )
 
@@ -844,6 +864,7 @@ class MainWindow(QtWidgets.QMainWindow):
         tb.addSeparator()
         add_btn("Generate", lambda: self.run_pipeline(mode="generate"))
         add_btn("Generate + Publish", lambda: self.run_pipeline(mode="generate_publish"))
+        add_btn("Asset Batcher", self.open_asset_batcher)
 
         spacer = QtWidgets.QWidget()
         spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
@@ -871,7 +892,7 @@ class MainWindow(QtWidgets.QMainWindow):
         more_btn.setMenu(more_menu)
 
         act_refresh_voices.triggered.connect(self.load_voices_background)
-        act_pub_only.triggered.connect(lambda: self.run_pipeline(mode="publish_only"))
+        act_pub_only.triggered.connect(self.run_publish_only)
         act_stop.triggered.connect(self.stop_pipeline)
         act_test_en.triggered.connect(lambda: self.test_tts("en"))
         act_test_zh.triggered.connect(lambda: self.test_tts("zh"))
@@ -879,6 +900,9 @@ class MainWindow(QtWidgets.QMainWindow):
         act_open.triggered.connect(lambda: webbrowser.open(self.cfg.comfy_url))
         act_start.triggered.connect(self.start_comfy)
         act_stop_comfy.triggered.connect(self.stop_comfy)
+
+        tb.addSeparator()
+        tb.addWidget(self._build_logo_label(42))
 
         self.hsplit = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.hsplit.setChildrenCollapsible(False)
@@ -950,6 +974,112 @@ class MainWindow(QtWidgets.QMainWindow):
         g.setStyleSheet("QGroupBox { font-weight: 600; }")
         return g
 
+    def _logo_path(self) -> Path:
+        return (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
+
+    def _build_logo_label(self, max_size: int = 96) -> QtWidgets.QLabel:
+        label = QtWidgets.QLabel()
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        label.setMinimumSize(max_size, max_size)
+        label.setMaximumSize(max_size, max_size)
+        label.setStyleSheet("QLabel{background:transparent;border:0;}")
+        logo_path = self._logo_path()
+        if logo_path.exists():
+            pix = QtGui.QPixmap(str(logo_path))
+            if not pix.isNull():
+                label.setPixmap(pix.scaled(max_size, max_size, QtCore.Qt.AspectRatioMode.KeepAspectRatio, QtCore.Qt.TransformationMode.SmoothTransformation))
+        return label
+
+    def open_asset_batcher(self) -> None:
+        try:
+            if self.asset_batcher_window is None:
+                from skyed_asset_batcher.app import MainWindow as AssetBatcherMainWindow
+
+                self.asset_batcher_window = AssetBatcherMainWindow(
+                    root_dir=self.root_dir,
+                    config_file=(self.root_dir / "skyed_batcher_config.json").resolve(),
+                )
+                self.asset_batcher_window.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
+                self.asset_batcher_window.destroyed.connect(self._on_asset_batcher_closed)
+            self.asset_batcher_window.show()
+            self.asset_batcher_window.raise_()
+            self.asset_batcher_window.activateWindow()
+        except Exception as exc:
+            self.append_log(f"[Asset Batcher] launch failed: {type(exc).__name__}: {exc}\n")
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Asset Batcher",
+                f"Could not open Asset Batcher.\n\n{type(exc).__name__}: {exc}",
+            )
+
+    def _on_asset_batcher_closed(self, *_args) -> None:
+        self.asset_batcher_window = None
+
+    def _apply_branding(self) -> None:
+        self.setWindowTitle("SkyEd Automation — Studio")
+        self.setStyleSheet("""
+        QMainWindow { background:#F4F8FC; }
+        QTabWidget::pane { border:1px solid #D9E7F5; border-radius:16px; background:#ffffff; }
+        QTabBar::tab { background:#EEF5FF; border:1px solid #D7E5F2; padding:10px 16px; margin-right:4px; border-top-left-radius:10px; border-top-right-radius:10px; font-weight:700; color:#16324A; }
+        QTabBar::tab:selected { background:#ffffff; color:#007BFF; border-bottom-color:#ffffff; }
+        QGroupBox { font-weight:700; border:1px solid #D9E7F5; border-radius:16px; margin-top:12px; background:#ffffff; color:#16324A; }
+        QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 6px; color:#16324A; }
+        QPushButton, QToolButton { background:#ffffff; border:1px solid #D7E5F2; border-radius:12px; padding:8px 12px; font-weight:700; color:#16324A; }
+        QPushButton:hover, QToolButton:hover { border-color:#007BFF; background:#F8FBFF; }
+        QPushButton:pressed, QToolButton:pressed { background:#EAF4FF; }
+        QPlainTextEdit, QLineEdit, QSpinBox, QDoubleSpinBox { background:#ffffff; border:1px solid #D7E5F2; border-radius:12px; padding:6px 8px; color:#16324A; selection-background-color:#CCE4FF; selection-color:#16324A; }
+        QComboBox { background:#ffffff; border:1px solid #D7E5F2; border-radius:12px; padding:6px 10px; color:#16324A; selection-background-color:#CCE4FF; selection-color:#16324A; }
+        QComboBox:hover { border-color:#007BFF; }
+        QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width:26px; border-left:1px solid #E4EEF8; background:#F8FBFF; border-top-right-radius:12px; border-bottom-right-radius:12px; }
+        QComboBox QAbstractItemView { background:#ffffff; color:#16324A; border:1px solid #D7E5F2; selection-background-color:#EAF4FF; selection-color:#16324A; outline:0; }
+        QMenu { background:#ffffff; border:1px solid #D7E5F2; color:#16324A; }
+        QMenu::item:selected { background:#EAF4FF; color:#16324A; }
+        QStatusBar { background:#ffffff; border-top:1px solid #D9E7F5; color:#16324A; }
+        QLabel { color:#16324A; }
+        QSplitter::handle { background:#E2ECF7; }
+        """)
+
+    def _brand_panel(self, title: str, subtitle: str, chips: List[str]) -> QtWidgets.QFrame:
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet(
+            "QFrame{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #007BFF, stop:1 #FC7B13);border:0;border-radius:22px;}"
+            "QLabel{color:white;background:transparent;border:0;}"
+        )
+        lay = QtWidgets.QVBoxLayout(frame)
+        lay.setContentsMargins(20, 20, 20, 20)
+        lay.setSpacing(12)
+
+        top_row = QtWidgets.QHBoxLayout()
+        top_row.setSpacing(14)
+
+        text_col = QtWidgets.QVBoxLayout()
+        text_col.setSpacing(6)
+        ttl = QtWidgets.QLabel(title)
+        ttl.setStyleSheet("QLabel{font-size:18px;font-weight:800;color:white;}")
+        sub = QtWidgets.QLabel(subtitle)
+        sub.setWordWrap(True)
+        sub.setStyleSheet("QLabel{font-size:12px;color:rgba(255,255,255,0.96);}")
+        text_col.addWidget(ttl)
+        text_col.addWidget(sub)
+
+        top_row.addLayout(text_col, 1)
+        top_row.addStretch(1)
+        top_row.addWidget(self._build_logo_label(108), 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+        lay.addLayout(top_row)
+
+        chip_row = QtWidgets.QHBoxLayout()
+        chip_row.setSpacing(8)
+        for chip in chips:
+            lbl = QtWidgets.QLabel(chip)
+            lbl.setStyleSheet(
+                "QLabel{background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.26);"
+                "border-radius:999px;padding:6px 10px;font-weight:700;color:white;}"
+            )
+            chip_row.addWidget(lbl)
+        chip_row.addStretch(1)
+        lay.addLayout(chip_row)
+        return frame
+
     def _build_tab_quick_actions(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
@@ -957,7 +1087,11 @@ class MainWindow(QtWidgets.QMainWindow):
         lesson_host = (_clean_env_value(os.getenv("WP_BASE_URL") or os.getenv("WP_BASE") or "https://skyedu.fun")).rstrip("/") or "https://skyedu.fun"
         quiz_host = _clean_env_value(os.getenv("QUIZ_PUBLIC_BASE") or "https://skyedu.fun/quiz")
         tag_host = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
-        lay.addWidget(self._brand_panel("Sky Education Studio", "Generate, check, publish, and monitor lesson packages without changing the existing workflow.", [f"WordPress: {lesson_host}", f"Quiz: {quiz_host}", f"tag_s: {tag_host}"]))
+        lay.addWidget(self._brand_panel(
+            "Sky Education Studio",
+            "Generate, publish, and monitor lesson packages without breaking the original workflow. Generate + Publish still opens the publish-surface chooser for that run.",
+            [f"WordPress: {lesson_host}", f"Quiz: {quiz_host}", f"tag_s: {tag_host}"]
+        ))
 
         g1 = self._group_box("Pipeline")
         l1 = QtWidgets.QVBoxLayout(g1)
@@ -969,9 +1103,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for b in (btn1, btn2, btn3, btn4, btn5):
             b.setMinimumHeight(36)
             l1.addWidget(b)
-        btn1.clicked.connect(lambda: self.run_pipeline("generate"))
-        btn2.clicked.connect(lambda: self.run_pipeline("generate_publish"))
-        btn3.clicked.connect(lambda: self.run_pipeline("publish_only"))
+        btn1.clicked.connect(self.run_generate)
+        btn2.clicked.connect(self.run_generate_publish)
+        btn3.clicked.connect(self.run_publish_only)
         btn4.clicked.connect(self.run_picture_reader_publish)
         btn5.clicked.connect(self.stop_pipeline)
 
@@ -989,11 +1123,18 @@ class MainWindow(QtWidgets.QMainWindow):
         bS.clicked.connect(self.start_comfy)
         bT.clicked.connect(self.stop_comfy)
 
+        g3 = self._group_box("Mini apps")
+        l3 = QtWidgets.QVBoxLayout(g3)
+        btn_batcher = QtWidgets.QPushButton("Open Asset Batcher")
+        btn_batcher.setMinimumHeight(36)
+        btn_batcher.clicked.connect(self.open_asset_batcher)
+        l3.addWidget(btn_batcher)
+
         lay.addWidget(g1)
         lay.addWidget(g2)
+        lay.addWidget(g3)
         lay.addStretch(1)
         return w
-
     def _build_tab_audio(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
@@ -1161,14 +1302,18 @@ class MainWindow(QtWidgets.QMainWindow):
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
 
-        g = self._group_box("WordPress")
-        fl = QtWidgets.QFormLayout(g)
-
         wp_base = (_clean_env_value(os.getenv("WP_BASE_URL") or os.getenv("WP_BASE") or "https://skyedu.fun")).rstrip("/") or "https://skyedu.fun"
         quiz_base = _clean_env_value(os.getenv("QUIZ_PUBLIC_BASE") or "https://skyedu.fun/quiz")
         tags_base = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
 
-        lay.addWidget(self._brand_panel("Publishing Surface", "The ECS migration target is now the main Sky Education domain. Keep publish defaults aligned with the live server before pushing lessons.", [f"Site: {wp_base}", f"Quiz base: {quiz_base}", f"tag_s base: {tags_base}"]))
+        lay.addWidget(self._brand_panel(
+            "Publishing Surface",
+            "The ECS migration target is now the main Sky Education domain. Publish actions still open a popup so you can choose the surface for that run.",
+            [f"Site: {wp_base}", f"Quiz base: {quiz_base}", f"tag_s base: {tags_base}"]
+        ))
+
+        g = self._group_box("WordPress")
+        fl = QtWidgets.QFormLayout(g)
 
         lbl_base = QtWidgets.QLabel(f"Base URL: {wp_base}")
         lbl_base.setWordWrap(True)
@@ -1185,6 +1330,64 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         tip.setWordWrap(True)
         fl.addRow(tip)
+
+        lay.addWidget(g)
+        lay.addStretch(1)
+        return w
+
+
+    def _build_tab_picture_reader(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+
+        lay.addWidget(self._brand_panel(
+            "Picture Reader Publisher",
+            "Upload a bilingual picture page, parse the text, build a mobile-friendly reading frame, and publish it to Sky Education.",
+            ["Single mobile reading block", "Touch-to-listen bilingual replay", "WordPress shortcode publishing"]
+        ))
+
+        g = self._group_box("Picture Reader")
+        fl = QtWidgets.QFormLayout(g)
+
+        self.edit_reader_image = QtWidgets.QLineEdit()
+        self.edit_reader_image.setPlaceholderText("Select the source picture with bilingual text...")
+        btn_browse = QtWidgets.QPushButton("Browse Image")
+        btn_browse.setMinimumHeight(34)
+        btn_browse.clicked.connect(self.browse_reader_image)
+        row_image = QtWidgets.QHBoxLayout()
+        row_image.addWidget(self.edit_reader_image, 1)
+        row_image.addWidget(btn_browse)
+        fl.addRow("Source image:", row_image)
+
+        self.edit_reader_title = QtWidgets.QLineEdit()
+        self.edit_reader_title.setPlaceholderText("Optional page title override")
+        fl.addRow("Page title:", self.edit_reader_title)
+
+        self.combo_reader_theme = QtWidgets.QComboBox()
+        self.combo_reader_theme.addItems(["fun_mission", "sky", "sky_tiles", "strict_dark"])
+        self.combo_reader_theme.setCurrentText(_normalize_theme_value(getattr(self.cfg, "picture_reader_theme", "fun_mission")))
+        fl.addRow("Reader theme:", self.combo_reader_theme)
+
+        self.combo_reader_ocr_backend = QtWidgets.QComboBox()
+        self.combo_reader_ocr_backend.addItems(["auto", "tesseract", "easyocr", "paddle"])
+        self.combo_reader_ocr_backend.setCurrentText((getattr(self.cfg, "ocr_backend", "auto") or "auto").strip().lower())
+        fl.addRow("OCR backend:", self.combo_reader_ocr_backend)
+
+        self.combo_reader_ocr_device = QtWidgets.QComboBox()
+        self.combo_reader_ocr_device.addItems(["cpu", "cuda"])
+        self.combo_reader_ocr_device.setCurrentText((getattr(self.cfg, "ocr_device", "cpu") or "cpu").strip().lower())
+        fl.addRow("OCR device:", self.combo_reader_ocr_device)
+
+        note = QtWidgets.QLabel(
+            "This mode parses a bilingual image page, keeps the sentence order, builds one mobile reading block, generates touch-to-listen audio for every line, and publishes a phone-first reading page. Fun Mission is the default reader theme. Auto OCR now scores every available backend and keeps the best result."
+        )
+        note.setWordWrap(True)
+        fl.addRow(note)
+
+        btn_publish = QtWidgets.QPushButton("Parse Picture + Publish")
+        btn_publish.setMinimumHeight(38)
+        btn_publish.clicked.connect(self.run_picture_reader_publish)
+        fl.addRow(btn_publish)
 
         lay.addWidget(g)
         lay.addStretch(1)
@@ -1266,59 +1469,6 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             QtWidgets.QMessageBox.information(self, "Image cache", "No image cache/spec/report files found in the latest lesson folder.")
 
-
-    def browse_reader_image(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self,
-            "Select bilingual picture",
-            str(self.root_dir),
-            "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"
-        )
-        if path:
-            self.edit_reader_image.setText(path)
-            self.status.showMessage(f"Picture selected: {Path(path).name}")
-
-    def run_picture_reader_publish(self) -> None:
-        self._clear_error_box()
-        script = self._pipeline_script_path()
-        if not script.exists():
-            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
-            return
-        if not hasattr(self, "edit_reader_image"):
-            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Picture Reader controls are not available.")
-            return
-        image_path = Path(self.edit_reader_image.text().strip()).expanduser()
-        if not image_path.exists():
-            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Please select an existing image file first.")
-            return
-        title = self.edit_reader_title.text().strip()
-
-        env = os.environ.copy()
-        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
-        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
-        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
-        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
-        wf = self.resolve_workflow_path()
-        env["COMFY_URL"] = str(self.cfg.comfy_url)
-        env["COMFY_WORKFLOW"] = str(wf)
-
-        args: List[str] = [
-            str(script),
-            "--page-kind", "picture_reader",
-            "--input-image", str(image_path),
-            "--theme", _normalize_theme_value(self.cfg.lesson_theme),
-            "--lesson-mode", "standard_homework",
-            "--surface-variant", "classic",
-            "--publish",
-        ]
-        if title:
-            args.extend(["--reader-title", title])
-
-        self.append_log(f"[PictureReader] IMAGE={image_path}\n")
-        if title:
-            self.append_log(f"[PictureReader] TITLE={title}\n")
-        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
-
     def _clear_images_grid(self) -> None:
         if not hasattr(self, "images_grid"):
             return
@@ -1386,6 +1536,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.append_log(f"[Pipeline] FINISHED exit_code={exit_code}\n")
         QtCore.QTimer.singleShot(200, self.refresh_image_preview)
 
+    def _clear_error_box(self) -> None:
+        if hasattr(self, "error_box") and self.error_box is not None:
+            self.error_box.clear()
+        self._error_lines_seen.clear()
+        self._traceback_buffer = []
+        self._traceback_active = False
+
+    def _append_error_line(self, line: str) -> None:
+        clean = line.rstrip("\r\n")
+        if not clean:
+            return
+        if clean in self._error_lines_seen:
+            return
+        self._error_lines_seen.add(clean)
+        if hasattr(self, "error_box") and self.error_box is not None:
+            self.error_box.moveCursor(QtGui.QTextCursor.End)
+            self.error_box.insertPlainText(clean + "\n")
+            self.error_box.moveCursor(QtGui.QTextCursor.End)
+
     def append_log(self, text: str, prefix: str = "") -> None:
         if not text:
             return
@@ -1400,6 +1569,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log.moveCursor(QtGui.QTextCursor.End)
         self.log.insertPlainText(text)
         self.log.moveCursor(QtGui.QTextCursor.End)
+
+        for raw_line in text.splitlines():
+            line = raw_line.rstrip()
+            low = line.lower()
+            if line.startswith("Traceback"):
+                self._traceback_active = True
+                self._traceback_buffer = [line]
+                self._append_error_line(line)
+                continue
+            if self._traceback_active:
+                self._traceback_buffer.append(line)
+                self._append_error_line(line)
+                if line.startswith(("AttributeError:", "RuntimeError:", "ValueError:", "TypeError:", "Exception:", "FileNotFoundError:", "ModuleNotFoundError:")):
+                    self._traceback_active = False
+                continue
+            if "error" in low or "traceback" in low or "exception" in low:
+                self._append_error_line(line)
 
     def default_editor_path(self) -> Path:
         p = Path(self.cfg.editor_file)
@@ -1761,6 +1947,74 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log(f"[Images] apply failed: {e}\n")
             QtWidgets.QMessageBox.critical(self, "Apply failed", str(e))
 
+
+    def browse_reader_image(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select bilingual picture",
+            str(self.root_dir),
+            "Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff)"
+        )
+        if path:
+            self.edit_reader_image.setText(path)
+            self.status.showMessage(f"Picture selected: {Path(path).name}")
+
+    def run_picture_reader_publish(self) -> None:
+        script = self._pipeline_script_path()
+        if not script.exists():
+            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
+            return
+        if not hasattr(self, "edit_reader_image"):
+            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Picture Reader controls are not available.")
+            return
+        image_path = Path(self.edit_reader_image.text().strip()).expanduser()
+        if not image_path.exists():
+            QtWidgets.QMessageBox.warning(self, "Picture Reader", "Please select an existing image file first.")
+            return
+        title = self.edit_reader_title.text().strip()
+        selected_theme = _normalize_theme_value(self.combo_reader_theme.currentText() if hasattr(self, "combo_reader_theme") else getattr(self.cfg, "picture_reader_theme", "fun_mission"))
+        selected_ocr_backend = (self.combo_reader_ocr_backend.currentText().strip().lower() if hasattr(self, "combo_reader_ocr_backend") else getattr(self.cfg, "ocr_backend", "auto")) or "auto"
+        selected_ocr_device = (self.combo_reader_ocr_device.currentText().strip().lower() if hasattr(self, "combo_reader_ocr_device") else getattr(self.cfg, "ocr_device", "cpu")) or "cpu"
+        self.cfg.picture_reader_theme = selected_theme
+        self.cfg.ocr_backend = selected_ocr_backend
+        self.cfg.ocr_device = selected_ocr_device
+        save_config(self.cfg_path, self.cfg)
+
+        env = os.environ.copy()
+        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
+        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
+        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
+        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
+        wf = self.resolve_workflow_path()
+        env["COMFY_URL"] = str(self.cfg.comfy_url)
+        env["COMFY_WORKFLOW"] = str(wf)
+
+        selected_surface_variant = "classic"
+        if selected_theme == "sky_tiles":
+            selected_surface_variant = "tiles"
+        elif selected_theme == "strict_dark":
+            selected_surface_variant = "strict_dark"
+
+        args: List[str] = [
+            str(script),
+            "--page-kind", "picture_reader",
+            "--input-image", str(image_path),
+            "--theme", selected_theme,
+            "--lesson-mode", "standard_homework",
+            "--surface-variant", selected_surface_variant,
+            "--ocr-backend", selected_ocr_backend,
+            "--ocr-device", selected_ocr_device,
+            "--publish",
+        ]
+        if title:
+            args.extend(["--reader-title", title])
+
+        self.append_log(f"[PictureReader] IMAGE={image_path}\n")
+        self.append_log(f"[PictureReader] THEME={selected_theme} OCR={selected_ocr_backend}/{selected_ocr_device}\n")
+        if title:
+            self.append_log(f"[PictureReader] TITLE={title}\n")
+        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
+
     def _pipeline_script_path(self) -> Path:
         return (Path(self.cfg.project_workdir) / self.cfg.pipeline_script).resolve()
 
@@ -1777,24 +2031,10 @@ class MainWindow(QtWidgets.QMainWindow):
         selected_surface_variant = "classic"
 
         if mode in ("generate_publish", "publish_only"):
-            dlg = PublishPresetDialog(parent=self, current_theme=selected_theme)
-            if dlg.exec() != int(QtWidgets.QDialog.DialogCode.Accepted):
-                self.append_log("[Publish] cancelled by user\n")
+            chosen = self._choose_publish_theme()
+            if not chosen:
                 return
-            selected_theme = dlg.selected_theme()
-            if selected_theme == "sky_tiles":
-                selected_lesson_mode = "kid_homework"
-                selected_surface_variant = "tiles"
-            elif selected_theme == "strict_dark":
-                selected_lesson_mode = "reading_listening"
-                selected_surface_variant = "strict_dark"
-            else:
-                selected_lesson_mode = "standard_homework"
-                selected_surface_variant = "classic"
-            self.cfg.lesson_theme = selected_theme
-            if hasattr(self, "combo_lesson_theme"):
-                self.combo_lesson_theme.setCurrentText(selected_theme)
-            save_config(self.cfg_path, self.cfg)
+            selected_theme, selected_lesson_mode, selected_surface_variant = chosen
         else:
             if hasattr(self, "combo_lesson_theme"):
                 value = self.combo_lesson_theme.currentText().strip().lower()

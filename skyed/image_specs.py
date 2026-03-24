@@ -4,17 +4,17 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List
 
-from .image_semantics import clean_visual_label, resolve_visual_plan, TEXT_EXCLUSION_TOKENS
+from .image_semantics import TEXT_EXCLUSION_TOKENS, clean_visual_label, resolve_visual_plan
+from .parser import parse_homework_text
 
 ANCHOR_PHRASES = [
-    "child-friendly ESL illustration",
-    "literal meaning shown clearly",
-    "single main concept",
-    "clean composition",
+    "ESL lesson illustration for children",
+    "clean educational illustration",
+    "clear literal meaning",
+    "plain or uncluttered background",
     "safe for young learners",
-    "plain or softly simplified background",
 ]
 
 POS_ALIASES = {
@@ -28,32 +28,31 @@ POS_ALIASES = {
     "adverb": "adverb",
     "prep": "preposition",
     "preposition": "preposition",
+    "phrase": "phrase",
+    "expression": "phrase",
     "pron": "pronoun",
     "pronoun": "pronoun",
+    "question": "question_word",
+    "question_word": "question_word",
+    "question word": "question_word",
     "det": "determiner",
     "determiner": "determiner",
     "num": "number",
     "number": "number",
-    "question": "question_word",
-    "question word": "question_word",
-    "question_word": "question_word",
-    "word": "noun",
     "time": "time",
-    "phrase": "phrase",
-    "expression": "expression",
 }
 
 SEMANTIC_DEFAULT_NEGATIVES = {
-    "noun": ["abstract symbol", "logo", "typography only", "blur", "still life unless object is the exact noun"],
+    "noun": ["abstract symbol", "logo", "typography only", "blur"],
     "verb": ["isolated object", "static still life", "logo", "typography only", "abstract concept art"],
     "adjective": ["isolated stationery", "empty desk", "logo", "typography only", "abstract art"],
     "time": ["isolated object", "logo", "typography only", "abstract symbol"],
     "phrase": ["logo", "typography only", "abstract concept art"],
-    "expression": ["logo", "typography only", "abstract concept art"],
     "preposition": ["logo", "typography only", "abstract concept art", "floating text labels"],
-    "number": ["written numeral", "calendar page", "poster with numbers", "typography only"],
-    "question_word": ["speech bubble text", "written word", "poster", "worksheet"],
-    "pronoun": ["name tag", "written label", "poster"],
+    "pronoun": ["logo", "typography only", "floating text labels"],
+    "question_word": ["speech bubble text", "logo", "floating text labels"],
+    "number": ["written digits", "poster numbers", "text labels"],
+    "determiner": ["logo", "typography only"],
 }
 
 WORD_OVERRIDES = {
@@ -78,47 +77,12 @@ WORD_OVERRIDES = {
         "render_mode": "action_scene",
         "scene_type": "literal_action_scene",
     },
-    "homework": {
-        "scene": "a student doing homework at a desk with notebook, pencil, and schoolbook",
-        "include": ["student", "desk", "notebook", "pencil", "schoolbook"],
-        "exclude": ["decorative objects only", "unclear papers", "still life only"],
-        "render_mode": "action_scene",
-        "scene_type": "literal_action_scene",
-    },
     "bag": {
         "scene": "a child's schoolbag or backpack in a school setting, or a child carrying the backpack",
         "include": ["schoolbag", "backpack", "child or desk", "school context"],
         "exclude": ["handbag", "luxury bag", "fashion bag", "tote bag"],
         "render_mode": "single_object",
         "scene_type": "literal_object_scene",
-    },
-    "weekend": {
-        "scene": "a family spending the weekend together, child-friendly home or park scene",
-        "include": ["family", "child", "weekend activity", "home or park"],
-        "exclude": ["camera", "isolated object", "logo", "calendar icon only"],
-        "render_mode": "attribute_scene",
-        "scene_type": "time_context_scene",
-    },
-    "tired": {
-        "scene": "a tired child after school, yawning or resting with a schoolbag nearby",
-        "include": ["child", "tired face", "yawning or resting", "after school context"],
-        "exclude": ["stationery only", "vase", "random desk objects", "still life"],
-        "render_mode": "attribute_scene",
-        "scene_type": "emotion_state_scene",
-    },
-    "busy": {
-        "scene": "a busy child doing several school tasks at a desk, books and homework visible",
-        "include": ["child", "desk", "books", "homework", "active working"],
-        "exclude": ["random crowd", "unclear action", "abstract activity"],
-        "render_mode": "attribute_scene",
-        "scene_type": "emotion_state_scene",
-    },
-    "happy": {
-        "scene": "a happy smiling child in a school or homework context, clear joyful expression",
-        "include": ["child", "smile", "joyful face", "school or homework context"],
-        "exclude": ["stationery only", "objects only", "empty desk", "still life"],
-        "render_mode": "attribute_scene",
-        "scene_type": "emotion_state_scene",
     },
 }
 
@@ -147,19 +111,13 @@ class ImageSpec:
     must_include: list[str] = field(default_factory=list)
     must_exclude: list[str] = field(default_factory=list)
     fallback_label: str = ""
-    semantic_class: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-_HEADER_RE = re.compile(r"^\s*#\s*([A-Za-z ]+)\s*:\s*(.*?)\s*$")
-_VOCAB_LINE_RE = re.compile(r"\s*([A-Za-z_ ]+)\s*:\s*([^,]+)")
-
-
 def normalize_pos(pos: str) -> str:
-    pos = re.sub(r"\s+", " ", (pos or "").strip().lower())
-    return POS_ALIASES.get(pos, pos or "noun")
+    return POS_ALIASES.get((pos or "").strip().lower(), (pos or "noun").strip().lower() or "noun")
 
 
 def slugify(text: str) -> str:
@@ -172,59 +130,25 @@ def infer_scene_type(pos: str, word: str) -> str:
     return build_image_spec(item).scene_type
 
 
-def _context_hint(example_en: str, clean_word: str) -> str:
+def _context_hint(example_en: str) -> str:
     ex = (example_en or "").strip()
     if not ex:
         return ""
     ex = re.sub(r"\s+", " ", ex)
     ex = ex.replace("'", "").replace('"', "")
-    if len(ex) > 80:
-        ex = ex[:80].rsplit(" ", 1)[0]
-    if not ex:
-        return ""
-    if clean_word and clean_word.lower() in ex.lower():
-        return f"scene inspired by lesson usage without any visible words"
-    return ""
-
-
-def _semantic_class(pos: str, render_mode: str, scene_type: str) -> str:
-    if pos == "number" or render_mode == "counting_scene":
-        return "number"
-    if pos == "question_word" or render_mode == "question_scene":
-        return "question_word"
-    if pos == "preposition" or render_mode == "relation_scene":
-        return "preposition"
-    if pos == "verb" or render_mode == "action_scene":
-        return "action"
-    if scene_type == "color_focus_scene":
-        return "color"
-    if pos == "pronoun":
-        return "pronoun"
-    return pos or "noun"
+    if len(ex) > 72:
+        ex = ex[:72].rsplit(" ", 1)[0]
+    return f"soft classroom context from lesson sentence: {ex}" if ex else ""
 
 
 def build_prompt_parts(item: VocabItem) -> tuple[list[str], list[str], list[str], str, str, str]:
     clean = clean_visual_label(item.word)
     pos = normalize_pos(item.pos)
-
     override = WORD_OVERRIDES.get(clean.lower())
     if override:
         include = list(dict.fromkeys(list(override.get("include", [])) + [clean]))
-        exclude = list(
-            dict.fromkeys(
-                list(override.get("exclude", []))
-                + list(TEXT_EXCLUSION_TOKENS)
-                + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))
-            )
-        )
-        return (
-            ANCHOR_PHRASES.copy(),
-            include,
-            exclude,
-            override["scene"],
-            override.get("render_mode", "single_object"),
-            override.get("scene_type", "literal_educational_scene"),
-        )
+        exclude = list(dict.fromkeys(list(override.get("exclude", [])) + list(TEXT_EXCLUSION_TOKENS) + list(SEMANTIC_DEFAULT_NEGATIVES.get(pos, []))))
+        return ANCHOR_PHRASES.copy(), include, exclude, override["scene"], override.get("render_mode", "single_object"), override.get("scene_type", "literal_educational_scene")
 
     plan = resolve_visual_plan(clean, pos, item.zh, item.example_en)
     include = list(dict.fromkeys(plan.include + [clean]))
@@ -240,10 +164,10 @@ def build_image_spec(item: VocabItem) -> ImageSpec:
     parts = [
         scene,
         "show the target meaning directly",
-        "do not use decorative substitutions",
-        "no readable text, no letters, no numbers, no chinese characters, no english words, no labels, no signboards, no watermark",
+        "avoid symbolic or decorative substitutions",
+        "no text, no letters, no numbers, no chinese characters, no english words, no labels, no signboards, no watermark",
     ]
-    context_hint = _context_hint(item.example_en, clean)
+    context_hint = _context_hint(item.example_en)
     if context_hint:
         parts.append(context_hint)
     parts.extend(anchors)
@@ -265,72 +189,38 @@ def build_image_spec(item: VocabItem) -> ImageSpec:
         must_include=list(dict.fromkeys(include)),
         must_exclude=list(dict.fromkeys(exclude)),
         fallback_label=fallback_label,
-        semantic_class=_semantic_class(normalized_pos, render_mode, scene_type),
     )
 
 
 def parse_homework_vocabulary(homework_text: str) -> list[VocabItem]:
-    title = ""
-    tags = ""
+    spec = parse_homework_text(homework_text)
+    title = str(spec.get("title") or "")
+    theme = ", ".join([str(t).strip() for t in (spec.get("tags") or []) if str(t).strip()])
     example_map: dict[str, str] = {}
-    vocab_text = ""
-    in_sentences = False
-    in_vocab = False
-
-    for raw_line in homework_text.splitlines():
-        line = raw_line.strip()
-        if not line:
+    for sent in spec.get("sentences", []) or []:
+        if not isinstance(sent, dict):
             continue
-
-        header_match = _HEADER_RE.match(line)
-        if header_match:
-            header = header_match.group(1).strip().lower()
-            value = header_match.group(2).strip()
-            if header == "title":
-                title = value
-            elif header == "tags":
-                tags = value
-            elif header == "vocabulary":
-                vocab_text = value
-                in_vocab = True
-                in_sentences = False
-            elif header == "sentences":
-                in_sentences = True
-                in_vocab = False
-            else:
-                in_vocab = False
-                in_sentences = False
+        en_line = str(sent.get("en") or "").strip()
+        if not en_line:
             continue
-
-        if line.startswith("#"):
-            in_vocab = False
-            in_sentences = False
-            continue
-
-        if in_vocab:
-            vocab_text = f"{vocab_text}, {line}" if vocab_text else line
-        elif in_sentences and not re.search(r"[\u4e00-\u9fff]", line):
-            normalized = re.sub(r"[^a-zA-Z' -]", " ", line).lower()
-            for token in re.findall(r"[a-zA-Z][a-zA-Z'-]+", normalized):
-                example_map.setdefault(token, line)
+        normalized = re.sub(r"[^a-zA-Z' -]", " ", en_line).lower()
+        for token in re.findall(r"[a-zA-Z][a-zA-Z'-]+", normalized):
+            example_map.setdefault(token, en_line)
 
     items: list[VocabItem] = []
-    for match in _VOCAB_LINE_RE.finditer(vocab_text):
-        pos = normalize_pos(match.group(1))
-        body = match.group(2).strip()
-        if "-" in body:
-            word, zh = body.split("-", 1)
-        else:
-            word, zh = body, ""
-        word = clean_visual_label(word.strip())
-        zh = zh.strip()
+    for raw in spec.get("vocab", []) or []:
+        if not isinstance(raw, dict):
+            continue
+        word = str(raw.get("en") or "").strip()
+        if not word:
+            continue
         items.append(
             VocabItem(
                 word=word,
-                pos=pos,
-                zh=zh,
+                pos=normalize_pos(str(raw.get("pos") or "noun")),
+                zh=str(raw.get("zh") or "").strip(),
                 example_en=example_map.get(clean_visual_label(word).lower(), ""),
-                theme=tags,
+                theme=theme,
                 title=title,
             )
         )
@@ -342,15 +232,10 @@ def build_specs_from_homework_text(homework_text: str) -> list[ImageSpec]:
 
 
 def build_specs_from_parsed_spec(spec: dict) -> list[ImageSpec]:
-    title = str((spec or {}).get("title") or "").strip()
-    tags_raw = (spec or {}).get("tags") or []
-    if isinstance(tags_raw, list):
-        theme = ", ".join(str(x).strip() for x in tags_raw if str(x).strip())
-    else:
-        theme = str(tags_raw).strip()
-
+    title = str(spec.get("title") or "")
+    theme = ", ".join([str(t).strip() for t in (spec.get("tags") or []) if str(t).strip()])
     example_map: dict[str, str] = {}
-    for sent in (spec or {}).get("sentences", []) or []:
+    for sent in spec.get("sentences", []) or []:
         if not isinstance(sent, dict):
             continue
         en_line = str(sent.get("en") or "").strip()
@@ -360,38 +245,38 @@ def build_specs_from_parsed_spec(spec: dict) -> list[ImageSpec]:
         for token in re.findall(r"[a-zA-Z][a-zA-Z'-]+", normalized):
             example_map.setdefault(token, en_line)
 
-    out: list[ImageSpec] = []
-    for raw in (spec or {}).get("vocab", []) or []:
+    items: List[ImageSpec] = []
+    for raw in spec.get("vocab", []) or []:
         if not isinstance(raw, dict):
             continue
         word = str(raw.get("en") or "").strip()
         if not word:
             continue
-        clean = clean_visual_label(word)
         item = VocabItem(
-            word=clean,
-            pos=normalize_pos(str(raw.get("pos") or "")) or "noun",
+            word=word,
+            pos=normalize_pos(str(raw.get("pos") or "noun")),
             zh=str(raw.get("zh") or "").strip(),
-            example_en=example_map.get(clean.lower(), ""),
+            example_en=example_map.get(clean_visual_label(word).lower(), ""),
             theme=theme,
             title=title,
         )
-        out.append(build_image_spec(item))
-    return out
+        items.append(build_image_spec(item))
+    return items
 
 
 def save_specs_json(specs: Iterable[ImageSpec], out_path: str | Path) -> Path:
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    data = [spec.to_dict() for spec in specs]
-    out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return out_path
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps([s.to_dict() for s in specs], ensure_ascii=False, indent=2), encoding="utf-8")
+    return out
 
 
 __all__ = [
     "VocabItem",
     "ImageSpec",
     "normalize_pos",
+    "slugify",
+    "infer_scene_type",
     "parse_homework_vocabulary",
     "build_image_spec",
     "build_specs_from_homework_text",

@@ -31,7 +31,7 @@ NEG_ALWAYS = (
     "abstract, surreal, cubism, expressionism, glitch, noise, watercolor, oil painting, sketch, lineart, "
     "lowpoly, 3d render, blurry, low quality, worst quality, messy background, "
     "deformed, disfigured, mutated, extra limbs, bad anatomy, bad hands, "
-    "text, watermark, logo, letters, numbers, chinese characters, english words, handwriting, caption, label, subtitle, signature, signboard, poster writing"
+    "text, watermark, logo, letters, numbers, chinese characters, english words, handwriting, caption, label, subtitle, signature, signboard, poster writing, gibberish typography, misspelled text, broken words, nonsense letters"
 )
 
 
