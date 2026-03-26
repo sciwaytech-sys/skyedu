@@ -4,18 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.4.6 Beta Asset batcher GUI fixed">
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/image_backends.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_backends.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/image_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_validation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/assets/skyed-lesson.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
-    </list>
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.4.9 Beta NG publisher is added" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -154,7 +143,7 @@
       <workItem from="1773578811209" duration="2198000" />
       <workItem from="1773592508789" duration="8213000" />
       <workItem from="1774334132215" duration="139000" />
-      <workItem from="1774334425227" duration="17544000" />
+      <workItem from="1774334425227" duration="34043000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -348,7 +337,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774373067960</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="4.4.8 Beta Card cutter Miniapp is added(see documentation)">
+      <option name="closed" value="true" />
+      <created>1774392429103</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1774392429103</updated>
+    </task>
+    <task id="LOCAL-00026" summary="4.4.9 Beta NG publisher is added">
+      <option name="closed" value="true" />
+      <created>1774550783521</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1774550783521</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -372,10 +377,12 @@
     <MESSAGE value="4.0Beta Final release. Operational example" />
     <MESSAGE value="4.4 Beta 24/03/2026 Integrated asset butcher. Waiting for further new theme logic addition and cached files reuse integration." />
     <MESSAGE value="4.4.6 Beta Asset batcher GUI fixed" />
-    <option name="LAST_COMMIT_MESSAGE" value="4.4.6 Beta Asset batcher GUI fixed" />
+    <MESSAGE value="4.4.8 Beta Card cutter Miniapp is added(see documentation)" />
+    <MESSAGE value="4.4.9 Beta NG publisher is added" />
+    <option name="LAST_COMMIT_MESSAGE" value="4.4.9 Beta NG publisher is added" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774390005160" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774544377354" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/skyed_automation$ff.coverage" NAME="ff Coverage Results" MODIFIED="1774037894426" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
