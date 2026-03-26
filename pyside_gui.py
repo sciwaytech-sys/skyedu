@@ -129,6 +129,15 @@ class AppConfig:
     special_audio_dir: str = ""
     special_audio_title: str = "Extra Audio"
 
+    # NG lesson helper
+    ng_words_repeat_1: str = ""
+    ng_words_repeat_2: str = ""
+    ng_words_repeat_3: str = ""
+    ng_phonics: str = ""
+    ng_chant: str = ""
+    ng_song: str = ""
+    ng_other: str = ""
+
     # thematic background helper
     picture_bg_source_image: str = ""
     picture_bg_transparency: int = 76
@@ -177,6 +186,13 @@ def _default_config(root_dir: Path) -> AppConfig:
         special_audio_enabled=False,
         special_audio_dir="",
         special_audio_title="Extra Audio",
+        ng_words_repeat_1="",
+        ng_words_repeat_2="",
+        ng_words_repeat_3="",
+        ng_phonics="",
+        ng_chant="",
+        ng_song="",
+        ng_other="",
         picture_bg_source_image="",
         picture_bg_transparency=76,
     )
@@ -295,6 +311,13 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         special_audio_enabled=bool(data.get("special_audio_enabled", base.special_audio_enabled)),
         special_audio_dir=str(data.get("special_audio_dir", base.special_audio_dir)),
         special_audio_title=str(data.get("special_audio_title", base.special_audio_title)),
+        ng_words_repeat_1=str(data.get("ng_words_repeat_1", base.ng_words_repeat_1)),
+        ng_words_repeat_2=str(data.get("ng_words_repeat_2", base.ng_words_repeat_2)),
+        ng_words_repeat_3=str(data.get("ng_words_repeat_3", base.ng_words_repeat_3)),
+        ng_phonics=str(data.get("ng_phonics", base.ng_phonics)),
+        ng_chant=str(data.get("ng_chant", base.ng_chant)),
+        ng_song=str(data.get("ng_song", base.ng_song)),
+        ng_other=str(data.get("ng_other", base.ng_other)),
         picture_bg_source_image=str(data.get("picture_bg_source_image", base.picture_bg_source_image)),
         picture_bg_transparency=int(data.get("picture_bg_transparency", base.picture_bg_transparency)),
     )
@@ -349,6 +372,13 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "special_audio_enabled": bool(cfg.special_audio_enabled),
         "special_audio_dir": str(cfg.special_audio_dir),
         "special_audio_title": str(cfg.special_audio_title),
+        "ng_words_repeat_1": str(cfg.ng_words_repeat_1),
+        "ng_words_repeat_2": str(cfg.ng_words_repeat_2),
+        "ng_words_repeat_3": str(cfg.ng_words_repeat_3),
+        "ng_phonics": str(cfg.ng_phonics),
+        "ng_chant": str(cfg.ng_chant),
+        "ng_song": str(cfg.ng_song),
+        "ng_other": str(cfg.ng_other),
         "picture_bg_source_image": str(cfg.picture_bg_source_image),
         "picture_bg_transparency": int(cfg.picture_bg_transparency),
     }
@@ -429,7 +459,7 @@ def _save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 PUBLISH_SURFACES = {
-    "Standard Homework": [("Sky", "sky"), ("Fun Mission", "fun_mission")],
+    "Standard Homework": [("Sky", "sky"), ("Fun Mission", "fun_mission"), ("NG", "ng")],
     "Kid Homework": [("Sky Tiles", "sky_tiles")],
     "Older Students": [("Strict Dark", "strict_dark")],
 }
@@ -442,6 +472,7 @@ THEME_ALIASES = {
     "strict_dark": "strict_dark",
     "fun": "fun_mission",
     "fun_mission": "fun_mission",
+    "ng": "ng",
 }
 
 def _normalize_theme_value(value: str) -> str:
@@ -700,13 +731,24 @@ class ProcessHarness(QtCore.QObject):
             return
 
         process_env = QtCore.QProcessEnvironment.systemEnvironment()
+        process_env.insert("PYTHONUNBUFFERED", "1")
         for k, v in env.items():
             process_env.insert(k, v)
 
+        launch_args = list(args)
+        try:
+            prog_name = Path(program).name.lower()
+        except Exception:
+            prog_name = str(program).lower()
+        if (prog_name.startswith("python") or prog_name == "py") and launch_args:
+            first = str(launch_args[0]).strip().lower()
+            if first != "-u":
+                launch_args = ["-u", *launch_args]
+
         self.proc.setProcessEnvironment(process_env)
         self.proc.setWorkingDirectory(cwd)
-        self.output.emit(f"[Process] START: {program} {' '.join(args)}\n")
-        self.proc.start(program, args)
+        self.output.emit(f"[Process] START: {program} {' '.join(launch_args)}\n")
+        self.proc.start(program, launch_args)
 
     def terminate(self) -> None:
         if not self.is_running():
@@ -805,6 +847,9 @@ class MainWindow(QtWidgets.QMainWindow):
         elif selected_theme == "strict_dark":
             selected_lesson_mode = "reading_listening"
             selected_surface_variant = "strict_dark"
+        elif selected_theme == "ng":
+            selected_lesson_mode = "standard_homework"
+            selected_surface_variant = "ng"
         else:
             selected_lesson_mode = "standard_homework"
             selected_surface_variant = "classic"
@@ -996,7 +1041,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
         self.right_tabs.addTab(self._build_tab_batch(), "Batch")
-        self.right_tabs.addTab(self._build_tab_special_lessons(), "Special Lessons")
+        self.right_tabs.addTab(self._build_tab_special_lessons(), "NG")
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
         self.right_tabs.addTab(self._build_tab_picture_reader(), "Picture Reader")
         self.hsplit.addWidget(self.right_tabs)
@@ -1532,35 +1577,52 @@ class MainWindow(QtWidgets.QMainWindow):
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
 
-        g = self._group_box("Special lesson audio routing")
+        lay.addWidget(self._brand_panel(
+            "NG Lesson Builder",
+            "Create the NG lesson path with an automatic touch-and-listen tag_s pack plus optional Happy Practice audio blocks.",
+            ["NG tag_s uses en-US-GuyNeural at 0% rate", "Only filled Happy Practice slots are published", "Main lesson logic stays unchanged for other themes"]
+        ))
+
+        g = self._group_box("Happy Practice audio uploads")
         fl = QtWidgets.QFormLayout(g)
+        self._ng_audio_inputs = {}
+        for key, label in [
+            ("ng_words_repeat_1", "Words to repeat 1"),
+            ("ng_words_repeat_2", "Words to repeat 2"),
+            ("ng_words_repeat_3", "Words to repeat 3"),
+            ("ng_phonics", "Phonics"),
+            ("ng_chant", "Chant"),
+            ("ng_song", "Song"),
+            ("ng_other", "Other"),
+        ]:
+            edit = QtWidgets.QLineEdit(getattr(self.cfg, key, ""))
+            edit.setPlaceholderText(f"Optional audio file for {label.lower()}...")
+            edit.textChanged.connect(self.on_ng_settings_changed)
+            btn = QtWidgets.QPushButton("Browse Audio")
+            btn.setMinimumHeight(34)
+            btn.clicked.connect(lambda _=False, field_key=key: self.browse_ng_audio_file(field_key))
+            row = QtWidgets.QHBoxLayout()
+            row.addWidget(edit, 1)
+            row.addWidget(btn)
+            fl.addRow(f"{label}:", row)
+            self._ng_audio_inputs[key] = edit
 
-        self.check_special_audio = QtWidgets.QCheckBox("Enable manual extra-audio routing")
-        self.check_special_audio.setChecked(bool(self.cfg.special_audio_enabled))
-        self.check_special_audio.toggled.connect(self.on_special_audio_settings_changed)
-        fl.addRow(self.check_special_audio)
-
-        self.edit_special_audio_dir = QtWidgets.QLineEdit(self.cfg.special_audio_dir)
-        self.edit_special_audio_dir.setPlaceholderText("Folder containing teacher-provided audio files")
-        self.edit_special_audio_dir.textChanged.connect(self.on_special_audio_settings_changed)
-        btn_browse_special_audio = QtWidgets.QPushButton("Browse Folder")
-        btn_browse_special_audio.setMinimumHeight(34)
-        btn_browse_special_audio.clicked.connect(self.browse_special_audio_dir)
-        row_dir = QtWidgets.QHBoxLayout()
-        row_dir.addWidget(self.edit_special_audio_dir, 1)
-        row_dir.addWidget(btn_browse_special_audio)
-        fl.addRow("Audio folder:", row_dir)
-
-        self.edit_special_audio_title = QtWidgets.QLineEdit(self.cfg.special_audio_title)
-        self.edit_special_audio_title.setPlaceholderText("Section title shown on the lesson page")
-        self.edit_special_audio_title.textChanged.connect(self.on_special_audio_settings_changed)
-        fl.addRow("Section title:", self.edit_special_audio_title)
-
-        note = QtWidgets.QLabel("Supported local formats: mp3, wav, ogg, m4a, aac. When enabled, files are copied into the lesson package and published as an Extra Audio section.")
+        note = QtWidgets.QLabel("Filled files are published as the Happy Practice section, placed right under the NG tag_s block. Empty slots are ignored.")
         note.setWordWrap(True)
         fl.addRow(note)
-
         lay.addWidget(g)
+
+        action_box = self._group_box("NG lesson actions")
+        action_lay = QtWidgets.QVBoxLayout(action_box)
+        btn_gen = QtWidgets.QPushButton("Generate")
+        btn_gen.setMinimumHeight(40)
+        btn_gen.clicked.connect(lambda: self.run_ng_pipeline(mode="generate"))
+        btn_pub = QtWidgets.QPushButton("Generate + Publish")
+        btn_pub.setMinimumHeight(42)
+        btn_pub.clicked.connect(lambda: self.run_ng_pipeline(mode="generate_publish"))
+        action_lay.addWidget(btn_gen)
+        action_lay.addWidget(btn_pub)
+        lay.addWidget(action_box)
         lay.addStretch(1)
         return w
 
@@ -1586,13 +1648,13 @@ class MainWindow(QtWidgets.QMainWindow):
         fl.addRow(lbl_base)
 
         self.combo_lesson_theme = QtWidgets.QComboBox()
-        self.combo_lesson_theme.addItems(["sky", "fun_mission", "strict_dark", "sky_tiles"])
+        self.combo_lesson_theme.addItems(["sky", "fun_mission", "strict_dark", "sky_tiles", "ng"])
         self.combo_lesson_theme.setCurrentText(_normalize_theme_value(self.cfg.lesson_theme))
         self.combo_lesson_theme.currentTextChanged.connect(self.on_lesson_theme_changed)
         fl.addRow("Default publish surface:", self.combo_lesson_theme)
 
         tip = QtWidgets.QLabel(
-            "Default surface used when publishing. Publish actions will also open a popup so you can choose Sky, Sky Tiles, Fun Mission, or Strict Dark for that run."
+            "Default surface used when publishing. Publish actions will also open a popup so you can choose Sky, Sky Tiles, Fun Mission, Strict Dark, or NG for that run."
         )
         tip.setWordWrap(True)
         fl.addRow(tip)
@@ -2073,6 +2135,30 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cfg.special_audio_title = self.edit_special_audio_title.text().strip() or "Extra Audio"
         save_config(self.cfg_path, self.cfg)
 
+    def on_ng_settings_changed(self, *_args) -> None:
+        for key in ("ng_words_repeat_1", "ng_words_repeat_2", "ng_words_repeat_3", "ng_phonics", "ng_chant", "ng_song", "ng_other"):
+            widget = getattr(self, "_ng_audio_inputs", {}).get(key) if hasattr(self, "_ng_audio_inputs") else None
+            if widget is not None:
+                setattr(self.cfg, key, widget.text().strip())
+        save_config(self.cfg_path, self.cfg)
+
+    def _ng_audio_field_map(self) -> Dict[str, str]:
+        labels = {
+            "ng_words_repeat_1": "Words to repeat 1",
+            "ng_words_repeat_2": "Words to repeat 2",
+            "ng_words_repeat_3": "Words to repeat 3",
+            "ng_phonics": "Phonics",
+            "ng_chant": "Chant",
+            "ng_song": "Song",
+            "ng_other": "Other",
+        }
+        out: Dict[str, str] = {}
+        for key, label in labels.items():
+            value = str(getattr(self.cfg, key, "") or "").strip()
+            if value:
+                out[label] = value
+        return out
+
     def on_lesson_theme_changed(self, _txt: str) -> None:
         if hasattr(self, "combo_lesson_theme"):
             value = self.combo_lesson_theme.currentText().strip().lower()
@@ -2288,6 +2374,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.edit_special_audio_dir.setText(path)
             self.on_special_audio_settings_changed()
 
+    def browse_ng_audio_file(self, field_key: str) -> None:
+        start_dir = str(Path(getattr(self.cfg, field_key, "") or self.root_dir).expanduser().parent if str(getattr(self.cfg, field_key, "") or "").strip() else self.root_dir)
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, f"Select audio for {field_key}", start_dir, "Audio Files (*.mp3 *.wav *.ogg *.m4a *.aac)")
+        if path and hasattr(self, "_ng_audio_inputs") and field_key in self._ng_audio_inputs:
+            self._ng_audio_inputs[field_key].setText(path)
+            self.on_ng_settings_changed()
+
     def browse_background_source_image(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
@@ -2358,6 +2451,9 @@ class MainWindow(QtWidgets.QMainWindow):
         elif selected_theme == "strict_dark":
             selected_lesson_mode = "reading_listening"
             selected_surface_variant = "strict_dark"
+        elif selected_theme == "ng":
+            selected_lesson_mode = "standard_homework"
+            selected_surface_variant = "ng"
         else:
             selected_lesson_mode = "standard_homework"
             selected_surface_variant = "classic"
@@ -2383,6 +2479,7 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
         env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
         env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
+        self._apply_ng_env(env)
         _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
         _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
         _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
@@ -2484,6 +2581,86 @@ class MainWindow(QtWidgets.QMainWindow):
     def _pipeline_script_path(self) -> Path:
         return (Path(self.cfg.project_workdir) / self.cfg.pipeline_script).resolve()
 
+    def _apply_ng_env(self, env: Dict[str, str]) -> None:
+        env["SKYED_NG_AUDIO_FIELDS"] = json.dumps(self._ng_audio_field_map(), ensure_ascii=False)
+        env["SKYED_NG_TAG_VOICE"] = "en-US-GuyNeural"
+        env["SKYED_NG_TAG_RATE"] = "0%"
+
+    def run_ng_pipeline(self, mode: str) -> None:
+        self.editor_save_default()
+        self._clear_error_box()
+        script = self._pipeline_script_path()
+        if not script.exists():
+            QtWidgets.QMessageBox.critical(self, "Missing pipeline script", f"Not found:\n{script}")
+            return
+
+        self.on_ng_settings_changed()
+        self.cfg.lesson_theme = "ng"
+        selected_theme = "ng"
+        selected_lesson_mode = "standard_homework"
+        selected_surface_variant = "ng"
+
+        input_path = str(self.default_editor_path())
+        args: List[str] = [
+            str(script),
+            "--input", input_path,
+            "--theme", selected_theme,
+            "--lesson-mode", selected_lesson_mode,
+            "--surface-variant", selected_surface_variant,
+        ]
+        if mode == "generate_publish":
+            args.append("--publish")
+
+        env = os.environ.copy()
+        env["HF_ENDPOINT"] = self.cfg.hf_endpoint
+        env["SKYED_TTS_RATE"] = _rate_string(int(self.cfg.tts_rate_percent))
+        env["SKYED_VOICE_EN"] = str(self.cfg.voice_en)
+        env["SKYED_VOICE_ZH"] = str(self.cfg.voice_zh)
+
+        self.cfg.picture_cards_type = self.combo_picture.currentText().strip() or self.cfg.picture_cards_type
+        self.cfg.image_backend = self._backend_key_from_ui(self.combo_backend.currentText())
+        self._capture_image_tab_settings()
+        save_config(self.cfg_path, self.cfg)
+
+        env["PICTURE_CARDS_TYPE"] = self.cfg.picture_cards_type
+        env["IMG_BACKEND"] = self.cfg.image_backend
+        env["IMG_WIDTH"] = str(int(self.cfg.img_width))
+        env["IMG_HEIGHT"] = str(int(self.cfg.img_height))
+        backend_key = (self.cfg.image_backend or "").strip().lower()
+        effective_steps = int(self.cfg.img_steps)
+        if backend_key in ("cloudflare", "cloudflare_flux", "cf", "flux") and effective_steps == 4:
+            effective_steps = 1
+        env["IMG_STEPS"] = str(int(effective_steps))
+        env["IMG_TIMEOUT_S"] = str(int(self.cfg.img_timeout_s))
+        env["IMG_CONCURRENCY"] = str(int(self.cfg.img_concurrency))
+        if backend_key in ("cloudflare", "cloudflare_flux", "cf", "flux"):
+            env["IMG_MAX_RETRIES"] = "0"
+            env.setdefault("SKYED_REQUIRE_TEXT_VALIDATION", "1")
+        elif backend_key in ("hf", "hf_endpoint", "huggingface", "hugging_face"):
+            env["IMG_MAX_RETRIES"] = "1"
+            env.setdefault("SKYED_REQUIRE_TEXT_VALIDATION", "1")
+        else:
+            env["IMG_MAX_RETRIES"] = "2"
+        env["SKYED_PROJECT_ROOT"] = str(Path(self.cfg.project_workdir).resolve())
+        env["SKYED_LOCAL_ASSET_LIBRARY_DIR"] = str((Path(self.cfg.project_workdir) / "asset_library").resolve())
+        env["SKYED_SPECIAL_AUDIO_ENABLED"] = "0"
+        env["SKYED_SPECIAL_AUDIO_DIR"] = ""
+        env["SKYED_SPECIAL_AUDIO_TITLE"] = "Extra Audio"
+        self._apply_ng_env(env)
+
+        _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
+        _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
+        _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
+        _set_env_if_nonempty(env, "HF_IMAGE_ENDPOINT_URL", self.cfg.hf_image_endpoint_url or "")
+        _set_env_if_nonempty(env, "HF_TOKEN", self.cfg.hf_token)
+        env["HF_GUIDANCE"] = str(self.cfg.hf_guidance)
+        wf = self.resolve_workflow_path()
+        env["COMFY_URL"] = str(self.cfg.comfy_url)
+        env["COMFY_WORKFLOW"] = str(wf)
+
+        self.append_log(f"[NG] THEME=ng MODE={selected_lesson_mode} SURFACE={selected_surface_variant} HAPPY_PRACTICE={len(self._ng_audio_field_map())}\n")
+        self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
+
     def run_pipeline(self, mode: str) -> None:
         self.editor_save_default()
         self._clear_error_box()
@@ -2506,6 +2683,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 value = self.combo_lesson_theme.currentText().strip().lower()
                 selected_theme = _normalize_theme_value(value)
                 self.cfg.lesson_theme = selected_theme
+                if selected_theme == "sky_tiles":
+                    selected_lesson_mode = "kid_homework"
+                    selected_surface_variant = "tiles"
+                elif selected_theme == "strict_dark":
+                    selected_lesson_mode = "reading_listening"
+                    selected_surface_variant = "strict_dark"
+                elif selected_theme == "ng":
+                    selected_lesson_mode = "standard_homework"
+                    selected_surface_variant = "ng"
                 save_config(self.cfg_path, self.cfg)
 
         input_path = str(self.default_editor_path())
@@ -2574,6 +2760,7 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
         env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
         env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
+        self._apply_ng_env(env)
 
         self.append_log(f"[Images] COMFY_WORKFLOW={wf} exists={wf.exists()}\n")
         self.append_log(

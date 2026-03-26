@@ -18,9 +18,10 @@ from skyed.tag_registry import discover_tag_games
 from skyed.picture_reader import parse_picture_to_reader_spec
 from skyed.utils import slugify, ensure_dir
 from skyed.cards import generate_vocab_cards, slugify as card_slugify
-from skyed.tts_edge import generate_audio, generate_long_audio_variants
+from skyed.tts_edge import generate_audio, generate_long_audio_variants, generate_word_audio_set
 from skyed.quizgen import generate_quiz, normalize_theme_variant
 from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
+from skyed.tag_gamegen import export_tag_s_touch_listen_cards
 
 
 def _sentence_audio_stem(base_text: str) -> str:
@@ -34,6 +35,11 @@ def _sentence_audio_stem(base_text: str) -> str:
     short = card_slugify(t[:60] if len(t) > 60 else t)
     h = hashlib.sha1(t.encode("utf-8")).hexdigest()[:10]
     return f"{short}_{h}" if short else h
+
+
+
+def _log_step(message: str) -> None:
+    print(str(message or ""), flush=True)
 
 
 def _h(text: str) -> str:
@@ -386,6 +392,86 @@ def _map_special_audio_items(items: List[Dict[str, str]], audio_url_by_rel: Dict
     return mapped
 
 
+def _copy_ng_happy_practice_assets_from_env(lesson_root: Path) -> List[Dict[str, str]]:
+    raw = (os.environ.get("SKYED_NG_AUDIO_FIELDS", "") or "").strip()
+    if not raw:
+        return []
+    try:
+        mapping = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"Invalid SKYED_NG_AUDIO_FIELDS JSON: {exc}")
+    if not isinstance(mapping, dict):
+        return []
+    dst_dir = ensure_dir(Path(lesson_root) / "audio" / "ng_happy_practice")
+    items: List[Dict[str, str]] = []
+    for label, src_value in mapping.items():
+        label_text = str(label or "").strip()
+        src_raw = str(src_value or "").strip()
+        if not label_text or not src_raw:
+            continue
+        src = Path(src_raw).expanduser()
+        if not src.exists() or not src.is_file():
+            raise RuntimeError(f"NG audio file not found: {src}")
+        if src.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
+            raise RuntimeError(f"Unsupported NG audio format: {src.name}")
+        safe_name = ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in src.name)
+        dst = dst_dir / safe_name
+        shutil.copy2(src, dst)
+        items.append({
+            "label": label_text,
+            "title": "Happy Practice",
+            "url": str(dst.relative_to(lesson_root)).replace('\\', '/'),
+        })
+    return items
+
+
+def _build_ng_tag_game(spec: Dict[str, List[Dict[str, str]]], lesson_root: Path, title: str) -> Optional[str]:
+    tags = [str(t or "").strip() for t in (spec.get("tags") or []) if str(t or "").strip()]
+    tag = (tags[0] if tags else slugify(title) or "ng").strip()
+    vocab = spec.get("vocab", []) or []
+    if not vocab:
+        return None
+
+    touch_audio_dir = ensure_dir(Path(lesson_root) / "audio" / "ng_touch")
+    touch_voice = (os.environ.get("SKYED_NG_TAG_VOICE") or "en-US-GuyNeural").strip() or "en-US-GuyNeural"
+    touch_rate = (os.environ.get("SKYED_NG_TAG_RATE") or (os.environ.get("SKYED_TTS_RATE") or "-10%")).strip() or "-10%"
+    word_jobs = []
+    for v in vocab:
+        en = str(v.get("en") or "").strip()
+        if en:
+            word_jobs.append((card_slugify(en), en))
+    audio_map = generate_word_audio_set(word_jobs, touch_audio_dir, voice=touch_voice, rate=touch_rate)
+
+    vocab_for_game: List[Dict[str, str]] = []
+    for v in vocab:
+        en = str(v.get("en") or "").strip()
+        if not en:
+            continue
+        stem = card_slugify(en)
+        img_rel = f"cards/{stem}.png"
+        if not (Path(lesson_root) / img_rel).exists():
+            img_rel = ""
+        audio_path = audio_map.get(stem)
+        audio_rel = str(audio_path.relative_to(lesson_root)).replace('\\', '/') if audio_path and audio_path.exists() else ""
+        vocab_for_game.append({
+            "en": en,
+            "zh": str(v.get("zh") or "").strip(),
+            "img": img_rel,
+            "audio_en": audio_rel,
+            "pos": str(v.get("pos") or "").strip(),
+        })
+
+    game_root = export_tag_s_touch_listen_cards(
+        tag=tag,
+        vocab=vocab_for_game,
+        out_dir=Path(os.getenv("OUTPUT_DIR", "output")) / "tag_s",
+        lesson_assets_root=Path(lesson_root),
+        game_id=f"ng_touch_{slugify(title) or 'lesson'}",
+        title=f"{title} — Touch and Listen",
+    )
+    return str(game_root)
+
+
 def _extract_day_number(title: str) -> str:
     m = __import__("re").search(r"\bday\s*(\d+)\b", title or "", flags=__import__("re").IGNORECASE)
     return m.group(1) if m else ""
@@ -441,6 +527,8 @@ def infer_mode_surface_from_theme(theme: str) -> tuple[str, str]:
         return "kid_homework", "tiles"
     if theme == "strict_dark":
         return "reading_listening", "strict_dark"
+    if theme == "ng":
+        return "standard_homework", "ng"
     return "standard_homework", "classic"
 
 
@@ -535,7 +623,7 @@ def main() -> None:
     ap.add_argument(
         "--theme",
         default=None,
-        choices=["sky", "sky_tiles", "strict_dark", "fun_mission", "strict", "fun", "app"],
+        choices=["sky", "sky_tiles", "strict_dark", "fun_mission", "strict", "fun", "app", "ng"],
         help="Lesson renderer theme for WordPress shortcode publishing.",
     )
     ap.add_argument(
@@ -547,7 +635,7 @@ def main() -> None:
     ap.add_argument(
         "--surface-variant",
         default=None,
-        choices=["classic", "tiles", "strict_dark"],
+        choices=["classic", "tiles", "strict_dark", "ng"],
         help="Optional explicit renderer surface. If omitted, inferred from theme.",
     )
     args = ap.parse_args()
@@ -660,7 +748,7 @@ def main() -> None:
         vocab_list = spec.get("vocab", []) or []
         missing_zh = [v.get("en", "") for v in vocab_list if not (v.get("zh") or "").strip()]
         if missing_zh:
-            print("[WARN] Missing Chinese for vocab:", ", ".join(missing_zh))
+            print("[WARN] Missing Chinese for vocab:", ", ".join(missing_zh), flush=True)
         if page_kind != "picture_reader" and len(vocab_list) == 0 and lesson_mode != "reading_listening":
             raise RuntimeError(
                 "Parser produced 0 vocab items. Check output/<slug>/spec_debug.json.\n"
@@ -679,31 +767,33 @@ def main() -> None:
                 except Exception:
                     pass
             if dry_run:
-                print("[DRY RUN] Skipping audio generation.")
+                _log_step("[DRY RUN] Skipping audio generation.")
                 audio_files = []
             else:
+                _log_step("[STAGE] audio generation starting")
                 t_audio = perf_counter()
                 audio_files = generate_audio(spec, audio_dir)
-                print(f"[TIME] audio={perf_counter() - t_audio:.2f}s")
+                _log_step(f"[TIME] audio={perf_counter() - t_audio:.2f}s")
             _ = audio_files
         else:
             if dry_run:
-                print("[DRY RUN] Skipping image + audio generation.")
+                _log_step("[DRY RUN] Skipping image + audio generation.")
                 card_files = []
                 audio_files = []
             else:
+                _log_step("[STAGE] image card generation starting")
                 t_cards = perf_counter()
                 card_files = generate_vocab_cards(spec, font_path, cards_dir)
-                print(f"[TIME] cards={perf_counter() - t_cards:.2f}s")
+                _log_step(f"[TIME] cards={perf_counter() - t_cards:.2f}s")
 
                 t_audio = perf_counter()
                 audio_files = generate_audio(spec, audio_dir)
-                print(f"[TIME] audio={perf_counter() - t_audio:.2f}s")
+                _log_step(f"[TIME] audio={perf_counter() - t_audio:.2f}s")
 
                 if lesson_mode == "reading_listening":
                     t_long_audio = perf_counter()
                     spec = generate_long_audio_variants(spec, lesson_root)
-                    print(f"[TIME] long_audio={perf_counter() - t_long_audio:.2f}s")
+                    _log_step(f"[TIME] long_audio={perf_counter() - t_long_audio:.2f}s")
                     try:
                         (lesson_root / "spec_debug.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
                     except Exception:
@@ -711,14 +801,17 @@ def main() -> None:
 
             try:
                 special_audio_items_local = _copy_special_audio_assets_from_env(lesson_root)
+                if lesson_theme == "ng":
+                    special_audio_items_local.extend(_copy_ng_happy_practice_assets_from_env(lesson_root))
             except Exception as exc:
                 raise RuntimeError(f"Failed to route special lesson audio: {exc}")
 
             _ = (card_files, audio_files)
 
+            _log_step("[STAGE] quiz generation starting")
             t_quiz = perf_counter()
             quiz_json_path = generate_quiz(spec, lesson_root, n_questions=8, theme_variant=lesson_theme)
-            print(f"[TIME] quiz={perf_counter() - t_quiz:.2f}s")
+            _log_step(f"[TIME] quiz={perf_counter() - t_quiz:.2f}s")
 
             template_html_path = Path("templates/quiz_index.html")
             if template_html_path.exists():
@@ -732,19 +825,33 @@ def main() -> None:
                 shutil.copy2(quiz_json_path, lesson_root / "quiz.json")
 
     if not special_audio_items_local:
-        manual_dir = lesson_root / "audio" / "manual"
-        if manual_dir.exists():
+        for folder_name, title_default in (("manual", (os.environ.get("SKYED_SPECIAL_AUDIO_TITLE", "Extra Audio") or "Extra Audio").strip() or "Extra Audio"), ("ng_happy_practice", "Happy Practice")):
+            manual_dir = lesson_root / "audio" / folder_name
+            if not manual_dir.exists():
+                continue
             for f in sorted(manual_dir.iterdir(), key=lambda p: p.name.lower()):
                 if not f.is_file() or f.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
                     continue
                 special_audio_items_local.append({
-                    "label": f.stem.replace("_", " ").replace("-", " ").strip() or "Extra Audio",
-                    "title": (os.environ.get("SKYED_SPECIAL_AUDIO_TITLE", "Extra Audio") or "Extra Audio").strip() or "Extra Audio",
+                    "label": f.stem.replace("_", " ").replace("-", " ").strip() or title_default,
+                    "title": title_default,
                     "url": str(f.relative_to(lesson_root)).replace('\\', '/'),
                 })
 
+    ng_tag_game_root = None
+    if page_kind != "picture_reader" and lesson_theme == "ng" and not args.publish_only and not dry_run:
+        try:
+            ng_tag_game_root = _build_ng_tag_game(spec, lesson_root, title)
+            if ng_tag_game_root:
+                _log_step(f"[NG] tag_s created: {ng_tag_game_root}")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to build NG tag_s package: {exc}")
+
     categories = infer_categories(spec, page_kind=page_kind, theme=lesson_theme, lesson_mode=lesson_mode, surface_variant=surface_variant)
-    tag_games = discover_tag_games(spec.get("tags", []) or [], theme=lesson_theme)
+    discover_tags = spec.get("tags", []) or []
+    if lesson_theme == "ng" and not discover_tags:
+        discover_tags = [slugify(title) or "ng"]
+    tag_games = discover_tag_games(discover_tags, theme=lesson_theme)
 
     items_local: List[Dict[str, str]] = []
     vocab_list = spec.get("vocab", []) or []
@@ -832,7 +939,7 @@ def main() -> None:
     except Exception:
         pass
 
-    print(f"Generated: {lesson_root}")
+    _log_step(f"Generated: {lesson_root}")
     print(f"Lesson local path: {(lesson_root / 'lesson.html')}")
     print(f"Quiz local path: {(lesson_root / 'index.html')}")
     if (lesson_root / 'cards' / 'image_specs.json').exists():
@@ -891,10 +998,10 @@ def main() -> None:
         )
 
     publish_rel_path = "/".join([p for p in [wp_group_path, publish_slug] if p])
-    print(f"[PUBLISH] GROUP={wp_group_path or '[root]'}")
-    print(f"[PUBLISH] SLUG_MODE={publish_slug_mode}")
-    print(f"[PUBLISH] SLUG={publish_slug}")
-    print(f"[PUBLISH] ROUTE=/{publish_rel_path}")
+    _log_step(f"[PUBLISH] GROUP={wp_group_path or '[root]'}")
+    _log_step(f"[PUBLISH] SLUG_MODE={publish_slug_mode}")
+    _log_step(f"[PUBLISH] SLUG={publish_slug}")
+    _log_step(f"[PUBLISH] ROUTE=/{publish_rel_path}")
 
     # Upload media (cards + audio). NOTE: we upload the rendered cards (cards/*.png), not raw ai images.
     card_url_by_stem: Dict[str, str] = {}
@@ -902,13 +1009,17 @@ def main() -> None:
     if cards_dir.exists():
         t_upload_cards = perf_counter()
         card_count = 0
-        for f in cards_dir.glob("*.png"):
+        card_files_to_upload = sorted(cards_dir.glob("*.png"))
+        total_card_files = len(card_files_to_upload)
+        _log_step(f"[PUBLISH] uploading cards count={total_card_files}")
+        for idx, f in enumerate(card_files_to_upload, start=1):
+            _log_step(f"[PUBLISH] card {idx}/{total_card_files}: {f.name}")
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
                 card_url_by_stem[f.stem] = url
             card_count += 1
-        print(f"[TIME] upload_cards={perf_counter() - t_upload_cards:.2f}s count={card_count}")
+        _log_step(f"[TIME] upload_cards={perf_counter() - t_upload_cards:.2f}s count={card_count}")
 
     source_image_url = ""
     source_image_dir = lesson_root / "source_image"
@@ -923,15 +1034,17 @@ def main() -> None:
     if audio_dir.exists():
         t_upload_audio = perf_counter()
         audio_count = 0
-        for f in sorted(audio_dir.rglob("*")):
-            if not f.is_file() or f.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
-                continue
+        audio_files_to_upload = [f for f in sorted(audio_dir.rglob("*")) if f.is_file() and f.suffix.lower() in AUDIO_FILE_EXTENSIONS]
+        total_audio_files = len(audio_files_to_upload)
+        _log_step(f"[PUBLISH] uploading audio count={total_audio_files}")
+        for idx, f in enumerate(audio_files_to_upload, start=1):
+            _log_step(f"[PUBLISH] audio {idx}/{total_audio_files}: {f.name}")
             j = upload_media(wp_base, wp_user, wp_pass, f)
             url = (j or {}).get("source_url") or ""
             if url:
                 audio_url_by_rel[_audio_rel_key(audio_dir, f)] = url
             audio_count += 1
-        print(f"[TIME] upload_audio={perf_counter() - t_upload_audio:.2f}s count={audio_count}")
+        _log_step(f"[TIME] upload_audio={perf_counter() - t_upload_audio:.2f}s count={audio_count}")
 
     consistency_report = _build_consistency_report(spec)
     try:
@@ -1030,7 +1143,7 @@ def main() -> None:
             slug=publish_slug,
             parent=parent_page_id if is_page_publish else None,
         )
-        print(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
+        _log_step(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
     else:
         # Recommended mode: publish a shortcode block that renders the lesson via a WP plugin.
         # This survives restrictive WP roles (no unfiltered_html) and allows real styling + audio + quiz JS.
@@ -1056,6 +1169,7 @@ def main() -> None:
             "reading_block": reading_remote,
             "listening_block": listening_remote,
             "extra_audio": special_audio_items_remote,
+            "qa": (spec.get("qa", []) or []) if lesson_theme == "sky" else [],
             "comprehension_questions": spec.get("comprehension_questions", []) or [],
             "quiz": quiz_dict,
             "practice": quiz_dict,
@@ -1083,7 +1197,7 @@ def main() -> None:
 
         t_payload_upload = perf_counter()
         payload_media = upload_media(wp_base, wp_user, wp_pass, payload_path)
-        print(f"[TIME] upload_payload={perf_counter() - t_payload_upload:.2f}s")
+        _log_step(f"[TIME] upload_payload={perf_counter() - t_payload_upload:.2f}s")
         data_url = (payload_media or {}).get("source_url") or ""
         if not data_url:
             raise RuntimeError("Failed to upload lesson_payload.txt to WordPress (no source_url).")
@@ -1103,9 +1217,9 @@ def main() -> None:
             slug=publish_slug,
             parent=parent_page_id if is_page_publish else None,
         )
-        print(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
-    print(f"Publish slug: {publish_slug}")
-    print("Published post:")
+        _log_step(f"[TIME] create_post={perf_counter() - t_create_post:.2f}s")
+    _log_step(f"Publish slug: {publish_slug}")
+    _log_step("Published post:")
     if isinstance(post, dict):
         print(post.get("link") or post)
     else:

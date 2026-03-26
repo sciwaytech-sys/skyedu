@@ -20,6 +20,10 @@ from .image_validation import ImageValidator
 from .scene_fallbacks import render_deterministic_scene
 
 
+def _progress_log(message: str) -> None:
+    print(str(message or ""), flush=True)
+
+
 def slugify(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"\s+", "_", s)
@@ -467,6 +471,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
 
     results: List[Path] = []
     report_rows: List[Dict[str, Any]] = []
+    total_items = len(vocab)
 
     def _int_env2(name: str, default: int) -> int:
         try:
@@ -514,6 +519,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
 
     def _gen_one(entry: Dict[str, str]) -> Dict[str, Any]:
         en_word = str(entry.get("en") or "").strip()
+        _progress_log(f"[Cards] START {en_word}")
         slug = slugify(en_word)
         ai_png = ai_dir / f"{slug}.png"
         fail_marker = ai_dir / f"{slug}.fail.txt"
@@ -551,17 +557,20 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 row["status"] = "local_asset_match"
                 row["local_asset_path"] = str(local_match)
                 row["final_prompt"] = "LOCAL_ASSET_ONLY"
+                _progress_log(f"[Cards] DONE {en_word} status={row['status']}")
                 return row
             deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
             if deterministic is not None:
                 row["status"] = "local_asset_missing_deterministic_fallback"
                 row["fallback_reason"] = "No matching local asset"
                 row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+                _progress_log(f"[Cards] DONE {en_word} status={row['status']}")
                 return row
             _save_clean_placeholder(img_spec.word or en_word, ai_png, font_path)
             row["status"] = "local_asset_missing_placeholder"
             row["fallback_reason"] = "No matching local asset"
             row["final_prompt"] = "LOCAL_PLACEHOLDER"
+            _progress_log(f"[Cards] DONE {en_word} status={row['status']}")
             return row
 
         if _should_use_local_cost_saver(img_spec, backend_name):
@@ -570,6 +579,7 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 row["status"] = "deterministic_local_no_cost"
                 row["smart_local"] = True
                 row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+                _progress_log(f"[Cards] DONE {en_word} status={row['status']}")
                 return row
 
         for attempt in range(0, max(0, max_retries) + 1):
@@ -650,9 +660,11 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
                 row["status"] = "clean_placeholder"
                 row["fallback_reason"] = last_err or "AI image rejected"
 
+        _progress_log(f"[Cards] DONE {en_word} status={row.get('status','unknown')}")
         return row
 
     if vocab:
+        _progress_log(f"[Cards] QUEUE total={total_items} backend={backend_name} concurrency={concurrency}")
         if concurrency <= 1:
             for it in vocab:
                 report_rows.append(_gen_one(it))

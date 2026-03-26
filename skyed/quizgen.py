@@ -20,6 +20,7 @@ THEME_ALIASES = {
     "strict_dark": "strict_dark",
     "fun": "fun_mission",
     "fun_mission": "fun_mission",
+    "ng": "ng",
 }
 
 

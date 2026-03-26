@@ -205,6 +205,7 @@ class SkyEd_Lesson_Renderer {
             'strict_dark' => 'strict_dark',
             'fun' => 'fun_mission',
             'fun_mission' => 'fun_mission',
+            'ng' => 'ng',
         ];
         return $aliases[$theme] ?? 'sky';
     }
@@ -238,6 +239,14 @@ class SkyEd_Lesson_Renderer {
                     'vocab_note' => 'Take one small step at a time and clear each checkpoint.',
                     'sent_note' => 'Say each sentence, then move to the next mission step.',
                     'practice_note' => 'One question at a time with clear actions and progress.',
+                ];
+            case 'ng':
+                return [
+                    'kicker' => 'NG Lesson',
+                    'subtitle' => 'Touch → listen → happy practice',
+                    'vocab_note' => 'Touch-and-listen support is added as a tag_s block for this lesson.',
+                    'sent_note' => 'Keep sentence practice short, clear, and repeatable.',
+                    'practice_note' => 'Happy Practice audio appears only for the files uploaded for this lesson.',
                 ];
             default:
                 return [
@@ -352,8 +361,14 @@ class SkyEd_Lesson_Renderer {
           <?php if ($theme === 'fun_mission'): ?><div class="skyed-sent__marker"><?php echo intval($idx + 1); ?></div><?php endif; ?>
           <div class="skyed-sent__text">
             <?php if ($theme === 'sky_tiles'): ?>
-              <div class="skyed-sent__oral-title">Listen and say it</div>
-              <div class="skyed-sent__oral-note">No reading needed on the child view.</div>
+              <div class="skyed-sent__tile-top">
+                <div class="skyed-sent__marker skyed-sent__marker--tile"><?php echo intval($idx + 1); ?></div>
+                <div>
+                  <div class="skyed-sent__oral-title">Listen. Say it.</div>
+                  <div class="skyed-sent__oral-note">Tap the blue button and repeat together.</div>
+                </div>
+              </div>
+              <?php if ($en !== ''): ?><div class="skyed-sent__tile-bubble"><?php echo self::esc($en); ?></div><?php endif; ?>
             <?php else: ?>
               <?php if ($en !== ''): ?><div class="skyed-sent__line skyed-sent__line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
               <?php if ($zh !== ''): ?><div class="skyed-sent__line skyed-sent__line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
@@ -361,13 +376,16 @@ class SkyEd_Lesson_Renderer {
           </div>
           <div class="skyed-sent__audio <?php echo $theme === 'sky_tiles' ? 'skyed-sent__audio--tile' : ''; ?>">
             <?php if ($theme === 'sky_tiles'): ?>
-              <?php if ($a_en): ?><button class="skyed-mini-play" type="button" data-audio="<?php echo esc_attr($a_en); ?>">Listen and say it</button><?php endif; ?>
-              <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">中</button><?php endif; ?>
-              <details class="skyed-sent__hint">
-                <summary>Hint</summary>
-                <?php if ($en !== ''): ?><div class="skyed-sent__hint-line skyed-sent__hint-line--en"><?php echo self::esc($en); ?></div><?php endif; ?>
-                <?php if ($zh !== ''): ?><div class="skyed-sent__hint-line skyed-sent__hint-line--zh"><?php echo self::esc($zh); ?></div><?php endif; ?>
+              <div class="skyed-sent__tile-actions">
+                <?php if ($a_en): ?><button class="skyed-mini-play skyed-mini-play--tile-main" type="button" data-audio="<?php echo esc_attr($a_en); ?>">▶ Listen</button><?php endif; ?>
+                <?php if ($a_zh): ?><button class="skyed-mini-play skyed-mini-play--hint" type="button" data-audio="<?php echo esc_attr($a_zh); ?>">中文</button><?php endif; ?>
+              </div>
+              <?php if ($zh !== ''): ?>
+              <details class="skyed-sent__hint skyed-sent__hint--tile">
+                <summary>Show meaning</summary>
+                <div class="skyed-sent__hint-line skyed-sent__hint-line--zh"><?php echo self::esc($zh); ?></div>
               </details>
+              <?php endif; ?>
             <?php else: ?>
               <?php if ($a_en): ?>
                 <div class="skyed-audio-box">
@@ -386,6 +404,48 @@ class SkyEd_Lesson_Renderer {
         </article>
         <?php return ob_get_clean();
     }
+
+    private static function render_qa_section(array $qa, string $theme) : string {
+        if ($theme !== 'sky' || empty($qa)) {
+            return '';
+        }
+        ob_start(); ?>
+        <section class="skyed-section skyed-section--qa">
+          <div class="skyed-section__head">
+            <div>
+              <div class="skyed-section__eyebrow">Talk together</div>
+              <h2 class="skyed-section__title">Questions and Answers</h2>
+            </div>
+            <div class="skyed-section__note">Use these short question-and-answer lines for guided speaking practice.</div>
+          </div>
+          <div class="skyed-grid skyed-grid--qa">
+            <?php foreach ($qa as $i => $row): ?>
+              <?php
+                $q = is_array($row) && isset($row['q']) ? (string)$row['q'] : '';
+                $a = is_array($row) && isset($row['a']) ? (string)$row['a'] : '';
+                if ($q === '' && $a === '') {
+                    continue;
+                }
+              ?>
+              <article class="skyed-qa-card">
+                <div class="skyed-qa-card__num"><?php echo intval($i + 1); ?></div>
+                <div class="skyed-qa-card__body">
+                  <?php if ($q !== ''): ?>
+                    <div class="skyed-qa-card__label">Question</div>
+                    <div class="skyed-qa-card__text skyed-qa-card__text--q"><?php echo self::esc($q); ?></div>
+                  <?php endif; ?>
+                  <?php if ($a !== ''): ?>
+                    <div class="skyed-qa-card__label skyed-qa-card__label--answer">Answer</div>
+                    <div class="skyed-qa-card__text skyed-qa-card__text--a"><?php echo self::esc($a); ?></div>
+                  <?php endif; ?>
+                </div>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        </section>
+        <?php return ob_get_clean();
+    }
+
     private static function render_info_row(array $categories) : string {
         if (!self::SHOW_PUBLIC_CATEGORIES || empty($categories)) {
             return '';
@@ -408,36 +468,40 @@ class SkyEd_Lesson_Renderer {
         <?php return ob_get_clean();
     }
 
-    private static function render_tag_games(array $tag_games) : string {
+    private static function render_tag_games(array $tag_games, string $theme = 'sky') : string {
         if (!self::SHOW_PUBLIC_TAG_GAMES || empty($tag_games)) {
             return '';
         }
+        $eyebrow = $theme === 'ng' ? 'Touch and listen' : 'Extra practice';
+        $title = $theme === 'ng' ? 'NG tag_s' : 'More to try';
+        $note = $theme === 'ng' ? 'Tap a lesson card and hear the word instantly.' : 'Optional extra activities linked to this lesson.';
         ob_start(); ?>
-        <section class="skyed-section skyed-section--tag-games">
+        <section class="skyed-section skyed-section--tag-games <?php echo $theme === 'ng' ? 'skyed-section--ng-tag' : ''; ?>">
           <div class="skyed-section__head">
             <div>
-              <div class="skyed-section__eyebrow">Extra practice</div>
-              <h2 class="skyed-section__title">More to try</h2>
+              <div class="skyed-section__eyebrow"><?php echo self::esc($eyebrow); ?></div>
+              <h2 class="skyed-section__title"><?php echo self::esc($title); ?></h2>
             </div>
-            <div class="skyed-section__note">Optional extra activities linked to this lesson.</div>
+            <div class="skyed-section__note"><?php echo self::esc($note); ?></div>
           </div>
-          <div class="skyed-tag-games">
+          <div class="skyed-tag-games <?php echo $theme === 'ng' ? 'skyed-tag-games--ng' : ''; ?>">
             <?php foreach ($tag_games as $game): ?>
               <?php if (!is_array($game)) { continue; } ?>
-              <a class="skyed-tag-game" href="<?php echo esc_url((string)($game['url'] ?? '')); ?>" target="_blank" rel="noopener">
+              <a class="skyed-tag-game <?php echo $theme === 'ng' ? 'skyed-tag-game--ng' : ''; ?>" href="<?php echo esc_url((string)($game['url'] ?? '')); ?>" target="_blank" rel="noopener">
                 <div class="skyed-tag-game__title"><?php echo self::esc((string)($game['title'] ?? ($game['game_id'] ?? 'Tag game'))); ?></div>
                 <div class="skyed-tag-game__meta"><?php echo self::esc((string)($game['tag'] ?? '')); ?></div>
+                <?php if ($theme === 'ng'): ?><div class="skyed-tag-game__cta">Open touch-and-listen practice</div><?php endif; ?>
               </a>
             <?php endforeach; ?>
           </div>
         </section>
         <?php return ob_get_clean();
     }
-    private static function render_extra_audio_section(array $items) : string {
+    private static function render_extra_audio_section(array $items, string $theme = 'sky') : string {
         if (empty($items)) {
             return '';
         }
-        $section_title = 'Extra Audio';
+        $section_title = $theme === 'ng' ? 'Happy Practice' : 'Extra Audio';
         foreach ($items as $item) {
             if (!is_array($item)) { continue; }
             $candidate = isset($item['title']) ? trim((string)$item['title']) : '';
@@ -446,21 +510,33 @@ class SkyEd_Lesson_Renderer {
                 break;
             }
         }
+        $is_happy = ($theme === 'ng');
         ob_start(); ?>
-        <section class="skyed-section skyed-section--extra-audio">
+        <section class="skyed-section skyed-section--extra-audio <?php echo $is_happy ? 'skyed-section--happy-practice' : ''; ?>">
           <div class="skyed-section__head">
             <div>
-              <div class="skyed-section__eyebrow">Special lesson</div>
+              <div class="skyed-section__eyebrow"><?php echo $is_happy ? 'Happy practice' : 'Special lesson'; ?></div>
               <h2 class="skyed-section__title"><?php echo self::esc($section_title); ?></h2>
             </div>
-            <div class="skyed-section__note">Teacher-routed local audio added for this lesson.</div>
+            <div class="skyed-section__note"><?php echo $is_happy ? 'Uploaded sing-along and repeat-after-me tracks for this NG lesson.' : 'Teacher-routed local audio added for this lesson.'; ?></div>
           </div>
-          <div class="skyed-extra-audio">
+          <div class="<?php echo $is_happy ? 'skyed-happy-audio' : 'skyed-extra-audio'; ?>">
             <?php foreach ($items as $item): if (!is_array($item)) { continue; } $url = isset($item['url']) ? (string)$item['url'] : ''; if ($url === '') { continue; } $label = isset($item['label']) ? (string)$item['label'] : $section_title; ?>
-              <article class="skyed-extra-audio__track">
-                <div class="skyed-extra-audio__label"><?php echo self::esc($label); ?></div>
-                <audio controls preload="none" src="<?php echo self::escu($url); ?>"></audio>
-              </article>
+              <?php if ($is_happy): ?>
+                <article class="skyed-happy-audio__track">
+                  <div class="skyed-happy-audio__sparkle">♪</div>
+                  <div class="skyed-happy-audio__body">
+                    <div class="skyed-happy-audio__label"><?php echo self::esc($label); ?></div>
+                    <div class="skyed-happy-audio__sub">Tap play and practise together.</div>
+                    <audio controls preload="none" src="<?php echo self::escu($url); ?>"></audio>
+                  </div>
+                </article>
+              <?php else: ?>
+                <article class="skyed-extra-audio__track">
+                  <div class="skyed-extra-audio__label"><?php echo self::esc($label); ?></div>
+                  <audio controls preload="none" src="<?php echo self::escu($url); ?>"></audio>
+                </article>
+              <?php endif; ?>
             <?php endforeach; ?>
           </div>
         </section>
@@ -521,7 +597,7 @@ class SkyEd_Lesson_Renderer {
                 <?php endif; ?>
               </div>
             </section>
-            <?php echo self::render_tag_games($tag_games); ?>
+            <?php echo self::render_tag_games($tag_games, $theme); ?>
           </div>
         </div>
         <script>
@@ -599,6 +675,7 @@ class SkyEd_Lesson_Renderer {
         $tag_games  = isset($payload['tag_games']) && is_array($payload['tag_games']) ? $payload['tag_games'] : [];
         $page_kind  = isset($payload['page_kind']) && is_string($payload['page_kind']) ? $payload['page_kind'] : 'lesson';
         $extra_audio = isset($payload['extra_audio']) && is_array($payload['extra_audio']) ? $payload['extra_audio'] : [];
+        $qa          = isset($payload['qa']) && is_array($payload['qa']) ? $payload['qa'] : [];
 
         $practice = [];
         if (isset($payload['practice']) && is_array($payload['practice'])) {
@@ -663,7 +740,7 @@ class SkyEd_Lesson_Renderer {
             <?php endif; ?>
 
             <?php // Categories are preserved in payload but hidden on public pages for now. ?>
-            <?php echo self::render_tag_games($tag_games); ?>
+            <?php echo self::render_tag_games($tag_games, $theme); ?>
 
             <section class="skyed-section skyed-section--vocab">
               <div class="skyed-section__head">
@@ -691,7 +768,9 @@ class SkyEd_Lesson_Renderer {
               </div>
             </section>
 
-            <?php echo self::render_extra_audio_section($extra_audio); ?>
+            <?php echo self::render_qa_section($qa, $theme); ?>
+
+            <?php echo self::render_extra_audio_section($extra_audio, $theme); ?>
 
             <section class="skyed-section skyed-section--practice">
               <div class="skyed-section__head">

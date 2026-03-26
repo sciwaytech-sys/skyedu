@@ -14,6 +14,10 @@ except Exception:  # pragma: no cover
     edge_tts = None
 
 
+def _tts_log(msg: str) -> None:
+    print(msg, flush=True)
+
+
 def _slugify(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"\s+", "_", s)
@@ -156,6 +160,8 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
         semaphore = asyncio.Semaphore(concurrency)
 
         async def _one(job: Dict[str, Any]) -> None:
+            label = str(job.get("label") or "item")
+            _tts_log(f"[TTS] START {label}")
             ok, err = await _synth_to_mp3(
                 job["text"],
                 job["voice"],
@@ -164,25 +170,22 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
                 max_retries=max_retries,
                 semaphore=semaphore,
             )
-            if not ok:
-                failures.append((str(job.get("label") or "item"), err))
+            if ok:
+                _tts_log(f"[TTS] DONE {label}")
+            else:
+                _tts_log(f"[TTS] FAIL {label}: {err}")
+                failures.append((label, err))
 
         await asyncio.gather(*[_one(job) for job in jobs], return_exceptions=False)
 
     if jobs:
+        _tts_log(f"[TTS] QUEUE total={len(jobs)} concurrency={concurrency} voices=EN:{voice_en} ZH:{voice_zh}")
         asyncio.run(_runner())
 
     if failures:
         report = out_dir / "tts_failures.txt"
-        report.write_text(
-            "\n".join(f"{label} :: {err}" for label, err in failures),
-            encoding="utf-8",
-        )
-        if len(failures) >= max(3, len(jobs) // 3):
-            raise RuntimeError(
-                f"TTS failed for {len(failures)} item(s). See: {report}"
-            )
-
+        report.write_text("\n".join(f"{label} :: {err}" for label, err in failures), encoding="utf-8")
+        raise RuntimeError(f"tag_s TTS failed for {len(failures)} item(s). See: {report}")
     return outputs
 
 
@@ -235,3 +238,53 @@ def generate_long_audio_variants(spec: Dict[str, Any], lesson_root: Path) -> Dic
         return spec
 
     return asyncio.run(_runner())
+
+
+
+def generate_word_audio_set(
+    items: List[Tuple[str, str]],
+    out_dir: Path,
+    *,
+    voice: str = "en-US-GuyNeural",
+    rate: str | None = None,
+) -> Dict[str, Path]:
+    """Generate one mp3 per (slug, text) pair and return slug->path."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    chosen_rate = (rate or (os.environ.get("SKYED_TTS_RATE") or "-10%").strip() or "-10%")
+    concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
+    max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
+    outputs: Dict[str, Path] = {}
+    jobs: List[Dict[str, Any]] = []
+    for slug, text in items:
+        safe_slug = _slugify(slug)
+        clean_text = str(text or "").strip()
+        if not safe_slug or not clean_text:
+            continue
+        out = out_dir / f"{safe_slug}.mp3"
+        outputs[safe_slug] = out
+        jobs.append({"slug": safe_slug, "text": clean_text, "voice": voice, "rate": chosen_rate, "out": out})
+
+    failures: List[Tuple[str, str]] = []
+
+    async def _runner() -> None:
+        semaphore = asyncio.Semaphore(concurrency)
+        async def _one(job: Dict[str, Any]) -> None:
+            label = str(job.get("slug") or "item")
+            _tts_log(f"[TTS] START tag_s:{label}")
+            ok, err = await _synth_to_mp3(job["text"], job["voice"], job["rate"], job["out"], max_retries=max_retries, semaphore=semaphore)
+            if ok:
+                _tts_log(f"[TTS] DONE tag_s:{label}")
+            else:
+                _tts_log(f"[TTS] FAIL tag_s:{label}: {err}")
+                failures.append((label, err))
+        await asyncio.gather(*[_one(job) for job in jobs], return_exceptions=False)
+
+    if jobs:
+        _tts_log(f"[TTS] QUEUE total={len(jobs)} concurrency={concurrency} voice={voice}")
+        asyncio.run(_runner())
+    if failures:
+        report = out_dir / "tts_failures.txt"
+        report.write_text("\n".join(f"{label} :: {err}" for label, err in failures), encoding="utf-8")
+        raise RuntimeError(f"tag_s TTS failed for {len(failures)} item(s). See: {report}")
+    return outputs

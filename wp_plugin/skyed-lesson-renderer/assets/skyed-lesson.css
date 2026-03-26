@@ -190,6 +190,16 @@
 .skyed-sent__line--zh{ color:var(--muted); }
 .skyed-sent--strict .skyed-sent__line{ background:var(--surface-3); }
 
+.skyed-grid--qa{ grid-template-columns:1fr; gap:1rem; }
+.skyed-qa-card{ display:grid; grid-template-columns:56px 1fr; gap:1rem; align-items:start; padding:1rem 1.1rem; border-radius:22px; background:linear-gradient(180deg,#ffffff,#f7fbff); border:1px solid var(--line); box-shadow:var(--shadow); }
+.skyed-qa-card__num{ width:56px; height:56px; border-radius:18px; display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent); font-size:1.15rem; font-weight:900; }
+.skyed-qa-card__body{ min-width:0; }
+.skyed-qa-card__label{ display:inline-flex; align-items:center; border-radius:999px; padding:.24rem .62rem; background:var(--chip); color:var(--accent); font-size:.72rem; font-weight:800; text-transform:uppercase; margin:0 0 .45rem; }
+.skyed-qa-card__label--answer{ margin-top:.85rem; background:#eef8ff; }
+.skyed-qa-card__text{ white-space:pre-wrap; line-height:1.45; }
+.skyed-qa-card__text--q{ font-size:1.06rem; font-weight:800; color:var(--ink); }
+.skyed-qa-card__text--a{ font-size:1rem; color:var(--muted); font-weight:700; }
+
 .skyed-practice{ padding:1rem; }
 .skyed-practice__toolbar{ display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:.35rem; }
 .skyed-practice__title{ font-weight:800; font-size:1.18rem; color:var(--ink); }
@@ -830,3 +840,150 @@ body.skyed-lesson-page nav[aria-label="Primary Menu"]{ display:none !important; 
 .skyed-extra-audio__track audio{
   width:100%;
 }
+
+
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent--tile{
+  grid-template-columns:1fr;
+  gap:.9rem;
+  padding:1rem;
+  background:linear-gradient(180deg,#fffef8,#fff7ea);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__tile-top{
+  display:flex;
+  align-items:center;
+  gap:.85rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__marker--tile{
+  width:52px;
+  height:52px;
+  border-radius:18px;
+  flex:0 0 52px;
+  font-size:1rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__oral-title{
+  font-size:1.08rem;
+  font-weight:900;
+  color:var(--ink);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__oral-note{
+  font-size:.92rem;
+  color:var(--muted);
+  margin-top:.12rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__tile-bubble{
+  display:block;
+  padding:1rem 1.1rem;
+  border-radius:22px;
+  background:#ffffff;
+  border:1px solid rgba(37,99,235,.12);
+  box-shadow:0 8px 20px rgba(37,99,235,.08);
+  font-size:1.15rem;
+  line-height:1.4;
+  font-weight:800;
+  color:var(--ink);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__audio--tile{
+  display:flex;
+  flex-direction:column;
+  gap:.75rem;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__tile-actions{
+  display:flex;
+  gap:.7rem;
+  flex-wrap:wrap;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-mini-play--tile-main{
+  min-width:180px;
+  justify-content:center;
+  padding:.95rem 1.15rem;
+  font-size:1rem;
+  background:linear-gradient(135deg,#2563eb,#22d3ee);
+  color:#fff;
+  border:0;
+  box-shadow:0 10px 22px rgba(37,99,235,.18);
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__hint--tile{
+  margin:0;
+  background:#fff;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__hint--tile summary{
+  color:#0f4fb6;
+}
+.skyed-lesson[data-theme="sky_tiles"] .skyed-sent__hint--tile .skyed-sent__hint-line--zh{
+  margin-top:.55rem;
+  font-size:.95rem;
+  font-weight:700;
+}
+@media (max-width: 640px){
+  .skyed-lesson[data-theme="sky_tiles"] .skyed-sent__tile-bubble{ font-size:1.02rem; }
+  .skyed-lesson[data-theme="sky_tiles"] .skyed-mini-play--tile-main{ width:100%; min-width:0; }
+}
+
+
+.skyed-lesson[data-theme="ng"] .skyed-section--ng-tag{
+  border-radius:28px;
+  background:linear-gradient(135deg,#fff7ed 0%, #fef3c7 42%, #eef6ff 100%);
+  border:1px solid rgba(251,146,60,.18);
+  box-shadow:0 22px 40px rgba(251,146,60,.10);
+}
+.skyed-tag-games--ng{
+  grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:1rem;
+}
+.skyed-tag-game--ng{
+  border:0;
+  border-radius:24px;
+  padding:1.15rem 1.1rem;
+  background:linear-gradient(180deg,#ffffff,#fff7ed);
+  box-shadow:0 18px 30px rgba(251,146,60,.10);
+}
+.skyed-tag-game--ng .skyed-tag-game__title{font-size:1.08rem;}
+.skyed-tag-game__cta{
+  margin-top:.7rem;
+  display:inline-flex;
+  align-items:center;
+  padding:.42rem .8rem;
+  border-radius:999px;
+  background:rgba(37,99,235,.10);
+  color:#1d4ed8;
+  font-weight:800;
+  font-size:.86rem;
+}
+.skyed-section--happy-practice{
+  border-radius:30px;
+  background:radial-gradient(circle at top left, rgba(56,189,248,.14), transparent 36%), linear-gradient(180deg,#ffffff,#f8fbff);
+  border:1px solid rgba(56,189,248,.18);
+  box-shadow:0 22px 40px rgba(56,189,248,.10);
+}
+.skyed-happy-audio{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:1rem;
+}
+.skyed-happy-audio__track{
+  display:grid;
+  grid-template-columns:54px 1fr;
+  gap:.9rem;
+  align-items:start;
+  padding:1rem;
+  border-radius:24px;
+  background:linear-gradient(180deg,#ffffff,#eff8ff);
+  border:1px solid rgba(56,189,248,.18);
+  box-shadow:0 14px 28px rgba(56,189,248,.10);
+}
+.skyed-happy-audio__sparkle{
+  width:54px;
+  height:54px;
+  border-radius:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1.55rem;
+  font-weight:900;
+  color:#0369a1;
+  background:linear-gradient(180deg,#dbeafe,#e0f2fe);
+}
+.skyed-happy-audio__body{min-width:0;}
+.skyed-happy-audio__label{font-size:1rem;font-weight:900;color:#0f172a;}
+.skyed-happy-audio__sub{margin:.24rem 0 .7rem;color:#64748b;font-size:.92rem;font-weight:700;}
+.skyed-happy-audio audio{width:100%;}
