@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from skyed.tag_registry import list_all_tag_games
+
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
 
@@ -136,7 +138,11 @@ class AppConfig:
     ng_phonics: str = ""
     ng_chant: str = ""
     ng_song: str = ""
+    ng_question: str = ""
     ng_other: str = ""
+    ng_other_2: str = ""
+    ng_primary_tag_game: str = ""
+    ng_secondary_tag_game: str = ""
 
     # thematic background helper
     picture_bg_source_image: str = ""
@@ -192,7 +198,11 @@ def _default_config(root_dir: Path) -> AppConfig:
         ng_phonics="",
         ng_chant="",
         ng_song="",
+        ng_question="",
         ng_other="",
+        ng_other_2="",
+        ng_primary_tag_game="",
+        ng_secondary_tag_game="",
         picture_bg_source_image="",
         picture_bg_transparency=76,
     )
@@ -317,7 +327,11 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         ng_phonics=str(data.get("ng_phonics", base.ng_phonics)),
         ng_chant=str(data.get("ng_chant", base.ng_chant)),
         ng_song=str(data.get("ng_song", base.ng_song)),
+        ng_question=str(data.get("ng_question", base.ng_question)),
         ng_other=str(data.get("ng_other", base.ng_other)),
+        ng_other_2=str(data.get("ng_other_2", base.ng_other_2)),
+        ng_primary_tag_game=str(data.get("ng_primary_tag_game", base.ng_primary_tag_game)),
+        ng_secondary_tag_game=str(data.get("ng_secondary_tag_game", base.ng_secondary_tag_game)),
         picture_bg_source_image=str(data.get("picture_bg_source_image", base.picture_bg_source_image)),
         picture_bg_transparency=int(data.get("picture_bg_transparency", base.picture_bg_transparency)),
     )
@@ -378,7 +392,11 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "ng_phonics": str(cfg.ng_phonics),
         "ng_chant": str(cfg.ng_chant),
         "ng_song": str(cfg.ng_song),
+        "ng_question": str(cfg.ng_question),
         "ng_other": str(cfg.ng_other),
+        "ng_other_2": str(cfg.ng_other_2),
+        "ng_primary_tag_game": str(cfg.ng_primary_tag_game),
+        "ng_secondary_tag_game": str(cfg.ng_secondary_tag_game),
         "picture_bg_source_image": str(cfg.picture_bg_source_image),
         "picture_bg_transparency": int(cfg.picture_bg_transparency),
     }
@@ -1576,52 +1594,118 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_tab_special_lessons(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(w)
+        lay.setSpacing(10)
 
-        lay.addWidget(self._brand_panel(
+        hero = self._brand_panel(
             "NG Lesson Builder",
-            "Create the NG lesson path with an automatic touch-and-listen tag_s pack plus optional Happy Practice audio blocks.",
-            ["NG tag_s uses en-US-GuyNeural at 0% rate", "Only filled Happy Practice slots are published", "Main lesson logic stays unchanged for other themes"]
-        ))
+            ("Create the NG lesson path with an automatic touch-and-listen tag_s pack.\n"
+             "Choose up to two existing tag_s packs and add optional Happy Practice audio."),
+            ["NG tag_s uses en-US-GuyNeural at 0% rate", "Only filled Happy Practice slots are published"]
+        )
+        hero.setMaximumHeight(160)
+        lay.addWidget(hero)
+
+        g_tag = self._group_box("NG tag_s for this lesson")
+        tag_lay = QtWidgets.QVBoxLayout(g_tag)
+        tag_lay.setContentsMargins(12, 12, 12, 12)
+        tag_lay.setSpacing(6)
+
+        select_row = QtWidgets.QHBoxLayout()
+        select_row.setSpacing(8)
+        self.combo_ng_primary_tag = QtWidgets.QComboBox()
+        self.combo_ng_secondary_tag = QtWidgets.QComboBox()
+        for combo in (self.combo_ng_primary_tag, self.combo_ng_secondary_tag):
+            combo.setMinimumHeight(28)
+            combo.setStyleSheet("QComboBox{font-size:10.5px;padding:3px 6px;} QComboBox QAbstractItemView{font-size:10.5px;}")
+        self.combo_ng_primary_tag.currentIndexChanged.connect(self.on_ng_settings_changed)
+        self.combo_ng_secondary_tag.currentIndexChanged.connect(self.on_ng_settings_changed)
+
+        primary_col = QtWidgets.QVBoxLayout()
+        primary_col.setSpacing(3)
+        lbl_primary = QtWidgets.QLabel("Primary existing tag_s")
+        lbl_primary.setStyleSheet("QLabel{font-size:10.5px;font-weight:700;color:#16324A;}")
+        primary_col.addWidget(lbl_primary)
+        primary_col.addWidget(self.combo_ng_primary_tag)
+
+        secondary_col = QtWidgets.QVBoxLayout()
+        secondary_col.setSpacing(3)
+        lbl_secondary = QtWidgets.QLabel("Second existing tag_s")
+        lbl_secondary.setStyleSheet("QLabel{font-size:10.5px;font-weight:700;color:#16324A;}")
+        secondary_col.addWidget(lbl_secondary)
+        secondary_col.addWidget(self.combo_ng_secondary_tag)
+
+        btn_refresh_tags = QtWidgets.QToolButton()
+        btn_refresh_tags.setToolTip("Refresh existing tag_s list from output/tag_s")
+        btn_refresh_tags.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_BrowserReload))
+        btn_refresh_tags.setFixedSize(28, 28)
+        btn_refresh_tags.clicked.connect(self.refresh_ng_tag_game_choices)
+
+        select_row.addLayout(primary_col, 1)
+        select_row.addLayout(secondary_col, 1)
+        select_row.addWidget(btn_refresh_tags, 0, QtCore.Qt.AlignmentFlag.AlignBottom)
+        tag_lay.addLayout(select_row)
+        lay.addWidget(g_tag)
 
         g = self._group_box("Happy Practice audio uploads")
-        fl = QtWidgets.QFormLayout(g)
+        g.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
+        audio_outer = QtWidgets.QVBoxLayout(g)
+        audio_outer.setContentsMargins(12, 10, 12, 10)
+        audio_outer.setSpacing(6)
+        audio_form = QtWidgets.QFormLayout()
+        audio_form.setHorizontalSpacing(8)
+        audio_form.setVerticalSpacing(6)
+        audio_form.setLabelAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
+        audio_form.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self._ng_audio_inputs = {}
-        for key, label in [
+        ng_audio_fields = [
             ("ng_words_repeat_1", "Words to repeat 1"),
             ("ng_words_repeat_2", "Words to repeat 2"),
             ("ng_words_repeat_3", "Words to repeat 3"),
             ("ng_phonics", "Phonics"),
             ("ng_chant", "Chant"),
             ("ng_song", "Song"),
+            ("ng_question", "Question"),
             ("ng_other", "Other"),
-        ]:
+            ("ng_other_2", "Other 2"),
+        ]
+        for key, label in ng_audio_fields:
+            lbl = QtWidgets.QLabel(f"{label}:")
+            lbl.setMinimumWidth(106)
+            lbl.setStyleSheet("QLabel{font-size:10.5px;color:#16324A;}")
+            row_widget = QtWidgets.QWidget()
+            row_lay = QtWidgets.QHBoxLayout(row_widget)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(6)
             edit = QtWidgets.QLineEdit(getattr(self.cfg, key, ""))
-            edit.setPlaceholderText(f"Optional audio file for {label.lower()}...")
+            edit.setMinimumHeight(26)
+            edit.setStyleSheet("QLineEdit{font-size:10px;padding:3px 6px;}")
+            edit.setPlaceholderText("Optional audio file")
             edit.textChanged.connect(self.on_ng_settings_changed)
-            btn = QtWidgets.QPushButton("Browse Audio")
-            btn.setMinimumHeight(34)
+            btn = QtWidgets.QToolButton()
+            btn.setText("…")
+            btn.setToolTip(f"Browse audio for {label}")
+            btn.setFixedSize(28, 26)
             btn.clicked.connect(lambda _=False, field_key=key: self.browse_ng_audio_file(field_key))
-            row = QtWidgets.QHBoxLayout()
-            row.addWidget(edit, 1)
-            row.addWidget(btn)
-            fl.addRow(f"{label}:", row)
+            row_lay.addWidget(edit, 1)
+            row_lay.addWidget(btn, 0)
+            audio_form.addRow(lbl, row_widget)
             self._ng_audio_inputs[key] = edit
-
-        note = QtWidgets.QLabel("Filled files are published as the Happy Practice section, placed right under the NG tag_s block. Empty slots are ignored.")
-        note.setWordWrap(True)
-        fl.addRow(note)
+        audio_outer.addLayout(audio_form)
         lay.addWidget(g)
+        self.refresh_ng_tag_game_choices()
 
         action_box = self._group_box("NG lesson actions")
-        action_lay = QtWidgets.QVBoxLayout(action_box)
+        action_lay = QtWidgets.QHBoxLayout(action_box)
+        action_lay.setContentsMargins(12, 12, 12, 12)
+        action_lay.setSpacing(10)
         btn_gen = QtWidgets.QPushButton("Generate")
         btn_gen.setMinimumHeight(40)
         btn_gen.clicked.connect(lambda: self.run_ng_pipeline(mode="generate"))
         btn_pub = QtWidgets.QPushButton("Generate + Publish")
-        btn_pub.setMinimumHeight(42)
+        btn_pub.setMinimumHeight(40)
         btn_pub.clicked.connect(lambda: self.run_ng_pipeline(mode="generate_publish"))
-        action_lay.addWidget(btn_gen)
-        action_lay.addWidget(btn_pub)
+        action_lay.addWidget(btn_gen, 1)
+        action_lay.addWidget(btn_pub, 1)
         lay.addWidget(action_box)
         lay.addStretch(1)
         return w
@@ -2135,12 +2219,88 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cfg.special_audio_title = self.edit_special_audio_title.text().strip() or "Extra Audio"
         save_config(self.cfg_path, self.cfg)
 
+    def _combo_tag_game_value(self, combo: QtWidgets.QComboBox | None) -> str:
+        if combo is None or combo.currentIndex() < 0:
+            return ""
+        data = combo.currentData()
+        return str(data or "").strip()
+
+    def refresh_ng_tag_game_choices(self) -> None:
+        combos = []
+        if hasattr(self, "combo_ng_primary_tag"):
+            combos.append((self.combo_ng_primary_tag, str(self.cfg.ng_primary_tag_game or "")))
+        if hasattr(self, "combo_ng_secondary_tag"):
+            combos.append((self.combo_ng_secondary_tag, str(self.cfg.ng_secondary_tag_game or "")))
+        if not combos:
+            return
+        tags_base = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
+        entries = list_all_tag_games(project_root=self.root_dir, tags_public_base=tags_base)
+        for combo, selected_value in combos:
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem("— None —", "")
+            found = False
+            for entry in entries:
+                value = json.dumps(entry, ensure_ascii=False, sort_keys=True)
+                label = f"{entry.get('title', 'tag_s')}  [{entry.get('tag', '')}/{entry.get('game_id', '')}]"
+                combo.addItem(label, value)
+                if selected_value and value == selected_value:
+                    found = True
+            if selected_value and not found:
+                try:
+                    entry = json.loads(selected_value)
+                    if isinstance(entry, dict):
+                        label = f"{entry.get('title', 'tag_s')}  [{entry.get('tag', '')}/{entry.get('game_id', '')}]"
+                        combo.addItem(label, selected_value)
+                        found = True
+                except Exception:
+                    pass
+            combo.setCurrentIndex(combo.findData(selected_value) if selected_value else 0)
+            if combo.currentIndex() < 0:
+                combo.setCurrentIndex(0)
+            combo.blockSignals(False)
+        self.append_log(f"[NG] tag_s list refreshed: {len(entries)} found\n")
+
     def on_ng_settings_changed(self, *_args) -> None:
-        for key in ("ng_words_repeat_1", "ng_words_repeat_2", "ng_words_repeat_3", "ng_phonics", "ng_chant", "ng_song", "ng_other"):
+        for key in ("ng_words_repeat_1", "ng_words_repeat_2", "ng_words_repeat_3", "ng_phonics", "ng_chant", "ng_song", "ng_question", "ng_other", "ng_other_2"):
             widget = getattr(self, "_ng_audio_inputs", {}).get(key) if hasattr(self, "_ng_audio_inputs") else None
             if widget is not None:
                 setattr(self.cfg, key, widget.text().strip())
+        if hasattr(self, "combo_ng_primary_tag"):
+            self.cfg.ng_primary_tag_game = self._combo_tag_game_value(self.combo_ng_primary_tag)
+        if hasattr(self, "combo_ng_secondary_tag"):
+            self.cfg.ng_secondary_tag_game = self._combo_tag_game_value(self.combo_ng_secondary_tag)
         save_config(self.cfg_path, self.cfg)
+
+    def _selected_ng_tag_games(self) -> List[Dict[str, str]]:
+        out: List[Dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for raw in (str(self.cfg.ng_primary_tag_game or ""), str(self.cfg.ng_secondary_tag_game or "")):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                entry = json.loads(raw)
+            except Exception:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            tag = str(entry.get("tag") or "").strip()
+            game_id = str(entry.get("game_id") or "").strip()
+            if not tag or not game_id:
+                continue
+            key = (tag, game_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "tag": tag,
+                "game_id": game_id,
+                "title": str(entry.get("title") or "").strip(),
+                "renderer": str(entry.get("renderer") or "").strip(),
+                "url": str(entry.get("url") or "").strip(),
+            })
+        return out
 
     def _ng_audio_field_map(self) -> Dict[str, str]:
         labels = {
@@ -2150,7 +2310,9 @@ class MainWindow(QtWidgets.QMainWindow):
             "ng_phonics": "Phonics",
             "ng_chant": "Chant",
             "ng_song": "Song",
+            "ng_question": "Question",
             "ng_other": "Other",
+            "ng_other_2": "Other 2",
         }
         out: Dict[str, str] = {}
         for key, label in labels.items():
@@ -2583,6 +2745,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _apply_ng_env(self, env: Dict[str, str]) -> None:
         env["SKYED_NG_AUDIO_FIELDS"] = json.dumps(self._ng_audio_field_map(), ensure_ascii=False)
+        env["SKYED_NG_SELECTED_TAG_GAMES"] = json.dumps(self._selected_ng_tag_games(), ensure_ascii=False)
         env["SKYED_NG_TAG_VOICE"] = "en-US-GuyNeural"
         env["SKYED_NG_TAG_RATE"] = "0%"
 

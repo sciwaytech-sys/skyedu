@@ -42,6 +42,17 @@
   "special_audio_enabled": false,
   "special_audio_dir": "",
   "special_audio_title": "Extra Audio",
+  "ng_words_repeat_1": "",
+  "ng_words_repeat_2": "",
+  "ng_words_repeat_3": "",
+  "ng_phonics": "",
+  "ng_chant": "",
+  "ng_song": "",
+  "ng_question": "",
+  "ng_other": "",
+  "ng_other_2": "",
+  "ng_primary_tag_game": "",
+  "ng_secondary_tag_game": "",
   "picture_bg_source_image": "",
   "picture_bg_transparency": 76
 }

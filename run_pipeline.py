@@ -425,6 +425,89 @@ def _copy_ng_happy_practice_assets_from_env(lesson_root: Path) -> List[Dict[str,
     return items
 
 
+
+def _load_ng_selected_tag_games_from_env() -> List[Dict[str, str]]:
+    raw = (os.environ.get("SKYED_NG_SELECTED_TAG_GAMES", "") or "").strip()
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"Invalid SKYED_NG_SELECTED_TAG_GAMES JSON: {exc}")
+    if not isinstance(payload, list):
+        return []
+    out: List[Dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        tag = str(item.get("tag") or "").strip()
+        game_id = str(item.get("game_id") or "").strip()
+        if not tag or not game_id:
+            continue
+        key = (tag, game_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "tag": tag,
+            "game_id": game_id,
+            "title": str(item.get("title") or "").strip(),
+            "renderer": str(item.get("renderer") or "").strip(),
+            "url": str(item.get("url") or "").strip(),
+        })
+    return out
+
+
+def _merge_tag_game_lists(*groups: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for group in groups:
+        for item in group or []:
+            if not isinstance(item, dict):
+                continue
+            tag = str(item.get("tag") or "").strip()
+            game_id = str(item.get("game_id") or "").strip()
+            if not tag or not game_id:
+                continue
+            key = (tag, game_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+    return out
+
+
+def _tag_game_info_from_root(game_root: Path | str | None) -> Optional[Dict[str, str]]:
+    if not game_root:
+        return None
+    root_path = Path(game_root)
+    if not root_path.exists():
+        return None
+    tag = root_path.parent.name
+    game_id = root_path.name
+    title = f"{tag} · {game_id.replace('_', ' ').replace('-', ' ').title()}"
+    renderer = ""
+    game_json = root_path / "game.json"
+    if game_json.exists():
+        try:
+            payload = json.loads(game_json.read_text(encoding="utf-8", errors="ignore"))
+            meta = payload.get("meta") if isinstance(payload, dict) else {}
+            if isinstance(meta, dict):
+                title = str(meta.get("title") or title).strip() or title
+                renderer = str(meta.get("renderer") or "").strip()
+        except Exception:
+            pass
+    base = (os.environ.get("TAGS_PUBLIC_BASE", "") or "").rstrip("/")
+    url = f"{base}/{tag}/{game_id}/index.html" if base else ""
+    return {
+        "tag": tag,
+        "game_id": game_id,
+        "title": title,
+        "renderer": renderer,
+        "url": url,
+    }
+
 def _build_ng_tag_game(spec: Dict[str, List[Dict[str, str]]], lesson_root: Path, title: str) -> Optional[str]:
     tags = [str(t or "").strip() for t in (spec.get("tags") or []) if str(t or "").strip()]
     tag = (tags[0] if tags else slugify(title) or "ng").strip()
@@ -851,7 +934,14 @@ def main() -> None:
     discover_tags = spec.get("tags", []) or []
     if lesson_theme == "ng" and not discover_tags:
         discover_tags = [slugify(title) or "ng"]
-    tag_games = discover_tag_games(discover_tags, theme=lesson_theme)
+    selected_ng_tag_games = _load_ng_selected_tag_games_from_env() if lesson_theme == "ng" else []
+    auto_ng_tag_game = _tag_game_info_from_root(ng_tag_game_root) if lesson_theme == "ng" else None
+    if lesson_theme == "ng" and selected_ng_tag_games:
+        tag_games = _merge_tag_game_lists([auto_ng_tag_game] if auto_ng_tag_game else [], selected_ng_tag_games)
+    else:
+        tag_games = discover_tag_games(discover_tags, theme=lesson_theme)
+        if lesson_theme == "ng" and auto_ng_tag_game:
+            tag_games = _merge_tag_game_lists([auto_ng_tag_game], tag_games)
 
     items_local: List[Dict[str, str]] = []
     vocab_list = spec.get("vocab", []) or []
