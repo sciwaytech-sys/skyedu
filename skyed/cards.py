@@ -24,11 +24,8 @@ def _progress_log(message: str) -> None:
     print(str(message or ""), flush=True)
 
 
-def slugify(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"[^a-z0-9_\-]+", "", s)
-    return s or "item"
+# slugify re-exported from utils — kept for asset_factory.py backward compat
+from .utils import slugify_file as slugify  # noqa: F401
 
 
 def _font_candidates(user_font: Optional[str]) -> List[str]:

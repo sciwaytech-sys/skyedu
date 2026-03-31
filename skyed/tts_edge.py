@@ -18,15 +18,37 @@ def _tts_log(msg: str) -> None:
     print(msg, flush=True)
 
 
-def _slugify(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"[^a-z0-9_\-]+", "", s)
-    return s or "item"
+# _slugify sourced from utils (same logic, single definition)
+from .utils import slugify_file as _slugify  # noqa: F401
 
 
 def _rate_string(rate_percent: int) -> str:
     return f"+{rate_percent}%" if rate_percent >= 0 else f"{rate_percent}%"
+
+def _normalize_rate_value(value: object, default: str = "-10%") -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raw = str(default or "-10%").strip() or "-10%"
+    if raw.endswith('%'):
+        num = raw[:-1].strip()
+    else:
+        num = raw
+    if not num:
+        num = str(default or "-10%").strip().rstrip('%') or "-10"
+    try:
+        iv = int(float(num))
+    except Exception:
+        fallback = str(default or "-10%").strip() or "-10%"
+        if not fallback.endswith('%'):
+            try:
+                fallback = _rate_string(int(float(fallback)))
+            except Exception:
+                fallback = "-10%"
+        elif fallback.startswith('0') or fallback == '0%':
+            fallback = "+0%"
+        return fallback
+    return _rate_string(iv)
+
 
 
 async def _synth_to_mp3(
@@ -99,14 +121,7 @@ def generate_audio(spec: Dict[str, Any], out_dir: Path) -> List[Path]:
     voice_en = (os.environ.get("SKYED_VOICE_EN") or "en-US-JennyNeural").strip()
     voice_zh = (os.environ.get("SKYED_VOICE_ZH") or "zh-CN-XiaoxiaoNeural").strip()
 
-    rate_env = (os.environ.get("SKYED_TTS_RATE") or "-10%").strip()
-    if rate_env.endswith("%"):
-        rate = rate_env
-    else:
-        try:
-            rate = _rate_string(int(rate_env))
-        except Exception:
-            rate = "-10%"
+    rate = _normalize_rate_value(os.environ.get("SKYED_TTS_RATE"), "-10%")
 
     concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
     max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
@@ -197,14 +212,7 @@ def generate_long_audio_variants(spec: Dict[str, Any], lesson_root: Path) -> Dic
     for reading/listening blocks when those sections exist.
     """
     lesson_root = Path(lesson_root)
-    rate_env = (os.environ.get("SKYED_TTS_RATE") or "-10%").strip()
-    if rate_env.endswith("%"):
-        rate = rate_env
-    else:
-        try:
-            rate = _rate_string(int(rate_env))
-        except Exception:
-            rate = "-10%"
+    rate = _normalize_rate_value(os.environ.get("SKYED_TTS_RATE"), "-10%")
 
     concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
     max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
@@ -251,7 +259,7 @@ def generate_word_audio_set(
     """Generate one mp3 per (slug, text) pair and return slug->path."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    chosen_rate = (rate or (os.environ.get("SKYED_TTS_RATE") or "-10%").strip() or "-10%")
+    chosen_rate = _normalize_rate_value(rate or os.environ.get("SKYED_TTS_RATE"), "-10%")
     concurrency = max(1, int(os.environ.get("SKYED_TTS_CONCURRENCY", "3") or "3"))
     max_retries = max(1, int(os.environ.get("SKYED_TTS_RETRIES", "5") or "5"))
     outputs: Dict[str, Path] = {}

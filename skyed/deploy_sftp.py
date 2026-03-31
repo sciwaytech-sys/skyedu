@@ -38,7 +38,13 @@ def load_sftp_config_from_env() -> SFTPConfig:
 
 
 def _connect(cfg: SFTPConfig):
-    import paramiko  # type: ignore
+    try:
+        import paramiko  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "Missing Python dependency 'paramiko' required for SFTP deploy. "
+            f"Install it into the same interpreter/venv that runs the pipeline: {exc}"
+        )
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())

@@ -4,6 +4,7 @@ import json
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List
+import re
 
 
 def _safe_tag(s: str) -> str:
@@ -69,6 +70,7 @@ def export_tag_s_matching_pairs(
     }
 
     (game_root / "game.json").write_text(json.dumps(game, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_standalone_index(game_root, game)
     return game_root
 
 
@@ -162,4 +164,35 @@ def export_tag_s_touch_listen_cards(
     }
 
     (game_root / "game.json").write_text(json.dumps(game, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_standalone_index(game_root, game)
     return game_root
+
+
+def _write_standalone_index(game_root: Path, game: Dict[str, Any]) -> None:
+    template = game_root / "index.html"
+    if template.exists():
+        html = template.read_text(encoding="utf-8", errors="ignore")
+    else:
+        html = """<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>tag_s</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script id="game-data" type="application/json">__GAME_JSON__</script>
+  <script type="module" src="./runtime.js"></script>
+</body>
+</html>
+"""
+    payload = json.dumps(game, ensure_ascii=False, indent=2).replace("</", "<\\/")
+    if "__GAME_JSON__" in html:
+        html = html.replace("__GAME_JSON__", payload)
+    elif 'id="game-data"' in html:
+        html = re.sub(r'(<script[^>]*id="game-data"[^>]*>)(.*?)(</script>)', lambda m: m.group(1) + payload + m.group(3), html, flags=re.S)
+    else:
+        html = html.replace('</body>', f'<script id="game-data" type="application/json">{payload}</script></body>')
+    template.write_text(html, encoding="utf-8")

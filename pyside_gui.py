@@ -143,6 +143,7 @@ class AppConfig:
     ng_other_2: str = ""
     ng_primary_tag_game: str = ""
     ng_secondary_tag_game: str = ""
+    ng_last_import_dir: str = ""
 
     # thematic background helper
     picture_bg_source_image: str = ""
@@ -203,6 +204,7 @@ def _default_config(root_dir: Path) -> AppConfig:
         ng_other_2="",
         ng_primary_tag_game="",
         ng_secondary_tag_game="",
+        ng_last_import_dir="",
         picture_bg_source_image="",
         picture_bg_transparency=76,
     )
@@ -332,6 +334,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         ng_other_2=str(data.get("ng_other_2", base.ng_other_2)),
         ng_primary_tag_game=str(data.get("ng_primary_tag_game", base.ng_primary_tag_game)),
         ng_secondary_tag_game=str(data.get("ng_secondary_tag_game", base.ng_secondary_tag_game)),
+        ng_last_import_dir=str(data.get("ng_last_import_dir", base.ng_last_import_dir)),
         picture_bg_source_image=str(data.get("picture_bg_source_image", base.picture_bg_source_image)),
         picture_bg_transparency=int(data.get("picture_bg_transparency", base.picture_bg_transparency)),
     )
@@ -397,6 +400,7 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "ng_other_2": str(cfg.ng_other_2),
         "ng_primary_tag_game": str(cfg.ng_primary_tag_game),
         "ng_secondary_tag_game": str(cfg.ng_secondary_tag_game),
+        "ng_last_import_dir": str(cfg.ng_last_import_dir),
         "picture_bg_source_image": str(cfg.picture_bg_source_image),
         "picture_bg_transparency": int(cfg.picture_bg_transparency),
     }
@@ -477,7 +481,7 @@ def _save_json(path: Path, obj: Dict[str, Any]) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 PUBLISH_SURFACES = {
-    "Standard Homework": [("Sky", "sky"), ("Fun Mission", "fun_mission"), ("NG", "ng")],
+    "Standard Homework": [("Sky", "sky"), ("Fun Mission", "fun_mission")],
     "Kid Homework": [("Sky Tiles", "sky_tiles")],
     "Older Students": [("Strict Dark", "strict_dark")],
 }
@@ -521,7 +525,8 @@ class PublishPresetDialog(QtWidgets.QDialog):
 
         note = QtWidgets.QLabel(
             "Sky = balanced standard homework. Sky Tiles = kid image/audio-first. "
-            "Strict Dark = older-student, text-first study mode. Fun Mission = guided checkpoint style."
+            "Strict Dark = older-student, text-first study mode. Fun Mission = guided checkpoint style. "
+            "NG publishing is separate and only available from the NG tab."
         )
         note.setWordWrap(True)
         lay.addWidget(note)
@@ -799,6 +804,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setWindowTitle("SkyEd Automation — Qt")
         self.resize(1600, 900)
+        self._default_layout_applied = False
+        self._layout_user_adjusted = False
         self.setMinimumSize(1440, 900)
         self.asset_batcher_window = None
         self.card_cutter_window = None
@@ -834,6 +841,8 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(450, self.load_voices_background)
         QtCore.QTimer.singleShot(0, self._start_full_window_mode)
         QtCore.QTimer.singleShot(0, self.apply_default_sizes)
+        QtCore.QTimer.singleShot(120, self.apply_default_sizes)
+        QtCore.QTimer.singleShot(400, self.apply_default_sizes)
 
     def _start_full_window_mode(self) -> None:
         self.setWindowState(self.windowState() | QtCore.Qt.WindowMaximized)
@@ -865,9 +874,6 @@ class MainWindow(QtWidgets.QMainWindow):
         elif selected_theme == "strict_dark":
             selected_lesson_mode = "reading_listening"
             selected_surface_variant = "strict_dark"
-        elif selected_theme == "ng":
-            selected_lesson_mode = "standard_homework"
-            selected_surface_variant = "ng"
         else:
             selected_lesson_mode = "standard_homework"
             selected_surface_variant = "classic"
@@ -994,6 +1000,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         more_menu = QtWidgets.QMenu(self)
         act_refresh_voices = more_menu.addAction("Refresh Voices")
+        act_reset_layout = more_menu.addAction("Reset Layout")
         more_menu.addSeparator()
         act_pub_only = more_menu.addAction("Publish Only")
         act_stop = more_menu.addAction("Stop Pipeline")
@@ -1009,6 +1016,7 @@ class MainWindow(QtWidgets.QMainWindow):
         more_btn.setMenu(more_menu)
 
         act_refresh_voices.triggered.connect(self.load_voices_background)
+        act_reset_layout.triggered.connect(self.reset_dashboard_layout)
         act_pub_only.triggered.connect(self.run_publish_only)
         act_stop.triggered.connect(self.stop_pipeline)
         act_test_en.triggered.connect(lambda: self.test_tts("en"))
@@ -1023,31 +1031,42 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.hsplit = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
         self.hsplit.setChildrenCollapsible(False)
+        self.hsplit.setHandleWidth(12)
+        self.hsplit.setOpaqueResize(True)
+        self.hsplit.splitterMoved.connect(self._mark_layout_user_adjusted)
         self.setCentralWidget(self.hsplit)
 
         left = QtWidgets.QWidget()
+        left.setMinimumWidth(420)
+        left.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         left_layout = QtWidgets.QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
         self.vsplit = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
         self.vsplit.setChildrenCollapsible(False)
+        self.vsplit.setHandleWidth(12)
+        self.vsplit.setOpaqueResize(True)
+        self.vsplit.splitterMoved.connect(self._mark_layout_user_adjusted)
         left_layout.addWidget(self.vsplit)
 
         self.editor = QtWidgets.QPlainTextEdit()
         self.editor.setPlaceholderText("Paste your homework.txt content here…")
         self.editor.setFont(QtGui.QFont("Consolas", 11))
+        self.editor.setMinimumHeight(260)
         self.vsplit.addWidget(self.editor)
 
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setFont(QtGui.QFont("Consolas", 10))
         self.log.setPlaceholderText("Live process log…")
+        self.log.setMinimumHeight(220)
         self.vsplit.addWidget(self.log)
 
         self.error_box = QtWidgets.QPlainTextEdit()
         self.error_box.setReadOnly(True)
         self.error_box.setFont(QtGui.QFont("Consolas", 10))
         self.error_box.setPlaceholderText("Generation errors and reasons will appear here…")
+        self.error_box.setMinimumHeight(150)
         self.error_box.setStyleSheet("QPlainTextEdit { background:#fff7f7; border:1px solid #e7b4b4; color:#7a1212; }")
         self.vsplit.addWidget(self.error_box)
 
@@ -1055,6 +1074,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.right_tabs = QtWidgets.QTabWidget()
         self.right_tabs.setDocumentMode(True)
+        self.right_tabs.setMinimumWidth(560)
+        self.right_tabs.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         self.right_tabs.addTab(self._build_tab_quick_actions(), "Quick")
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
@@ -1063,6 +1084,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
         self.right_tabs.addTab(self._build_tab_picture_reader(), "Picture Reader")
         self.hsplit.addWidget(self.right_tabs)
+        self.hsplit.setStretchFactor(0, 1)
+        self.hsplit.setStretchFactor(1, 1)
+        self.vsplit.setStretchFactor(0, 5)
+        self.vsplit.setStretchFactor(1, 3)
+        self.vsplit.setStretchFactor(2, 2)
 
         self.status = QtWidgets.QStatusBar()
         self.setStatusBar(self.status)
@@ -1078,15 +1104,34 @@ class MainWindow(QtWidgets.QMainWindow):
             f"[CFG] workflow(resolved)={wf} exists={wf.exists()}\n"
         )
 
+    def _mark_layout_user_adjusted(self, *_args) -> None:
+        if self._default_layout_applied:
+            self._layout_user_adjusted = True
+
     def apply_default_sizes(self) -> None:
+        if self._layout_user_adjusted:
+            return
         w = self.hsplit.width() or max(self.width(), 1600)
-        left_w = max(700, int(w * 0.44))
-        self.hsplit.setSizes([left_w, max(420, w - left_w)])
+        left_w = max(760, int(w * 0.50))
+        right_w = max(560, w - left_w)
+        self.hsplit.setSizes([left_w, right_w])
         h = self.vsplit.height() or max(self.height(), 900)
-        editor_h = int(h * 0.58)
-        log_h = max(180, int(h * 0.20))
-        error_h = max(160, h - editor_h - log_h)
+        editor_h = max(300, int(h * 0.48))
+        log_h = max(240, int(h * 0.30))
+        error_h = max(170, h - editor_h - log_h)
         self.vsplit.setSizes([editor_h, log_h, error_h])
+        self._default_layout_applied = True
+
+    def showEvent(self, event: QtGui.QShowEvent) -> None:
+        super().showEvent(event)
+        if not self._layout_user_adjusted:
+            QtCore.QTimer.singleShot(0, self.apply_default_sizes)
+            QtCore.QTimer.singleShot(120, self.apply_default_sizes)
+
+    def reset_dashboard_layout(self) -> None:
+        self._layout_user_adjusted = False
+        self._default_layout_applied = False
+        self.apply_default_sizes()
 
     def _group_box(self, title: str) -> QtWidgets.QGroupBox:
         g = QtWidgets.QGroupBox(title)
@@ -1599,8 +1644,8 @@ class MainWindow(QtWidgets.QMainWindow):
         hero = self._brand_panel(
             "NG Lesson Builder",
             ("Create the NG lesson path with an automatic touch-and-listen tag_s pack.\n"
-             "Choose up to two existing tag_s packs and add optional Happy Practice audio."),
-            ["NG tag_s uses en-US-GuyNeural at 0% rate", "Only filled Happy Practice slots are published"]
+             "Choose up to two existing tag_s packs and add optional Happy Practice audio. NG publishing is fully separate from the main homework publish flow."),
+            ["NG tag_s uses en-US-GuyNeural at -22% rate", "Only filled Happy Practice slots are published"]
         )
         hero.setMaximumHeight(160)
         lay.addWidget(hero)
@@ -1635,7 +1680,7 @@ class MainWindow(QtWidgets.QMainWindow):
         secondary_col.addWidget(self.combo_ng_secondary_tag)
 
         btn_refresh_tags = QtWidgets.QToolButton()
-        btn_refresh_tags.setToolTip("Refresh existing tag_s list from output/tag_s")
+        btn_refresh_tags.setToolTip("Refresh existing tag_s list from the project tag_s folder")
         btn_refresh_tags.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_BrowserReload))
         btn_refresh_tags.setFixedSize(28, 28)
         btn_refresh_tags.clicked.connect(self.refresh_ng_tag_game_choices)
@@ -1698,12 +1743,12 @@ class MainWindow(QtWidgets.QMainWindow):
         action_lay = QtWidgets.QHBoxLayout(action_box)
         action_lay.setContentsMargins(12, 12, 12, 12)
         action_lay.setSpacing(10)
-        btn_gen = QtWidgets.QPushButton("Generate")
+        btn_gen = QtWidgets.QPushButton("Generate NG")
         btn_gen.setMinimumHeight(40)
         btn_gen.clicked.connect(lambda: self.run_ng_pipeline(mode="generate"))
-        btn_pub = QtWidgets.QPushButton("Generate + Publish")
+        btn_pub = QtWidgets.QPushButton("Publish NG")
         btn_pub.setMinimumHeight(40)
-        btn_pub.clicked.connect(lambda: self.run_ng_pipeline(mode="generate_publish"))
+        btn_pub.clicked.connect(self.run_ng_publish)
         action_lay.addWidget(btn_gen, 1)
         action_lay.addWidget(btn_pub, 1)
         lay.addWidget(action_box)
@@ -1732,13 +1777,18 @@ class MainWindow(QtWidgets.QMainWindow):
         fl.addRow(lbl_base)
 
         self.combo_lesson_theme = QtWidgets.QComboBox()
-        self.combo_lesson_theme.addItems(["sky", "fun_mission", "strict_dark", "sky_tiles", "ng"])
-        self.combo_lesson_theme.setCurrentText(_normalize_theme_value(self.cfg.lesson_theme))
+        self.combo_lesson_theme.addItems(["sky", "fun_mission", "strict_dark", "sky_tiles"])
+        initial_publish_theme = _normalize_theme_value(self.cfg.lesson_theme)
+        if initial_publish_theme == "ng":
+            initial_publish_theme = "sky"
+            self.cfg.lesson_theme = "sky"
+            save_config(self.cfg_path, self.cfg)
+        self.combo_lesson_theme.setCurrentText(initial_publish_theme)
         self.combo_lesson_theme.currentTextChanged.connect(self.on_lesson_theme_changed)
         fl.addRow("Default publish surface:", self.combo_lesson_theme)
 
         tip = QtWidgets.QLabel(
-            "Default surface used when publishing. Publish actions will also open a popup so you can choose Sky, Sky Tiles, Fun Mission, Strict Dark, or NG for that run."
+            "Default surface used when publishing. Publish actions will also open a popup so you can choose Sky, Sky Tiles, Fun Mission, or Strict Dark for that run. NG is handled separately in the NG tab."
         )
         tip.setWordWrap(True)
         fl.addRow(tip)
@@ -2219,11 +2269,66 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cfg.special_audio_title = self.edit_special_audio_title.text().strip() or "Extra Audio"
         save_config(self.cfg_path, self.cfg)
 
+    def _parse_tag_game_entry(self, raw: str) -> Dict[str, Any]:
+        raw = str(raw or "").strip()
+        if not raw:
+            return {}
+        try:
+            entry = json.loads(raw)
+        except Exception:
+            return {}
+        return entry if isinstance(entry, dict) else {}
+
+    def _tag_game_key(self, entry: Dict[str, Any] | None) -> tuple[str, str]:
+        if not isinstance(entry, dict):
+            return ("", "")
+        tag = str(entry.get("tag") or "").strip()
+        game_id = str(entry.get("game_id") or "").strip()
+        return (tag, game_id)
+
+    def _compact_tag_game_entry(self, entry: Dict[str, Any] | None) -> Dict[str, Any]:
+        if not isinstance(entry, dict):
+            return {}
+        out = {
+            "tag": str(entry.get("tag") or "").strip(),
+            "game_id": str(entry.get("game_id") or "").strip(),
+            "title": str(entry.get("title") or "").strip(),
+            "renderer": str(entry.get("renderer") or "").strip(),
+            "url": str(entry.get("url") or "").strip(),
+            "local_root": str(entry.get("local_root") or "").strip(),
+        }
+        return {k: v for k, v in out.items() if v}
+
+    def _renderer_label(self, renderer: str) -> str:
+        key = str(renderer or "").strip().lower()
+        mapping = {
+            "touch_listen_cards": "Touch and Listen",
+            "matching_pairs": "Matching Pairs",
+            "image_cards": "Image Cards",
+        }
+        return mapping.get(key, key.replace("_", " ").title() if key else "tag_s")
+
+    def _tag_game_combo_label(self, entry: Dict[str, Any] | None) -> str:
+        if not isinstance(entry, dict):
+            return "tag_s"
+        tag = str(entry.get("tag") or "").strip()
+        game_id = str(entry.get("game_id") or "").strip()
+        title = str(entry.get("title") or "").strip()
+        renderer = self._renderer_label(entry.get("renderer") or "")
+        if not title:
+            base = game_id.replace("_", " ").replace("-", " ").title() if game_id else "tag_s"
+            title = f"{base} · {renderer}" if renderer else base
+        elif renderer and renderer.lower() not in title.lower():
+            title = f"{title} · {renderer}"
+        path = f"{tag}/{game_id}" if tag and game_id else game_id or tag or ""
+        return f"{title}  [{path}]" if path else title
+
     def _combo_tag_game_value(self, combo: QtWidgets.QComboBox | None) -> str:
         if combo is None or combo.currentIndex() < 0:
             return ""
-        data = combo.currentData()
-        return str(data or "").strip()
+        entry = self._parse_tag_game_entry(combo.currentData())
+        compact = self._compact_tag_game_entry(entry)
+        return json.dumps(compact, ensure_ascii=False, sort_keys=True) if compact else ""
 
     def refresh_ng_tag_game_choices(self) -> None:
         combos = []
@@ -2236,28 +2341,27 @@ class MainWindow(QtWidgets.QMainWindow):
         tags_base = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
         entries = list_all_tag_games(project_root=self.root_dir, tags_public_base=tags_base)
         for combo, selected_value in combos:
+            selected_entry = self._parse_tag_game_entry(selected_value)
+            selected_key = self._tag_game_key(selected_entry)
             combo.blockSignals(True)
             combo.clear()
             combo.addItem("— None —", "")
-            found = False
+            target_index = 0
             for entry in entries:
-                value = json.dumps(entry, ensure_ascii=False, sort_keys=True)
-                label = f"{entry.get('title', 'tag_s')}  [{entry.get('tag', '')}/{entry.get('game_id', '')}]"
+                compact = self._compact_tag_game_entry(entry)
+                value = json.dumps(compact, ensure_ascii=False, sort_keys=True) if compact else ""
+                label = self._tag_game_combo_label(entry)
                 combo.addItem(label, value)
-                if selected_value and value == selected_value:
-                    found = True
-            if selected_value and not found:
-                try:
-                    entry = json.loads(selected_value)
-                    if isinstance(entry, dict):
-                        label = f"{entry.get('title', 'tag_s')}  [{entry.get('tag', '')}/{entry.get('game_id', '')}]"
-                        combo.addItem(label, selected_value)
-                        found = True
-                except Exception:
-                    pass
-            combo.setCurrentIndex(combo.findData(selected_value) if selected_value else 0)
-            if combo.currentIndex() < 0:
-                combo.setCurrentIndex(0)
+                if selected_key and self._tag_game_key(entry) == selected_key:
+                    target_index = combo.count() - 1
+            if selected_key and target_index == 0:
+                fallback_entry = selected_entry
+                compact = self._compact_tag_game_entry(fallback_entry)
+                if compact:
+                    value = json.dumps(compact, ensure_ascii=False, sort_keys=True)
+                    combo.addItem(self._tag_game_combo_label(fallback_entry), value)
+                    target_index = combo.count() - 1
+            combo.setCurrentIndex(target_index)
             combo.blockSignals(False)
         self.append_log(f"[NG] tag_s list refreshed: {len(entries)} found\n")
 
@@ -2293,13 +2397,15 @@ class MainWindow(QtWidgets.QMainWindow):
             if key in seen:
                 continue
             seen.add(key)
-            out.append({
+            compact = {
                 "tag": tag,
                 "game_id": game_id,
                 "title": str(entry.get("title") or "").strip(),
                 "renderer": str(entry.get("renderer") or "").strip(),
                 "url": str(entry.get("url") or "").strip(),
-            })
+                "local_root": str(entry.get("local_root") or "").strip(),
+            }
+            out.append({k: v for k, v in compact.items() if v})
         return out
 
     def _ng_audio_field_map(self) -> Dict[str, str]:
@@ -2324,7 +2430,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_lesson_theme_changed(self, _txt: str) -> None:
         if hasattr(self, "combo_lesson_theme"):
             value = self.combo_lesson_theme.currentText().strip().lower()
-            self.cfg.lesson_theme = _normalize_theme_value(value)
+            normalized = _normalize_theme_value(value)
+            if normalized == "ng":
+                normalized = "sky"
+                self.combo_lesson_theme.setCurrentText("sky")
+            self.cfg.lesson_theme = normalized
             save_config(self.cfg_path, self.cfg)
             self.append_log(f"[Publish] lesson theme set to {self.cfg.lesson_theme}\n")
 
@@ -2537,10 +2647,26 @@ class MainWindow(QtWidgets.QMainWindow):
             self.on_special_audio_settings_changed()
 
     def browse_ng_audio_file(self, field_key: str) -> None:
-        start_dir = str(Path(getattr(self.cfg, field_key, "") or self.root_dir).expanduser().parent if str(getattr(self.cfg, field_key, "") or "").strip() else self.root_dir)
+        start_dir = str(self.root_dir)
+        remembered_dir = str(getattr(self.cfg, "ng_last_import_dir", "") or "").strip()
+        if remembered_dir and Path(remembered_dir).expanduser().exists():
+            start_dir = str(Path(remembered_dir).expanduser())
+        else:
+            current_value = str(getattr(self.cfg, field_key, "") or "").strip()
+            if current_value:
+                try:
+                    parent = Path(current_value).expanduser().parent
+                    if parent.exists():
+                        start_dir = str(parent)
+                except Exception:
+                    pass
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, f"Select audio for {field_key}", start_dir, "Audio Files (*.mp3 *.wav *.ogg *.m4a *.aac)")
         if path and hasattr(self, "_ng_audio_inputs") and field_key in self._ng_audio_inputs:
             self._ng_audio_inputs[field_key].setText(path)
+            try:
+                self.cfg.ng_last_import_dir = str(Path(path).expanduser().parent)
+            except Exception:
+                pass
             self.on_ng_settings_changed()
 
     def browse_background_source_image(self) -> None:
@@ -2614,8 +2740,11 @@ class MainWindow(QtWidgets.QMainWindow):
             selected_lesson_mode = "reading_listening"
             selected_surface_variant = "strict_dark"
         elif selected_theme == "ng":
+            selected_theme = "sky"
+            self.cfg.lesson_theme = "sky"
+            save_config(self.cfg_path, self.cfg)
             selected_lesson_mode = "standard_homework"
-            selected_surface_variant = "ng"
+            selected_surface_variant = "classic"
         else:
             selected_lesson_mode = "standard_homework"
             selected_surface_variant = "classic"
@@ -2641,7 +2770,7 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
         env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
         env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
-        self._apply_ng_env(env)
+        self._clear_ng_env(env)
         _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
         _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
         _set_env_if_nonempty(env, "CF_MODEL", self.cfg.cf_model)
@@ -2713,6 +2842,7 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
         env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
         env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
+        self._clear_ng_env(env)
 
         selected_surface_variant = "classic"
         if selected_theme == "sky_tiles":
@@ -2747,7 +2877,21 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_NG_AUDIO_FIELDS"] = json.dumps(self._ng_audio_field_map(), ensure_ascii=False)
         env["SKYED_NG_SELECTED_TAG_GAMES"] = json.dumps(self._selected_ng_tag_games(), ensure_ascii=False)
         env["SKYED_NG_TAG_VOICE"] = "en-US-GuyNeural"
-        env["SKYED_NG_TAG_RATE"] = "0%"
+        env["SKYED_NG_TAG_RATE"] = "-22%"
+
+    def _clear_ng_env(self, env: Dict[str, str]) -> None:
+        for key in (
+            "SKYED_NG_AUDIO_FIELDS",
+            "SKYED_NG_SELECTED_TAG_GAMES",
+            "SKYED_NG_TAG_VOICE",
+            "SKYED_NG_TAG_RATE",
+            "SKYED_PIPELINE_ENTRYPOINT",
+            "SKYED_NG_ACTION",
+        ):
+            env.pop(key, None)
+
+    def run_ng_publish(self) -> None:
+        self.run_ng_pipeline("publish_ng")
 
     def run_ng_pipeline(self, mode: str) -> None:
         self.editor_save_default()
@@ -2771,8 +2915,10 @@ class MainWindow(QtWidgets.QMainWindow):
             "--lesson-mode", selected_lesson_mode,
             "--surface-variant", selected_surface_variant,
         ]
-        if mode == "generate_publish":
-            args.append("--publish")
+        if mode == "publish_ng":
+            args.append("--ng-publish")
+        else:
+            args.append("--ng-generate")
 
         env = os.environ.copy()
         env["HF_ENDPOINT"] = self.cfg.hf_endpoint
@@ -2810,6 +2956,8 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_DIR"] = ""
         env["SKYED_SPECIAL_AUDIO_TITLE"] = "Extra Audio"
         self._apply_ng_env(env)
+        env["SKYED_PIPELINE_ENTRYPOINT"] = "ng_tab"
+        env["SKYED_NG_ACTION"] = "publish_ng" if mode == "publish_ng" else "generate_ng"
 
         _set_env_if_nonempty(env, "CF_ACCOUNT_ID", self.cfg.cf_account_id)
         _set_env_if_nonempty(env, "CF_API_TOKEN", self.cfg.cf_api_token)
@@ -2821,7 +2969,8 @@ class MainWindow(QtWidgets.QMainWindow):
         env["COMFY_URL"] = str(self.cfg.comfy_url)
         env["COMFY_WORKFLOW"] = str(wf)
 
-        self.append_log(f"[NG] THEME=ng MODE={selected_lesson_mode} SURFACE={selected_surface_variant} HAPPY_PRACTICE={len(self._ng_audio_field_map())}\n")
+        action_name = "publish_ng" if mode == "publish_ng" else mode
+        self.append_log(f"[NG] ACTION={action_name} THEME=ng MODE={selected_lesson_mode} SURFACE={selected_surface_variant} HAPPY_PRACTICE={len(self._ng_audio_field_map())} TAG_GAMES={len(self._selected_ng_tag_games())}\n")
         self.pipe_proc.start(self.cfg.project_python, args, self.cfg.project_workdir, env)
 
     def run_pipeline(self, mode: str) -> None:
@@ -2853,8 +3002,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     selected_lesson_mode = "reading_listening"
                     selected_surface_variant = "strict_dark"
                 elif selected_theme == "ng":
+                    selected_theme = "sky"
+                    self.cfg.lesson_theme = "sky"
                     selected_lesson_mode = "standard_homework"
-                    selected_surface_variant = "ng"
+                    selected_surface_variant = "classic"
                 save_config(self.cfg_path, self.cfg)
 
         input_path = str(self.default_editor_path())
@@ -2865,7 +3016,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "--lesson-mode", selected_lesson_mode,
             "--surface-variant", selected_surface_variant,
         ]
-        if mode == "generate_publish":
+        if mode in ("generate_publish", "publish_ng"):
             args.append("--publish")
         elif mode == "publish_only":
             args.append("--publish-only")
@@ -2923,7 +3074,7 @@ class MainWindow(QtWidgets.QMainWindow):
         env["SKYED_SPECIAL_AUDIO_ENABLED"] = "1" if self.cfg.special_audio_enabled else "0"
         env["SKYED_SPECIAL_AUDIO_DIR"] = str(self.cfg.special_audio_dir or "")
         env["SKYED_SPECIAL_AUDIO_TITLE"] = str(self.cfg.special_audio_title or "Extra Audio")
-        self._apply_ng_env(env)
+        self._clear_ng_env(env)
 
         self.append_log(f"[Images] COMFY_WORKFLOW={wf} exists={wf.exists()}\n")
         self.append_log(

@@ -4,7 +4,23 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.4.9 Beta NG publisher is added" />
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.5.0 Beta NG publisher is confugured. Tag_s selection logic is added">
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/deploy_sftp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/deploy_sftp.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/tag_gamegen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tag_gamegen.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/tts_edge.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tts_edge.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/tag_runtime/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/runtime.js" beforeDir="false" afterPath="$PROJECT_DIR$/templates/tag_runtime/runtime.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/templates/tag_runtime/styles.css" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -143,7 +159,9 @@
       <workItem from="1773578811209" duration="2198000" />
       <workItem from="1773592508789" duration="8213000" />
       <workItem from="1774334132215" duration="139000" />
-      <workItem from="1774334425227" duration="34043000" />
+      <workItem from="1774334425227" duration="42086000" />
+      <workItem from="1774807159267" duration="21969000" />
+      <workItem from="1774938643775" duration="4189000" />
     </task>
     <task id="LOCAL-00001" summary="1.1 updated">
       <option name="closed" value="true" />
@@ -353,7 +371,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774550783521</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="4.4.9 Beta NG publisher is added">
+      <option name="closed" value="true" />
+      <created>1774550830747</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1774550830747</updated>
+    </task>
+    <task id="LOCAL-00028" summary="4.5.0 Beta NG publisher is confugured. Tag_s selection logic is added">
+      <option name="closed" value="true" />
+      <created>1774624853310</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1774624853310</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -379,10 +413,11 @@
     <MESSAGE value="4.4.6 Beta Asset batcher GUI fixed" />
     <MESSAGE value="4.4.8 Beta Card cutter Miniapp is added(see documentation)" />
     <MESSAGE value="4.4.9 Beta NG publisher is added" />
-    <option name="LAST_COMMIT_MESSAGE" value="4.4.9 Beta NG publisher is added" />
+    <MESSAGE value="4.5.0 Beta NG publisher is confugured. Tag_s selection logic is added" />
+    <option name="LAST_COMMIT_MESSAGE" value="4.5.0 Beta NG publisher is confugured. Tag_s selection logic is added" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774544377354" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1774946234044" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/skyed_automation$ff.coverage" NAME="ff Coverage Results" MODIFIED="1774037894426" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

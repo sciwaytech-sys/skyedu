@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from skyed.parser import parse_homework_text
 from skyed.lesson_metadata import infer_categories
-from skyed.tag_registry import discover_tag_games
+from skyed.tag_registry import safe_tag, hydrate_tag_game_entries
 from skyed.picture_reader import parse_picture_to_reader_spec
 from skyed.utils import slugify, ensure_dir
 from skyed.cards import generate_vocab_cards, slugify as card_slugify
@@ -22,666 +22,99 @@ from skyed.tts_edge import generate_audio, generate_long_audio_variants, generat
 from skyed.quizgen import generate_quiz, normalize_theme_variant
 from skyed.wp import upload_media, create_post, ensure_page_path, next_sequential_slug, assert_slug_available
 from skyed.tag_gamegen import export_tag_s_touch_listen_cards
+from skyed.pipeline_helpers import (
+    log_step as _log_step,
+    sentence_audio_stem as _sentence_audio_stem,
+    tag_s_output_root as _tag_s_output_root,
+    h as _h,
+    hu as _hu,
+    build_lesson_html,
+    build_picture_reader_html,
+    audio_rel_key as _audio_rel_key,
+    AUDIO_FILE_EXTENSIONS,
+    resolve_uploaded_audio_url as _resolve_uploaded_audio_url,
+    map_special_audio_items as _map_special_audio_items,
+    copy_special_audio_assets_from_env as _copy_special_audio_assets_from_env,
+    copy_ng_happy_practice_assets_from_env as _copy_ng_happy_practice_assets_from_env,
+    load_ng_selected_tag_games_from_env as _load_ng_selected_tag_games_from_env,
+    merge_tag_game_lists as _merge_tag_game_lists,
+    tag_game_info_from_root as _tag_game_info_from_root,
+    extract_day_number as _extract_day_number,
+    build_publish_slug as _build_publish_slug,
+    normalize_publish_slug_mode as _normalize_publish_slug_mode,
+    clean_publish_group_path as _clean_publish_group_path,
+    sanitize_publish_slug as _sanitize_publish_slug,
+    infer_mode_surface_from_theme,
+    build_consistency_report as _build_consistency_report,
+    rewrite_practice_media_urls as _rewrite_practice_media_urls,
+    rewrite_tag_game_media_urls as _rewrite_tag_game_media_urls,
+    deploy_tag_games_for_publish as _deploy_tag_games_for_publish,
+)
 
 
-def _sentence_audio_stem(base_text: str) -> str:
+
+
+def _build_ng_tag_game(spec: Dict, lesson_root: Path, title: str) -> Optional[Path]:
+    """Build the automatic NG touch-listen tag_s package.
+
+    Important compatibility rule:
+    - use the same tag normalization as tag_registry/tag_gamegen
+    - keep the automatic NG package keyed by tag, not by lesson slug
+
+    This avoids path mismatches such as my_body vs mybody and keeps NG output
+    aligned with the reusable tag_s structure the rest of the project expects.
     """
-    Stable stem for sentence audio files.
-    - uses a short slug from the sentence text (or its first chunk)
-    - adds a hash suffix to avoid collisions
-    Result is used as: sent_<stem>.mp3
-    """
-    t = (base_text or "").strip()
-    short = card_slugify(t[:60] if len(t) > 60 else t)
-    h = hashlib.sha1(t.encode("utf-8")).hexdigest()[:10]
-    return f"{short}_{h}" if short else h
-
-
-
-def _log_step(message: str) -> None:
-    print(str(message or ""), flush=True)
-
-
-def _h(text: str) -> str:
-    return html.escape(text or "", quote=False)
-
-
-def _hu(text: str) -> str:
-    return html.escape(text or "", quote=True)
-
-
-def build_lesson_html(
-    title: str,
-    vocab_items: List[Dict[str, str]],
-    sentence_items: List[Dict[str, str]],
-    quiz_url: str,
-    *,
-    quiz_embed_mode: str = "embed",  # embed | link | off
-    quiz_note: str = "",
-    extra_audio_items: Optional[List[Dict[str, str]]] = None,
-) -> str:
-    """
-    LMS-style lesson page:
-      - Vocab grid: each card contains image + EN+CN + audio (EN+CN).
-      - Sentences section: EN+CN line pairs + audio (EN+CN).
-      - Quiz block: always shows a "Start Quiz" button when URL is available.
-        iframe is optional (Tutor LMS may sanitize/limit iframe/script behavior).
-    """
-    css = """
-    <style>
-      :root{
-        --max:1100px; --r:16px; --stroke:rgba(0,0,0,.10);
-        --shadow:0 10px 25px rgba(0,0,0,.10);
-        --bg:#f6f7fb; --card:#fff; --muted:#6b7280;
-        --brand1:#2563eb; --brand2:#38bdf8;
-      }
-      body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#111827;}
-      .wrap{max-width:var(--max);margin:0 auto;padding:18px 14px 60px;}
-      .hero{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff;border-radius:18px;padding:16px 16px 12px;margin-bottom:14px;box-shadow:var(--shadow);}
-      .hero h2{margin:0;font-size:20px;}
-      .hero .sub{opacity:.9;margin-top:6px;font-size:13px;}
-      .h3{font-size:14px;margin:16px 0 10px;color:#0f172a;}
-      .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
-      @media (max-width:980px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-      @media (max-width:620px){.grid{grid-template-columns:1fr;}}
-      .card{background:var(--card);border:1px solid var(--stroke);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;}
-      .media{aspect-ratio:4/3;background:#eef2ff;display:flex;align-items:center;justify-content:center;}
-      /* IMPORTANT: contain -> prevents “cut” look */
-      .media img{width:100%;height:100%;object-fit:contain;display:block;background:#eef2ff;}
-      .bd{padding:12px 12px 14px;display:flex;flex-direction:column;gap:10px;}
-      .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}
-      .en{font-weight:800;font-size:18px;}
-      .zh{font-weight:650;color:var(--muted);}
-      audio{width:100%;}
-      .note{font-size:12px;color:var(--muted);margin-top:6px;}
-
-      .sentwrap{display:flex;flex-direction:column;gap:10px;}
-      .skyed-sent{background:var(--card);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:12px;}
-      .skyed-sent .txt{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
-      .skyed-sent .txt b{color:#0f172a;}
-      .skyed-sent .aud{display:flex;flex-direction:column;gap:8px;}
-
-      .quizbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0 12px;}
-      .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:999px;
-           text-decoration:none;font-weight:800;border:1px solid rgba(255,255,255,.25);}
-      .btn-primary{background:linear-gradient(90deg,var(--brand1),var(--brand2));color:#fff;}
-      .btn-ghost{background:#fff;color:#0f172a;border:1px solid var(--stroke);}
-      .warn{background:#fff7ed;border:1px solid rgba(249,115,22,.25);color:#9a3412;border-radius:14px;padding:10px 12px;}
-      iframe{width:100%;height:900px;border:0;border-radius:16px;box-shadow:var(--shadow);background:#fff;}
-      .extraaud{display:flex;flex-direction:column;gap:10px;}
-      .extraaud .track{background:var(--card);border:1px solid var(--stroke);border-radius:16px;box-shadow:var(--shadow);padding:12px;}
-      .extraaud .track b{display:block;margin-bottom:8px;color:#0f172a;}
-    </style>
-    """
-
-    vocab_cards: List[str] = []
-    for it in vocab_items:
-        en = (it.get("en") or "").strip()
-        zh = (it.get("zh") or "").strip()
-        img = (it.get("img") or "").strip()
-        a_en = (it.get("audio_en") or "").strip()
-        a_zh = (it.get("audio_zh") or "").strip()
-
-        en_t = _h(en)
-        zh_t = _h(zh)
-        img_u = _hu(img)
-        a_en_u = _hu(a_en)
-        a_zh_u = _hu(a_zh)
-        alt_t = _hu(en)
-
-        card = ['<div class="card">']
-        card.append('<div class="media">')
-        if img_u:
-            card.append(f'<img src="{img_u}" alt="{alt_t}" loading="lazy">')
-        card.append("</div>")
-        card.append('<div class="bd">')
-        card.append('<div class="row">')
-        card.append(f'<div class="en">{en_t}</div>')
-        card.append(f'<div class="zh">{zh_t}</div>' if zh_t else '<div class="zh"></div>')
-        card.append("</div>")
-        if a_en_u:
-            card.append(f'<audio controls src="{a_en_u}"></audio>')
-        if a_zh_u:
-            card.append(f'<audio controls src="{a_zh_u}"></audio>')
-        card.append("</div></div>")
-        vocab_cards.append("".join(card))
-
-    sent_cards: List[str] = []
-    for it in sentence_items:
-        en = (it.get("en") or "").strip()
-        zh = (it.get("zh") or "").strip()
-        a_en = (it.get("audio_en") or "").strip()
-        a_zh = (it.get("audio_zh") or "").strip()
-
-        en_t = _h(en)
-        zh_t = _h(zh)
-        a_en_u = _hu(a_en)
-        a_zh_u = _hu(a_zh)
-
-        row = ['<div class="skyed-sent">']
-        row.append('<div class="txt">')
-        if en_t:
-            row.append(f"<div><b>EN:</b> {en_t}</div>")
-        if zh_t:
-            row.append(f"<div><b>CN:</b> {zh_t}</div>")
-        row.append("</div>")
-        row.append('<div class="aud">')
-        if a_en_u:
-            row.append(f'<audio controls src="{a_en_u}"></audio>')
-        if a_zh_u:
-            row.append(f'<audio controls src="{a_zh_u}"></audio>')
-        row.append("</div></div>")
-        sent_cards.append("".join(row))
-
-    q_url = (quiz_url or "").strip()
-    embed = (quiz_embed_mode or "embed").strip().lower() == "embed"
-    link_ok = bool(q_url) and q_url.lower() != "about:blank"
-
-    # For Tutor LMS safety: show button always when link exists; embed iframe only if allowed.
-    quiz_block = []
-    if quiz_note:
-        quiz_block.append(f'<div class="warn">{_h(quiz_note)}</div>')
-    quiz_block.append('<div class="quizbar">')
-    if link_ok:
-        quiz_block.append(f'<a class="btn btn-primary" href="{_hu(q_url)}" target="_blank" rel="noopener">▶ Start Practice</a>')
-        quiz_block.append(f'<a class="btn btn-ghost" href="{_hu(q_url)}">Open here</a>')
-    else:
-        quiz_block.append('<span class="warn">Practice URL not configured. Configure QUIZ_PUBLIC_BASE only if you want a separate hosted practice page.</span>')
-    quiz_block.append('</div>')
-    if embed and link_ok:
-        quiz_block.append(f'<iframe src="{_hu(q_url)}" loading="lazy"></iframe>')
-
-    extra_audio_block: List[str] = []
-    if extra_audio_items:
-        section_title = "Extra Audio"
-        for item in extra_audio_items:
-            candidate_title = str(item.get("title") or "").strip()
-            if candidate_title:
-                section_title = candidate_title
-                break
-        extra_audio_block.append(f'<div class="h3">{_h(section_title)}</div>')
-        extra_audio_block.append('<div class="extraaud">')
-        for item in extra_audio_items:
-            label = _h(str(item.get("label") or section_title))
-            url = _hu(str(item.get("url") or ""))
-            if not url:
-                continue
-            extra_audio_block.append(f'<div class="track"><b>{label}</b><audio controls src="{url}"></audio></div>')
-        extra_audio_block.append('</div>')
-
-    html_out = f"""{css}
-    <div class="wrap">
-      <div class="hero">
-        <h2>{_h(title)}</h2>
-        <div class="sub">Vocabulary → Sentences → Practice</div>
-      </div>
-
-      <div class="h3">Vocabulary Cards</div>
-      <div class="grid">
-        {''.join(vocab_cards)}
-      </div>
-      <div class="note">Keep practice 5–10 minutes. Audio optional.</div>
-
-      <div class="h3">Sentences</div>
-      <div class="sentwrap">
-        {''.join(sent_cards)}
-      </div>
-
-      {''.join(extra_audio_block)}
-
-      <div class="h3">Practice</div>
-      {''.join(quiz_block)}
-    </div>
-    """
-    return html_out
-
-
-def build_picture_reader_html(
-    title: str,
-    sentence_items: List[Dict[str, str]],
-    *,
-    cover_image: str = "",
-) -> str:
-    css = """
-    <style>
-      :root{
-        --max:880px; --r:28px; --stroke:rgba(15,23,42,.10);
-        --bg:#fff8ef; --card:#ffffff; --card-2:#fffaf3; --muted:#7d6656;
-        --brand1:#f08c00; --brand2:#ffbf69; --shadow:0 18px 40px rgba(202,120,27,.12);
-      }
-      body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#3a2b20;}
-      .wrap{max-width:var(--max);margin:0 auto;padding:18px 14px 56px;}
-      .hero{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;border-radius:30px;padding:18px 18px 14px;box-shadow:var(--shadow);margin-bottom:16px;}
-      .hero h2{margin:0;font-size:22px;line-height:1.25;}
-      .hero .sub{margin-top:6px;font-size:13px;opacity:.95;}
-      .hero .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-      .chip{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-size:12px;font-weight:800;}
-      .sheet{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--stroke);border-radius:30px;box-shadow:var(--shadow);overflow:hidden;}
-      .sheet__top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 12px;border-bottom:1px solid rgba(240,140,0,.10);}
-      .pill{display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;background:rgba(240,140,0,.12);color:#b15d00;font-size:13px;font-weight:800;}
-      .note{font-size:13px;color:var(--muted);}
-      .flow{padding:10px 14px 6px;}
-      .line{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;width:100%;text-align:left;border:0;background:transparent;padding:12px 4px;border-radius:18px;cursor:pointer;transition:background .16s ease, transform .16s ease;}
-      .line + .line{border-top:1px dashed rgba(180,123,41,.16);}
-      .line:hover,.line:focus{background:rgba(255,191,105,.12);outline:none;}
-      .line.is-playing{background:rgba(240,140,0,.08);}
-      .idx{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:rgba(240,140,0,.12);color:#b15d00;font-size:12px;font-weight:800;margin-top:2px;}
-      .body{min-width:0;}
-      .label{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#c07a1f;margin-bottom:4px;}
-      .label.zh{margin-top:10px;color:#8b6b52;}
-      .en{display:inline;font-size:22px;font-weight:900;line-height:1.52;padding:1px 4px;border-radius:10px;transition:background .15s ease, box-shadow .15s ease;}
-      .zh{display:inline-block;font-size:18px;line-height:1.68;color:#4b3a2e;padding:1px 4px;border-radius:10px;transition:background .15s ease, box-shadow .15s ease;}
-      .line.is-speaking-en .en,.line.is-speaking-zh .zh{background:rgba(255,191,105,.24);box-shadow:0 0 0 6px rgba(255,191,105,.12);}
-      .tap{align-self:center;white-space:nowrap;font-size:13px;color:#b15d00;font-weight:800;}
-      .art{padding:4px 16px 16px;}
-      .art img{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:22px;border:1px solid rgba(240,140,0,.10);}
-      @media (max-width:640px){
-        .sheet__top{align-items:flex-start;flex-direction:column;gap:8px;}
-        .line{grid-template-columns:32px minmax(0,1fr);gap:10px;padding:12px 2px;}
-        .tap{grid-column:2;color:var(--muted);font-size:12px;margin-top:2px;}
-        .en{font-size:19px;}
-        .zh{font-size:16px;}
-      }
-    </style>
-    """
-
-    rows = []
-    for idx, it in enumerate(sentence_items):
-        en = _h((it.get("en") or "").strip())
-        zh = _h((it.get("zh") or "").strip())
-        a_en = _hu((it.get("audio_en") or "").strip())
-        a_zh = _hu((it.get("audio_zh") or "").strip())
-        if not en and not zh:
-            continue
-        row = [f'<button class="line" type="button" data-audio-en="{a_en}" data-audio-zh="{a_zh}">']
-        row.append(f'<span class="idx">{idx + 1}</span>')
-        row.append('<span class="body">')
-        if en:
-            row.append('<span class="label">English</span>')
-            row.append(f'<span class="en">{en}</span>')
-        if zh:
-            row.append('<span class="label zh">Chinese</span>')
-            row.append(f'<span class="zh">{zh}</span>')
-        row.append('</span>')
-        row.append('<span class="tap">Tap to listen</span>')
-        row.append('</button>')
-        rows.append(''.join(row))
-
-    cover_html = f'<div class="art"><img src="{_hu(cover_image)}" alt="{_h(title)}" loading="lazy"></div>' if cover_image else ''
-
-    parts = [
-        css,
-        '<div class="wrap">',
-        '  <div class="hero">',
-        '    <div class="pill" style="background:rgba(255,255,255,.18);color:#fff;">Sky Reading Frame</div>',
-        f'    <h2>{_h(title)}</h2>',
-        '    <div class="sub">Touch any line to hear it. English plays first, then Chinese.</div>',
-        f'    <div class="meta"><span class="chip">{len(rows)} lines</span><span class="chip">Touch to listen</span></div>',
-        '  </div>',
-        '  <section class="sheet">',
-        '    <div class="sheet__top"><div class="pill">Interactive picture text</div><div class="note">Single reading block for fast mobile replay.</div></div>',
-        f'    <div class="flow">{"".join(rows)}</div>',
-        f'    {cover_html}',
-        '  </section>',
-        '</div>',
-        """<script>
-    (function(){
-      const entries = document.querySelectorAll('.line');
-      let current = null;
-      let currentEntry = null;
-      function clearState(){ entries.forEach(function(el){ el.classList.remove('is-playing','is-speaking-en','is-speaking-zh'); }); }
-      function stopCurrent(){ if (current) { try { current.pause(); current.currentTime = 0; } catch(e){} } current = null; currentEntry = null; clearState(); }
-      function playUrl(url, onEnd){ if (!url) { if (onEnd) onEnd(); return; } const audio = new Audio(url); current = audio; audio.onended = function(){ if (onEnd) onEnd(); }; audio.onerror = function(){ if (onEnd) onEnd(); }; audio.play().catch(function(){ if (onEnd) onEnd(); }); }
-      function playEntry(entry){ if (currentEntry === entry) { stopCurrent(); return; } stopCurrent(); currentEntry = entry; const enUrl = entry.getAttribute('data-audio-en') || ''; const zhUrl = entry.getAttribute('data-audio-zh') || ''; entry.classList.add('is-playing'); if (enUrl) { entry.classList.add('is-speaking-en'); playUrl(enUrl, function(){ entry.classList.remove('is-speaking-en'); if (zhUrl) { entry.classList.add('is-speaking-zh'); playUrl(zhUrl, function(){ stopCurrent(); }); } else { stopCurrent(); } }); } else if (zhUrl) { entry.classList.add('is-speaking-zh'); playUrl(zhUrl, function(){ stopCurrent(); }); } }
-      entries.forEach(function(entry){ entry.addEventListener('click', function(){ playEntry(entry); }); entry.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); playEntry(entry); } }); });
-    })();
-    </script>""",
-    ]
-    return ''.join(parts)
-
-
-def _audio_rel_key(audio_root: Path, f: Path) -> str:
-    """Stable key preserving language subfolder, e.g. en/apple.mp3, zh/sent_xxx.mp3"""
-    try:
-        return f.relative_to(audio_root).as_posix()
-    except Exception:
-        # fallback (shouldn't normally happen)
-        return f.name
-
-
-AUDIO_FILE_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac"}
-
-
-def _copy_special_audio_assets_from_env(lesson_root: Path) -> List[Dict[str, str]]:
-    enabled = (os.environ.get("SKYED_SPECIAL_AUDIO_ENABLED", "0") or "0").strip().lower() in {"1", "true", "yes", "on"}
-    if not enabled:
-        return []
-    src_dir_raw = (os.environ.get("SKYED_SPECIAL_AUDIO_DIR", "") or "").strip()
-    if not src_dir_raw:
-        return []
-    src_dir = Path(src_dir_raw).expanduser()
-    if not src_dir.exists() or not src_dir.is_dir():
-        raise RuntimeError(f"Special lesson audio folder not found: {src_dir}")
-    dst_dir = ensure_dir(Path(lesson_root) / "audio" / "manual")
-    title_default = (os.environ.get("SKYED_SPECIAL_AUDIO_TITLE", "Extra Audio") or "Extra Audio").strip() or "Extra Audio"
-    items: List[Dict[str, str]] = []
-    for src in sorted(src_dir.iterdir(), key=lambda p: p.name.lower()):
-        if not src.is_file() or src.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
-            continue
-        safe_name = ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in src.name)
-        dst = dst_dir / safe_name
-        shutil.copy2(src, dst)
-        label = src.stem.replace('_', ' ').replace('-', ' ').strip() or title_default
-        items.append({
-            "label": label,
-            "title": title_default,
-            "url": str(dst.relative_to(lesson_root)).replace('\\', '/'),
-        })
-    return items
-
-
-def _map_special_audio_items(items: List[Dict[str, str]], audio_url_by_rel: Dict[str, str]) -> List[Dict[str, str]]:
-    mapped: List[Dict[str, str]] = []
-    for item in items or []:
-        rel = str(item.get("url") or "").strip()
-        mapped.append({
-            "label": str(item.get("label") or "Extra Audio").strip() or "Extra Audio",
-            "title": str(item.get("title") or "Extra Audio").strip() or "Extra Audio",
-            "url": audio_url_by_rel.get(rel, rel),
-        })
-    return mapped
-
-
-def _copy_ng_happy_practice_assets_from_env(lesson_root: Path) -> List[Dict[str, str]]:
-    raw = (os.environ.get("SKYED_NG_AUDIO_FIELDS", "") or "").strip()
-    if not raw:
-        return []
-    try:
-        mapping = json.loads(raw)
-    except Exception as exc:
-        raise RuntimeError(f"Invalid SKYED_NG_AUDIO_FIELDS JSON: {exc}")
-    if not isinstance(mapping, dict):
-        return []
-    dst_dir = ensure_dir(Path(lesson_root) / "audio" / "ng_happy_practice")
-    items: List[Dict[str, str]] = []
-    for label, src_value in mapping.items():
-        label_text = str(label or "").strip()
-        src_raw = str(src_value or "").strip()
-        if not label_text or not src_raw:
-            continue
-        src = Path(src_raw).expanduser()
-        if not src.exists() or not src.is_file():
-            raise RuntimeError(f"NG audio file not found: {src}")
-        if src.suffix.lower() not in AUDIO_FILE_EXTENSIONS:
-            raise RuntimeError(f"Unsupported NG audio format: {src.name}")
-        safe_name = ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in src.name)
-        dst = dst_dir / safe_name
-        shutil.copy2(src, dst)
-        items.append({
-            "label": label_text,
-            "title": "Happy Practice",
-            "url": str(dst.relative_to(lesson_root)).replace('\\', '/'),
-        })
-    return items
-
-
-
-def _load_ng_selected_tag_games_from_env() -> List[Dict[str, str]]:
-    raw = (os.environ.get("SKYED_NG_SELECTED_TAG_GAMES", "") or "").strip()
-    if not raw:
-        return []
-    try:
-        payload = json.loads(raw)
-    except Exception as exc:
-        raise RuntimeError(f"Invalid SKYED_NG_SELECTED_TAG_GAMES JSON: {exc}")
-    if not isinstance(payload, list):
-        return []
-    out: List[Dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        tag = str(item.get("tag") or "").strip()
-        game_id = str(item.get("game_id") or "").strip()
-        if not tag or not game_id:
-            continue
-        key = (tag, game_id)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append({
-            "tag": tag,
-            "game_id": game_id,
-            "title": str(item.get("title") or "").strip(),
-            "renderer": str(item.get("renderer") or "").strip(),
-            "url": str(item.get("url") or "").strip(),
-        })
-    return out
-
-
-def _merge_tag_game_lists(*groups: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    out: List[Dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for group in groups:
-        for item in group or []:
-            if not isinstance(item, dict):
-                continue
-            tag = str(item.get("tag") or "").strip()
-            game_id = str(item.get("game_id") or "").strip()
-            if not tag or not game_id:
-                continue
-            key = (tag, game_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(item)
-    return out
-
-
-def _tag_game_info_from_root(game_root: Path | str | None) -> Optional[Dict[str, str]]:
-    if not game_root:
-        return None
-    root_path = Path(game_root)
-    if not root_path.exists():
-        return None
-    tag = root_path.parent.name
-    game_id = root_path.name
-    title = f"{tag} · {game_id.replace('_', ' ').replace('-', ' ').title()}"
-    renderer = ""
-    game_json = root_path / "game.json"
-    if game_json.exists():
-        try:
-            payload = json.loads(game_json.read_text(encoding="utf-8", errors="ignore"))
-            meta = payload.get("meta") if isinstance(payload, dict) else {}
-            if isinstance(meta, dict):
-                title = str(meta.get("title") or title).strip() or title
-                renderer = str(meta.get("renderer") or "").strip()
-        except Exception:
-            pass
-    base = (os.environ.get("TAGS_PUBLIC_BASE", "") or "").rstrip("/")
-    url = f"{base}/{tag}/{game_id}/index.html" if base else ""
-    return {
-        "tag": tag,
-        "game_id": game_id,
-        "title": title,
-        "renderer": renderer,
-        "url": url,
-    }
-
-def _build_ng_tag_game(spec: Dict[str, List[Dict[str, str]]], lesson_root: Path, title: str) -> Optional[str]:
-    tags = [str(t or "").strip() for t in (spec.get("tags") or []) if str(t or "").strip()]
-    tag = (tags[0] if tags else slugify(title) or "ng").strip()
     vocab = spec.get("vocab", []) or []
     if not vocab:
         return None
 
-    touch_audio_dir = ensure_dir(Path(lesson_root) / "audio" / "ng_touch")
-    touch_voice = (os.environ.get("SKYED_NG_TAG_VOICE") or "en-US-GuyNeural").strip() or "en-US-GuyNeural"
-    touch_rate = (os.environ.get("SKYED_NG_TAG_RATE") or (os.environ.get("SKYED_TTS_RATE") or "-10%")).strip() or "-10%"
-    word_jobs = []
-    for v in vocab:
-        en = str(v.get("en") or "").strip()
-        if en:
-            word_jobs.append((card_slugify(en), en))
-    audio_map = generate_word_audio_set(word_jobs, touch_audio_dir, voice=touch_voice, rate=touch_rate)
+    lesson_tag = safe_tag(title) or "ng"
+    raw_tags = spec.get("tags", []) or []
+    primary_tag = ""
+    for raw in raw_tags:
+        candidate = safe_tag(str(raw or ""))
+        if candidate:
+            primary_tag = candidate
+            break
+    tag = primary_tag or lesson_tag
+    game_id = f"{tag}_v1"
 
-    vocab_for_game: List[Dict[str, str]] = []
-    for v in vocab:
-        en = str(v.get("en") or "").strip()
+    exported_vocab: List[Dict[str, str]] = []
+    for entry in vocab:
+        en = str(entry.get("en") or "").strip()
+        zh = str(entry.get("zh") or "").strip()
         if not en:
             continue
         stem = card_slugify(en)
         img_rel = f"cards/{stem}.png"
-        if not (Path(lesson_root) / img_rel).exists():
+        audio_rel = f"audio/en/{stem}.mp3"
+        if not (lesson_root / img_rel).exists():
             img_rel = ""
-        audio_path = audio_map.get(stem)
-        audio_rel = str(audio_path.relative_to(lesson_root)).replace('\\', '/') if audio_path and audio_path.exists() else ""
-        vocab_for_game.append({
+        if not (lesson_root / audio_rel).exists():
+            audio_rel = ""
+        exported_vocab.append({
             "en": en,
-            "zh": str(v.get("zh") or "").strip(),
+            "zh": zh,
+            "pos": str(entry.get("pos") or "").strip(),
             "img": img_rel,
             "audio_en": audio_rel,
-            "pos": str(v.get("pos") or "").strip(),
         })
 
-    game_root = export_tag_s_touch_listen_cards(
+    if not exported_vocab:
+        return None
+
+    # Keep NG auto tag_s isolated inside the lesson output instead of writing
+    # into the shared Card Cutter tag_s library.
+    out_root = ensure_dir(lesson_root / "_inline_tag_s")
+    return export_tag_s_touch_listen_cards(
         tag=tag,
-        vocab=vocab_for_game,
-        out_dir=Path(os.getenv("OUTPUT_DIR", "output")) / "tag_s",
-        lesson_assets_root=Path(lesson_root),
-        game_id=f"ng_touch_{slugify(title) or 'lesson'}",
-        title=f"{title} — Touch and Listen",
+        vocab=exported_vocab,
+        out_dir=out_root,
+        lesson_assets_root=lesson_root,
+        game_id=game_id,
+        title=f"{title} · Touch and Listen",
     )
-    return str(game_root)
 
-
-def _extract_day_number(title: str) -> str:
-    m = __import__("re").search(r"\bday\s*(\d+)\b", title or "", flags=__import__("re").IGNORECASE)
-    return m.group(1) if m else ""
-
-
-def _build_publish_slug(title: str, tags: List[str], style: str = "auto") -> str:
-    style = (style or "auto").strip().lower()
-    day = _extract_day_number(title)
-    clean_tags = [slugify(str(t or "")) for t in (tags or []) if str(t or "").strip()]
-    first_tag = clean_tags[0] if clean_tags else ""
-    topic = first_tag or slugify(title.replace("Homework", "").replace("homework", ""))
-    topic = __import__("re").sub(r"(^day-\d+-?|^day\d+-?|^-+)", "", topic).strip("-")
-    topic = "-".join([x for x in topic.split("-")[:2] if x])
-    if style == "shortcode" and day:
-        return f"hw-{int(day):03d}"
-    if style == "topic" and topic:
-        return topic
-    if style == "topic_day" and topic and day:
-        return f"{topic}-{day}"
-    if style == "day_topic" and day and topic:
-        return f"d{int(day)}-{topic}"
-    if day and topic:
-        return f"d{int(day)}-{topic}"
-    if topic:
-        return topic
-    if day:
-        return f"hw-{int(day):03d}"
-    return slugify(title)
-
-
-def _normalize_publish_slug_mode(mode: str) -> str:
-    m = (mode or "auto_lesson").strip().lower()
-    if m in ("auto_lesson", "title", "custom"):
-        return m
-    return "auto_lesson"
-
-
-def _clean_publish_group_path(path: str) -> str:
-    raw = str(path or "").strip().strip("/")
-    if not raw:
-        return ""
-    parts = [slugify(seg) for seg in raw.split("/") if slugify(seg)]
-    return "/".join(parts)
-
-
-def _sanitize_publish_slug(value: str) -> str:
-    return slugify(str(value or "").strip())
-
-
-def infer_mode_surface_from_theme(theme: str) -> tuple[str, str]:
-    theme = normalize_theme_variant((theme or "sky").strip().lower())
-    if theme == "sky_tiles":
-        return "kid_homework", "tiles"
-    if theme == "strict_dark":
-        return "reading_listening", "strict_dark"
-    if theme == "ng":
-        return "standard_homework", "ng"
-    return "standard_homework", "classic"
-
-
-def _build_consistency_report(spec: Dict[str, List[Dict[str, str]]]) -> Dict[str, object]:
-    import re
-    vocab = spec.get("vocab", []) or []
-    sentences = spec.get("sentences", []) or []
-    vocab_words = [str(v.get("en") or "").strip() for v in vocab if str(v.get("en") or "").strip()]
-    sent_texts = [str(s.get("en") or "").strip() for s in sentences if str(s.get("en") or "").strip()]
-    used = []
-    for w in vocab_words:
-        if any(re.search(rf"\b{re.escape(w)}\b", s, flags=re.IGNORECASE) for s in sent_texts):
-            used.append(w)
-    unused = [w for w in vocab_words if w not in used]
-    missing_zh = [str(v.get("en") or "").strip() for v in vocab if not str(v.get("zh") or "").strip()]
-    missing_pos = [str(v.get("en") or "").strip() for v in vocab if not str(v.get("pos") or "").strip()]
-    return {
-        "vocab_count": len(vocab_words),
-        "sentence_count": len(sent_texts),
-        "vocab_seen_in_sentences": used,
-        "vocab_not_seen_in_sentences": unused,
-        "missing_zh": missing_zh,
-        "missing_pos": missing_pos,
-        "coverage_ratio": round((len(used) / max(1, len(vocab_words))), 3),
-    }
-
-
-def _rewrite_practice_media_urls(practice: Dict, card_url_by_stem: Dict[str, str], audio_url_by_rel: Dict[str, str]) -> Dict:
-    """Map local cards/audio references inside practice JSON to uploaded WP media URLs."""
-    if not isinstance(practice, dict):
-        return practice
-
-    def map_img(value: str) -> str:
-        raw = str(value or "").strip()
-        if not raw:
-            return raw
-        if raw.startswith("http://") or raw.startswith("https://"):
-            return raw
-        path = Path(raw)
-        if path.parts and path.parts[0] == "cards":
-            stem = path.stem
-            return card_url_by_stem.get(stem, raw)
-        return raw
-
-    def map_audio(value: str) -> str:
-        raw = str(value or "").strip()
-        if not raw:
-            return raw
-        if raw.startswith("http://") or raw.startswith("https://"):
-            return raw
-        path = Path(raw)
-        if path.parts and path.parts[0] == "audio":
-            rel = Path(*path.parts[1:]).as_posix()
-            return audio_url_by_rel.get(rel, raw)
-        return raw
-
-    for q in practice.get("questions", []) or []:
-        if not isinstance(q, dict):
-            continue
-        if "prompt_image" in q:
-            q["prompt_image"] = map_img(q.get("prompt_image", ""))
-        if "prompt_audio" in q:
-            q["prompt_audio"] = map_audio(q.get("prompt_audio", ""))
-        for choice in q.get("choices", []) or []:
-            if isinstance(choice, dict):
-                if "img" in choice:
-                    choice["img"] = map_img(choice.get("img", ""))
-                if "audio" in choice:
-                    choice["audio"] = map_audio(choice.get("audio", ""))
-    return practice
 
 
 def main() -> None:
@@ -721,7 +154,19 @@ def main() -> None:
         choices=["classic", "tiles", "strict_dark", "ng"],
         help="Optional explicit renderer surface. If omitted, inferred from theme.",
     )
+    ap.add_argument("--ng-generate", action="store_true", help="Internal entrypoint for NG tab generation.")
+    ap.add_argument("--ng-publish", action="store_true", help="Internal entrypoint for NG tab generate+publish.")
     args = ap.parse_args()
+
+    ng_entrypoint = "publish_ng" if args.ng_publish else ("generate_ng" if args.ng_generate else "")
+    if ng_entrypoint:
+        args.theme = "ng"
+        if not args.lesson_mode:
+            args.lesson_mode = "standard_homework"
+        if not args.surface_variant:
+            args.surface_variant = "ng"
+        if args.ng_publish:
+            args.publish = True
 
     # Support both WP_BASE_URL and WP_BASE (older runs/configs).
     wp_base = (os.getenv("WP_BASE_URL", "").strip() or os.getenv("WP_BASE", "").strip())
@@ -744,6 +189,19 @@ def main() -> None:
 
     print(f"[ENV] PYTHON={os.sys.executable}")
     print(f"[PUBLISH] THEME={lesson_theme} MODE={lesson_mode} SURFACE={surface_variant}")
+    entrypoint_env = (os.getenv("SKYED_PIPELINE_ENTRYPOINT", "") or "").strip()
+    ng_action_env = (os.getenv("SKYED_NG_ACTION", "") or "").strip()
+    effective_entrypoint = ng_entrypoint or entrypoint_env
+    is_ng_workflow = bool(ng_entrypoint or ng_action_env or effective_entrypoint == "ng_tab")
+    if lesson_theme == "ng" and not is_ng_workflow:
+        print("[NG] theme=ng ignored outside NG tab; falling back to sky")
+        lesson_theme = "sky"
+        if lesson_mode == "standard_homework":
+            surface_variant = "classic"
+    if effective_entrypoint:
+        print(f"[ENTRYPOINT] {effective_entrypoint}")
+    if ng_action_env:
+        print(f"[NG] ACTION={ng_action_env}")
 
     page_kind = (args.page_kind or "lesson").strip().lower()
     hw_text = ""
@@ -922,7 +380,7 @@ def main() -> None:
                 })
 
     ng_tag_game_root = None
-    if page_kind != "picture_reader" and lesson_theme == "ng" and not args.publish_only and not dry_run:
+    if page_kind != "picture_reader" and is_ng_workflow and lesson_theme == "ng" and not args.publish_only and not dry_run:
         try:
             ng_tag_game_root = _build_ng_tag_game(spec, lesson_root, title)
             if ng_tag_game_root:
@@ -931,17 +389,22 @@ def main() -> None:
             raise RuntimeError(f"Failed to build NG tag_s package: {exc}")
 
     categories = infer_categories(spec, page_kind=page_kind, theme=lesson_theme, lesson_mode=lesson_mode, surface_variant=surface_variant)
-    discover_tags = spec.get("tags", []) or []
-    if lesson_theme == "ng" and not discover_tags:
-        discover_tags = [slugify(title) or "ng"]
-    selected_ng_tag_games = _load_ng_selected_tag_games_from_env() if lesson_theme == "ng" else []
-    auto_ng_tag_game = _tag_game_info_from_root(ng_tag_game_root) if lesson_theme == "ng" else None
-    if lesson_theme == "ng" and selected_ng_tag_games:
+    # Shared tag_s discovery from homework tags caused unrelated Card Cutter
+    # packs to leak into normal lesson publishing. Keep the standard pipeline
+    # isolated. Only the NG workflow may attach tag_s, and even there only the
+    # auto-generated NG pack plus explicitly selected packs are allowed.
+    enable_legacy_tag_discovery = (os.getenv("SKYED_ENABLE_SHARED_TAG_DISCOVERY", "0") or "0").strip().lower() in {"1", "true", "yes", "on"}
+    selected_ng_tag_games = hydrate_tag_game_entries(_load_ng_selected_tag_games_from_env(), project_root=Path(__file__).resolve().parent) if (is_ng_workflow and lesson_theme == "ng") else []
+    auto_ng_tag_game = _tag_game_info_from_root(ng_tag_game_root) if (is_ng_workflow and lesson_theme == "ng") else None
+    if is_ng_workflow and lesson_theme == "ng":
         tag_games = _merge_tag_game_lists([auto_ng_tag_game] if auto_ng_tag_game else [], selected_ng_tag_games)
     else:
-        tag_games = discover_tag_games(discover_tags, theme=lesson_theme)
-        if lesson_theme == "ng" and auto_ng_tag_game:
-            tag_games = _merge_tag_game_lists([auto_ng_tag_game], tag_games)
+        tag_games = []
+    if enable_legacy_tag_discovery and page_kind != "picture_reader":
+        from skyed.tag_registry import discover_tag_games as _discover_tag_games
+        discover_tags = spec.get("tags", []) or []
+        tag_games = _merge_tag_game_lists(tag_games, hydrate_tag_game_entries(_discover_tag_games(discover_tags, theme=lesson_theme), project_root=Path(__file__).resolve().parent))
+    tag_games = hydrate_tag_game_entries(tag_games, project_root=Path(__file__).resolve().parent)
 
     items_local: List[Dict[str, str]] = []
     vocab_list = spec.get("vocab", []) or []
@@ -1185,7 +648,7 @@ def main() -> None:
             if not isinstance(item, dict):
                 continue
             rel = str(item.get("url") or "").strip()
-            mapped.append({**item, "url": audio_url_by_rel.get(rel, rel)})
+            mapped.append({**item, "url": _resolve_uploaded_audio_url(audio_url_by_rel, rel)})
         if mapped:
             out["audio_variants"] = mapped
         return out
@@ -1193,6 +656,29 @@ def main() -> None:
     reading_remote = map_block_audio(spec.get("reading_block") or {})
     listening_remote = map_block_audio(spec.get("listening_block") or {})
     special_audio_items_remote = _map_special_audio_items(special_audio_items_local, audio_url_by_rel)
+    tag_games = _deploy_tag_games_for_publish(tag_games, log_func=_log_step)
+    tag_games = _rewrite_tag_game_media_urls(
+        tag_games,
+        lesson_root=lesson_root,
+        upload_media_func=upload_media,
+        wp_base=wp_base,
+        wp_user=wp_user,
+        wp_pass=wp_pass,
+        card_url_by_stem=card_url_by_stem,
+        audio_url_by_rel=audio_url_by_rel,
+    )
+    inline_ready_tag_games: List[Dict[str, str]] = []
+    skipped_tag_games = 0
+    for game in tag_games:
+        data = game.get("data") if isinstance(game, dict) else None
+        items = data.get("items") if isinstance(data, dict) else None
+        if isinstance(data, dict) and isinstance(items, list) and items:
+            inline_ready_tag_games.append(game)
+        else:
+            skipped_tag_games += 1
+    if skipped_tag_games:
+        _log_step(f"[tag_s] inline skip count={skipped_tag_games} (missing embedded data)")
+    tag_games = inline_ready_tag_games
 
     # Remote practice URL:
     # If QUIZ_PUBLIC_BASE is configured to a real static host, use it.
@@ -1292,7 +778,9 @@ def main() -> None:
         if not data_url:
             raise RuntimeError("Failed to upload lesson_payload.txt to WordPress (no source_url).")
 
-        shortcode = f'[skyed_lesson data_url="{data_url}" theme="{lesson_theme}"]'
+        payload_hash = hashlib.sha1(payload_path.read_bytes()).hexdigest()[:12]
+        data_url_for_shortcode = f"{data_url}{'&' if '?' in data_url else '?'}v={payload_hash}"
+        shortcode = f'[skyed_lesson data_url="{data_url_for_shortcode}" theme="{lesson_theme}"]'
 
         t_create_post = perf_counter()
         post = create_post(

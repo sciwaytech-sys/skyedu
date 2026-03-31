@@ -1,5 +1,6 @@
 python-dotenv
 requests
+paramiko>=3.4
 Pillow
 pydub
 pyttsx3
