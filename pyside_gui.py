@@ -14,6 +14,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from skyed.tag_registry import list_all_tag_games
+from skyed.parser import parse_homework_text
+from skyed.tag_creator import (
+    CATEGORY_SUGGESTIONS,
+    GAME_LABELS,
+    STYLE_LABELS,
+    TagCreatorOptions,
+    build_preview_from_text,
+    preview_root as tag_preview_root,
+    publish_preview_pack,
+    published_root as tag_published_root,
+)
 
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -149,6 +160,19 @@ class AppConfig:
     picture_bg_source_image: str = ""
     picture_bg_transparency: int = 76
 
+    # tag_s creator
+    tag_creator_source_file: str = ""
+    tag_creator_game_type: str = "touch_listen_cards"
+    tag_creator_title: str = ""
+    tag_creator_tag: str = ""
+    tag_creator_category: str = "Vocabulary"
+    tag_creator_game_id: str = ""
+    tag_creator_style: str = "sky_soft"
+    tag_creator_use_local_assets: bool = True
+    tag_creator_generate_audio: bool = True
+    tag_creator_preview_file: str = ""
+    tag_creator_publish_file: str = ""
+
 
 def _default_config(root_dir: Path) -> AppConfig:
     # Known baseline defaults from your project snapshot
@@ -207,6 +231,17 @@ def _default_config(root_dir: Path) -> AppConfig:
         ng_last_import_dir="",
         picture_bg_source_image="",
         picture_bg_transparency=76,
+        tag_creator_source_file="",
+        tag_creator_game_type="touch_listen_cards",
+        tag_creator_title="",
+        tag_creator_tag="",
+        tag_creator_category="Vocabulary",
+        tag_creator_game_id="",
+        tag_creator_style="sky_soft",
+        tag_creator_use_local_assets=True,
+        tag_creator_generate_audio=True,
+        tag_creator_preview_file="",
+        tag_creator_publish_file="",
     )
 
 
@@ -337,6 +372,17 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         ng_last_import_dir=str(data.get("ng_last_import_dir", base.ng_last_import_dir)),
         picture_bg_source_image=str(data.get("picture_bg_source_image", base.picture_bg_source_image)),
         picture_bg_transparency=int(data.get("picture_bg_transparency", base.picture_bg_transparency)),
+        tag_creator_source_file=str(data.get("tag_creator_source_file", base.tag_creator_source_file)),
+        tag_creator_game_type=str(data.get("tag_creator_game_type", base.tag_creator_game_type) or base.tag_creator_game_type),
+        tag_creator_title=str(data.get("tag_creator_title", base.tag_creator_title)),
+        tag_creator_tag=str(data.get("tag_creator_tag", base.tag_creator_tag)),
+        tag_creator_category=str(data.get("tag_creator_category", base.tag_creator_category) or base.tag_creator_category),
+        tag_creator_game_id=str(data.get("tag_creator_game_id", base.tag_creator_game_id)),
+        tag_creator_style=str(data.get("tag_creator_style", base.tag_creator_style) or base.tag_creator_style),
+        tag_creator_use_local_assets=bool(data.get("tag_creator_use_local_assets", base.tag_creator_use_local_assets)),
+        tag_creator_generate_audio=bool(data.get("tag_creator_generate_audio", base.tag_creator_generate_audio)),
+        tag_creator_preview_file=str(data.get("tag_creator_preview_file", base.tag_creator_preview_file)),
+        tag_creator_publish_file=str(data.get("tag_creator_publish_file", base.tag_creator_publish_file)),
     )
 
     _autofill_cfg_from_env(cfg)
@@ -403,6 +449,17 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "ng_last_import_dir": str(cfg.ng_last_import_dir),
         "picture_bg_source_image": str(cfg.picture_bg_source_image),
         "picture_bg_transparency": int(cfg.picture_bg_transparency),
+        "tag_creator_source_file": str(cfg.tag_creator_source_file),
+        "tag_creator_game_type": str(cfg.tag_creator_game_type),
+        "tag_creator_title": str(cfg.tag_creator_title),
+        "tag_creator_tag": str(cfg.tag_creator_tag),
+        "tag_creator_category": str(cfg.tag_creator_category),
+        "tag_creator_game_id": str(cfg.tag_creator_game_id),
+        "tag_creator_style": str(cfg.tag_creator_style),
+        "tag_creator_use_local_assets": bool(cfg.tag_creator_use_local_assets),
+        "tag_creator_generate_audio": bool(cfg.tag_creator_generate_audio),
+        "tag_creator_preview_file": str(cfg.tag_creator_preview_file),
+        "tag_creator_publish_file": str(cfg.tag_creator_publish_file),
     }
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -1080,6 +1137,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.right_tabs.addTab(self._build_tab_audio(), "Audio")
         self.right_tabs.addTab(self._build_tab_images(), "Images")
         self.right_tabs.addTab(self._build_tab_batch(), "Batch")
+        self.right_tabs.addTab(self._build_tab_tag_creator(), "tag_s Creator")
         self.right_tabs.addTab(self._build_tab_special_lessons(), "NG")
         self.right_tabs.addTab(self._build_tab_publish(), "Publish")
         self.right_tabs.addTab(self._build_tab_picture_reader(), "Picture Reader")
@@ -1151,6 +1209,26 @@ class MainWindow(QtWidgets.QMainWindow):
             if widget is None:
                 continue
             widget.setMinimumHeight(height)
+
+    def _layout_widget(
+        self,
+        layout: QtWidgets.QLayout,
+        *,
+        margins: Tuple[int, int, int, int] = (0, 0, 0, 0),
+    ) -> QtWidgets.QWidget:
+        wrapper = QtWidgets.QWidget()
+        layout.setContentsMargins(*margins)
+        wrapper.setLayout(layout)
+        return wrapper
+
+    def _wrap_tab_in_scroll(self, content: QtWidgets.QWidget) -> QtWidgets.QScrollArea:
+        if content.layout() is not None:
+            content.layout().setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinAndMaxSize)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        scroll.setWidget(content)
+        return scroll
 
     def _logo_path(self) -> Path:
         return (self.root_dir / "assets" / "branding" / "sky_logo.png").resolve()
@@ -1364,8 +1442,8 @@ class MainWindow(QtWidgets.QMainWindow):
         return w
 
     def _build_tab_images(self) -> QtWidgets.QWidget:
-        w = QtWidgets.QWidget()
-        lay = QtWidgets.QVBoxLayout(w)
+        content = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(10)
 
@@ -1427,7 +1505,7 @@ class MainWindow(QtWidgets.QMainWindow):
         size_row.setSpacing(10)
         size_row.addWidget(self.spin_img_w)
         size_row.addWidget(self.spin_img_h)
-        common_fl.addRow("Width / Height:", size_row)
+        common_fl.addRow("Width / Height:", self._layout_widget(size_row))
 
         self.spin_img_steps = QtWidgets.QSpinBox()
         self.spin_img_steps.setRange(1, 100)
@@ -1449,7 +1527,7 @@ class MainWindow(QtWidgets.QMainWindow):
         runtime_row.addWidget(self.spin_img_steps)
         runtime_row.addWidget(self.spin_img_timeout)
         runtime_row.addWidget(self.spin_img_conc)
-        common_fl.addRow("Steps / Timeout / Concurrency:", runtime_row)
+        common_fl.addRow("Steps / Timeout / Concurrency:", self._layout_widget(runtime_row))
         self._set_min_control_height(self.spin_img_w, self.spin_img_h, self.spin_img_steps, self.spin_img_timeout, self.spin_img_conc, height=34)
         l.addWidget(self.box_ai_common)
 
@@ -1508,7 +1586,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row_bg.setSpacing(10)
         row_bg.addWidget(self.edit_bg_source_image, 1)
         row_bg.addWidget(btn_bg_browse)
-        bg_fl.addRow("Source image:", row_bg)
+        bg_fl.addRow("Source image:", self._layout_widget(row_bg))
 
         self.combo_bg_ocr_backend = QtWidgets.QComboBox()
         self.combo_bg_ocr_backend.addItems(["auto", "tesseract", "easyocr", "paddle"])
@@ -1524,7 +1602,7 @@ class MainWindow(QtWidgets.QMainWindow):
         ocr_row.setSpacing(10)
         ocr_row.addWidget(self.combo_bg_ocr_backend)
         ocr_row.addWidget(self.combo_bg_ocr_device)
-        bg_fl.addRow("OCR backend / device:", ocr_row)
+        bg_fl.addRow("OCR backend / device:", self._layout_widget(ocr_row))
 
         self.spin_bg_transparency = QtWidgets.QSpinBox()
         self.spin_bg_transparency.setRange(60, 90)
@@ -1583,11 +1661,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.images_grid.setVerticalSpacing(12)
 
         self.images_scroll.setWidget(self.images_container)
+        self.images_scroll.setMinimumHeight(240)
+        self.images_scroll.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         l.addWidget(self.images_scroll, 1)
 
-        lay.addWidget(g, 1)
+        lay.addWidget(g)
         self._update_image_backend_ui_state()
-        return w
+        return self._wrap_tab_in_scroll(content)
 
     def _build_tab_batch(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
@@ -1635,6 +1715,334 @@ class MainWindow(QtWidgets.QMainWindow):
         lay.addWidget(g)
         lay.addStretch(1)
         return w
+
+    def _build_tab_tag_creator(self) -> QtWidgets.QWidget:
+        content = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(content)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(10)
+
+        hero = self._brand_panel(
+            "tag_s Creator",
+            "Build standalone reusable tag_s packs from the current homework source or a separate text file. Generate creates a local file:// preview pack. Publish copies the pack into the project tag_s library and refreshes category pages.",
+            ["Separate from NG and Card Cutter", "Uses local asset library when available", "Preview works without a local server"]
+        )
+        hero.setMinimumHeight(178)
+        lay.addWidget(hero)
+
+        g_source = self._group_box("Source and pack identity")
+        fl_source = QtWidgets.QFormLayout(g_source)
+        self._setup_form_layout(fl_source)
+
+        self.edit_tag_creator_source = QtWidgets.QLineEdit(str(self.cfg.tag_creator_source_file or ""))
+        self.edit_tag_creator_source.setPlaceholderText("Optional .txt source file. Leave empty to use the current editor content.")
+        self.edit_tag_creator_source.textChanged.connect(self.on_tag_creator_settings_changed)
+        btn_source_browse = QtWidgets.QPushButton("Browse")
+        btn_source_browse.clicked.connect(self.browse_tag_creator_source_file)
+        btn_use_editor = QtWidgets.QPushButton("Use editor")
+        btn_use_editor.clicked.connect(self.use_editor_as_tag_creator_source)
+        row_source = QtWidgets.QHBoxLayout()
+        row_source.addWidget(self.edit_tag_creator_source, 1)
+        row_source.addWidget(btn_source_browse)
+        row_source.addWidget(btn_use_editor)
+        fl_source.addRow("Source text:", self._layout_widget(row_source))
+
+        self.combo_tag_creator_type = QtWidgets.QComboBox()
+        for key in ("touch_listen_cards", "listen_click_choice", "matching_pairs", "memory_pairs", "image_cards", "reveal_guess"):
+            self.combo_tag_creator_type.addItem(GAME_LABELS.get(key, key.replace("_", " ").title()), key)
+        current_game_type = str(self.cfg.tag_creator_game_type or "touch_listen_cards")
+        idx = max(0, self.combo_tag_creator_type.findData(current_game_type))
+        self.combo_tag_creator_type.setCurrentIndex(idx)
+        self.combo_tag_creator_type.currentIndexChanged.connect(self.on_tag_creator_settings_changed)
+        fl_source.addRow("Game type:", self.combo_tag_creator_type)
+
+        self.edit_tag_creator_title = QtWidgets.QLineEdit(str(self.cfg.tag_creator_title or ""))
+        self.edit_tag_creator_title.setPlaceholderText("Optional title override")
+        self.edit_tag_creator_title.textChanged.connect(self.on_tag_creator_settings_changed)
+        fl_source.addRow("Title:", self.edit_tag_creator_title)
+
+        id_row = QtWidgets.QHBoxLayout()
+        self.edit_tag_creator_tag = QtWidgets.QLineEdit(str(self.cfg.tag_creator_tag or ""))
+        self.edit_tag_creator_tag.setPlaceholderText("theme tag, for example body-parts")
+        self.edit_tag_creator_tag.textChanged.connect(self.on_tag_creator_settings_changed)
+        self.edit_tag_creator_game_id = QtWidgets.QLineEdit(str(self.cfg.tag_creator_game_id or ""))
+        self.edit_tag_creator_game_id.setPlaceholderText("Optional pack id, for example body_parts_touch_v1")
+        self.edit_tag_creator_game_id.textChanged.connect(self.on_tag_creator_settings_changed)
+        id_row.addWidget(self.edit_tag_creator_tag, 1)
+        id_row.addWidget(self.edit_tag_creator_game_id, 1)
+        fl_source.addRow("Tag / Pack id:", self._layout_widget(id_row))
+
+        self.combo_tag_creator_category = QtWidgets.QComboBox()
+        self.combo_tag_creator_category.setEditable(True)
+        self.combo_tag_creator_category.addItems(CATEGORY_SUGGESTIONS)
+        self.combo_tag_creator_category.setCurrentText(str(self.cfg.tag_creator_category or "Vocabulary"))
+        self.combo_tag_creator_category.currentTextChanged.connect(self.on_tag_creator_settings_changed)
+        fl_source.addRow("Website category:", self.combo_tag_creator_category)
+
+        self.combo_tag_creator_style = QtWidgets.QComboBox()
+        for key, label in STYLE_LABELS.items():
+            self.combo_tag_creator_style.addItem(label, key)
+        style_idx = max(0, self.combo_tag_creator_style.findData(str(self.cfg.tag_creator_style or "sky_soft")))
+        self.combo_tag_creator_style.setCurrentIndex(style_idx)
+        self.combo_tag_creator_style.currentIndexChanged.connect(self.on_tag_creator_settings_changed)
+        fl_source.addRow("Visual style:", self.combo_tag_creator_style)
+
+        g_source.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
+        lay.addWidget(g_source)
+
+        g_auto = self._group_box("Automation and output")
+        fl_auto = QtWidgets.QFormLayout(g_auto)
+        self._setup_form_layout(fl_auto)
+        self.check_tag_creator_assets = QtWidgets.QCheckBox("Use local reusable assets")
+        self.check_tag_creator_assets.setChecked(bool(self.cfg.tag_creator_use_local_assets))
+        self.check_tag_creator_assets.toggled.connect(self.on_tag_creator_settings_changed)
+        fl_auto.addRow(self.check_tag_creator_assets)
+
+        self.check_tag_creator_audio = QtWidgets.QCheckBox("Generate English audio for the game")
+        self.check_tag_creator_audio.setChecked(bool(self.cfg.tag_creator_generate_audio))
+        self.check_tag_creator_audio.toggled.connect(self.on_tag_creator_settings_changed)
+        fl_auto.addRow(self.check_tag_creator_audio)
+
+        self.lbl_tag_creator_preview = QtWidgets.QLabel(str(self.cfg.tag_creator_preview_file or "Preview file will appear here after Generate."))
+        self.lbl_tag_creator_preview.setWordWrap(True)
+        fl_auto.addRow("Preview file:", self.lbl_tag_creator_preview)
+
+        self.lbl_tag_creator_publish = QtWidgets.QLabel(str(self.cfg.tag_creator_publish_file or "Published file will appear here after Publish."))
+        self.lbl_tag_creator_publish.setWordWrap(True)
+        fl_auto.addRow("Published file:", self.lbl_tag_creator_publish)
+
+        g_auto.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
+        lay.addWidget(g_auto)
+
+        g_actions = self._group_box("tag_s actions")
+        action_lay = QtWidgets.QGridLayout(g_actions)
+        action_lay.setContentsMargins(12, 12, 12, 12)
+        action_lay.setHorizontalSpacing(10)
+        action_lay.setVerticalSpacing(10)
+        btn_tag_generate = QtWidgets.QPushButton("Generate Preview")
+        btn_tag_generate.setMinimumHeight(40)
+        btn_tag_generate.clicked.connect(self.run_tag_creator_generate)
+        btn_tag_publish = QtWidgets.QPushButton("Publish to tag_s")
+        btn_tag_publish.setMinimumHeight(40)
+        btn_tag_publish.clicked.connect(self.run_tag_creator_publish)
+        btn_open_preview = QtWidgets.QPushButton("Open Preview")
+        btn_open_preview.setMinimumHeight(38)
+        btn_open_preview.clicked.connect(self.open_tag_creator_preview)
+        btn_open_publish = QtWidgets.QPushButton("Open Published")
+        btn_open_publish.setMinimumHeight(38)
+        btn_open_publish.clicked.connect(self.open_tag_creator_published)
+        btn_refresh_tag_meta = QtWidgets.QPushButton("Refresh From Source")
+        btn_refresh_tag_meta.setMinimumHeight(38)
+        btn_refresh_tag_meta.clicked.connect(self.refresh_tag_creator_summary)
+        btn_open_tag_root = QtWidgets.QPushButton("Open tag_s Folder")
+        btn_open_tag_root.setMinimumHeight(38)
+        btn_open_tag_root.clicked.connect(self.open_tag_creator_library_root)
+        action_lay.addWidget(btn_tag_generate, 0, 0)
+        action_lay.addWidget(btn_tag_publish, 0, 1)
+        action_lay.addWidget(btn_open_preview, 1, 0)
+        action_lay.addWidget(btn_open_publish, 1, 1)
+        action_lay.addWidget(btn_refresh_tag_meta, 2, 0)
+        action_lay.addWidget(btn_open_tag_root, 2, 1)
+        action_lay.setColumnStretch(0, 1)
+        action_lay.setColumnStretch(1, 1)
+        g_actions.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
+        lay.addWidget(g_actions)
+
+        self.tag_creator_summary = QtWidgets.QPlainTextEdit()
+        self.tag_creator_summary.setReadOnly(True)
+        self.tag_creator_summary.setMinimumHeight(240)
+        self.tag_creator_summary.setPlaceholderText("Parsed source summary, preview output, and publish status will appear here.")
+        lay.addWidget(self.tag_creator_summary)
+        self.refresh_tag_creator_summary()
+        return self._wrap_tab_in_scroll(content)
+
+    def _tag_creator_game_type_value(self) -> str:
+        if hasattr(self, "combo_tag_creator_type"):
+            return str(self.combo_tag_creator_type.currentData() or "touch_listen_cards")
+        return "touch_listen_cards"
+
+    def _tag_creator_style_value(self) -> str:
+        if hasattr(self, "combo_tag_creator_style"):
+            return str(self.combo_tag_creator_style.currentData() or "sky_soft")
+        return "sky_soft"
+
+    def on_tag_creator_settings_changed(self, *_args) -> None:
+        if hasattr(self, "edit_tag_creator_source"):
+            self.cfg.tag_creator_source_file = self.edit_tag_creator_source.text().strip()
+        self.cfg.tag_creator_game_type = self._tag_creator_game_type_value()
+        if hasattr(self, "edit_tag_creator_title"):
+            self.cfg.tag_creator_title = self.edit_tag_creator_title.text().strip()
+        if hasattr(self, "edit_tag_creator_tag"):
+            self.cfg.tag_creator_tag = self.edit_tag_creator_tag.text().strip()
+        if hasattr(self, "combo_tag_creator_category"):
+            self.cfg.tag_creator_category = self.combo_tag_creator_category.currentText().strip() or "Vocabulary"
+        if hasattr(self, "edit_tag_creator_game_id"):
+            self.cfg.tag_creator_game_id = self.edit_tag_creator_game_id.text().strip()
+        self.cfg.tag_creator_style = self._tag_creator_style_value()
+        if hasattr(self, "check_tag_creator_assets"):
+            self.cfg.tag_creator_use_local_assets = bool(self.check_tag_creator_assets.isChecked())
+        if hasattr(self, "check_tag_creator_audio"):
+            self.cfg.tag_creator_generate_audio = bool(self.check_tag_creator_audio.isChecked())
+        save_config(self.cfg_path, self.cfg)
+
+    def browse_tag_creator_source_file(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select tag_s source text",
+            str(self.root_dir),
+            "Text Files (*.txt);;All Files (*)",
+        )
+        if path:
+            self.edit_tag_creator_source.setText(path)
+            self.refresh_tag_creator_summary()
+
+    def use_editor_as_tag_creator_source(self) -> None:
+        if hasattr(self, "edit_tag_creator_source"):
+            self.edit_tag_creator_source.clear()
+        self.cfg.tag_creator_source_file = ""
+        save_config(self.cfg_path, self.cfg)
+        self.refresh_tag_creator_summary()
+
+    def _tag_creator_source_text(self) -> Tuple[str, Optional[Path], str]:
+        source_path = Path(str(self.cfg.tag_creator_source_file or "").strip()).expanduser() if str(self.cfg.tag_creator_source_file or "").strip() else None
+        if source_path is not None and source_path.exists() and source_path.is_file():
+            return source_path.read_text(encoding="utf-8", errors="ignore"), source_path.parent, str(source_path)
+        editor_text = self.editor.toPlainText() if hasattr(self, "editor") else ""
+        return editor_text, self.root_dir, "editor"
+
+    def refresh_tag_creator_summary(self) -> None:
+        self.on_tag_creator_settings_changed()
+        try:
+            text, _source_dir, label = self._tag_creator_source_text()
+            parsed = parse_homework_text(text or "")
+            vocab = [item for item in list(parsed.get("vocab") or []) if isinstance(item, dict) and str(item.get("en") or "").strip()]
+            tags = [str(x).strip() for x in list(parsed.get("tags") or []) if str(x).strip()]
+            if not self.edit_tag_creator_title.text().strip() and str(parsed.get("title") or "").strip():
+                self.edit_tag_creator_title.setText(str(parsed.get("title") or "").strip())
+            if not self.edit_tag_creator_tag.text().strip() and tags:
+                self.edit_tag_creator_tag.setText(tags[0])
+            if not self.combo_tag_creator_category.currentText().strip() and tags:
+                self.combo_tag_creator_category.setCurrentText(tags[0])
+            summary_lines = [
+                f"Source: {label}",
+                f"Title: {parsed.get('title') or ''}",
+                f"Tags: {', '.join(tags) if tags else '(none)'}",
+                f"Vocabulary items: {len(vocab)}",
+                f"Sentences: {len(list(parsed.get('sentences') or []))}",
+                f"Reading block: {'yes' if str((parsed.get('reading_block') or {}).get('text') or '').strip() else 'no'}",
+                f"Listening block: {'yes' if str((parsed.get('listening_block') or {}).get('text') or '').strip() else 'no'}",
+                "",
+                "Vocabulary preview:",
+            ]
+            for item in vocab[:12]:
+                en = str(item.get('en') or '').strip()
+                zh = str(item.get('zh') or '').strip()
+                pos = str(item.get('pos') or '').strip()
+                summary_lines.append(f"- {en} [{pos or 'word'}] {zh}".rstrip())
+            if len(vocab) > 12:
+                summary_lines.append(f"… and {len(vocab) - 12} more")
+            if hasattr(self, 'lbl_tag_creator_preview'):
+                self.lbl_tag_creator_preview.setText(str(self.cfg.tag_creator_preview_file or "Preview file will appear here after Generate."))
+            if hasattr(self, 'lbl_tag_creator_publish'):
+                self.lbl_tag_creator_publish.setText(str(self.cfg.tag_creator_publish_file or "Published file will appear here after Publish."))
+            if hasattr(self, 'tag_creator_summary'):
+                self.tag_creator_summary.setPlainText("\n".join(summary_lines))
+        except Exception as exc:
+            if hasattr(self, 'tag_creator_summary'):
+                self.tag_creator_summary.setPlainText(f"Could not parse tag_s source.\n\n{type(exc).__name__}: {exc}")
+
+    def _tag_creator_options(self) -> TagCreatorOptions:
+        self.on_tag_creator_settings_changed()
+        return TagCreatorOptions(
+            tag=str(self.cfg.tag_creator_tag or "").strip(),
+            title=str(self.cfg.tag_creator_title or "").strip(),
+            category=str(self.cfg.tag_creator_category or "Vocabulary").strip() or "Vocabulary",
+            game_type=self._tag_creator_game_type_value(),
+            game_id=str(self.cfg.tag_creator_game_id or "").strip(),
+            style=self._tag_creator_style_value(),
+            voice=str(self.cfg.voice_en or "en-US-GuyNeural"),
+            rate=_rate_string(int(self.cfg.tts_rate_percent)),
+            use_local_assets=bool(self.cfg.tag_creator_use_local_assets),
+            generate_audio=bool(self.cfg.tag_creator_generate_audio),
+        )
+
+    def _open_local_path(self, path: Path) -> None:
+        target = Path(path)
+        if not target.exists():
+            QtWidgets.QMessageBox.warning(self, "Open path", f"Not found:\n\n{target}")
+            return
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(target.resolve())))
+
+    def run_tag_creator_generate(self) -> None:
+        try:
+            text, source_dir, label = self._tag_creator_source_text()
+            if not str(text or "").strip():
+                QtWidgets.QMessageBox.warning(self, "tag_s Creator", "Source text is empty. Load a file or use the editor content first.")
+                return
+            result = build_preview_from_text(
+                text=text,
+                options=self._tag_creator_options(),
+                project_root=self.root_dir,
+                source_dir=source_dir,
+                output_root=tag_preview_root(self.root_dir),
+            )
+            self.cfg.tag_creator_preview_file = str(result.preview_index)
+            save_config(self.cfg_path, self.cfg)
+            self.append_log(
+                f"[tag_s Creator] preview generated: {result.preview_index}\n"
+                f"[tag_s Creator] source={label} tag={result.tag} game_id={result.game_id} vocab={result.vocab_count} assets={result.assets_used} placeholders={result.placeholders_used} audio={result.audio_generated}\n"
+            )
+            self.refresh_tag_creator_summary()
+            self._open_local_path(result.preview_index)
+        except Exception as exc:
+            self.append_log(f"[tag_s Creator] preview failed: {type(exc).__name__}: {exc}\n")
+            QtWidgets.QMessageBox.critical(self, "tag_s Creator", f"Preview generation failed.\n\n{type(exc).__name__}: {exc}")
+
+    def run_tag_creator_publish(self) -> None:
+        try:
+            text, source_dir, label = self._tag_creator_source_text()
+            if not str(text or "").strip():
+                QtWidgets.QMessageBox.warning(self, "tag_s Creator", "Source text is empty. Load a file or use the editor content first.")
+                return
+            preview_result = build_preview_from_text(
+                text=text,
+                options=self._tag_creator_options(),
+                project_root=self.root_dir,
+                source_dir=source_dir,
+                output_root=tag_preview_root(self.root_dir),
+            )
+            publish_result = publish_preview_pack(preview_game_root=preview_result.preview_root, project_root=self.root_dir)
+            self.cfg.tag_creator_preview_file = str(preview_result.preview_index)
+            self.cfg.tag_creator_publish_file = str(publish_result.publish_index or "")
+            save_config(self.cfg_path, self.cfg)
+            self.append_log(
+                f"[tag_s Creator] published: {publish_result.publish_index}\n"
+                f"[tag_s Creator] source={label} tag={publish_result.tag} game_id={publish_result.game_id} vocab={publish_result.vocab_count} audio={publish_result.audio_generated}\n"
+            )
+            self.refresh_tag_creator_summary()
+            self.refresh_ng_tag_game_choices()
+            if publish_result.publish_index is not None:
+                self._open_local_path(publish_result.publish_index)
+        except Exception as exc:
+            self.append_log(f"[tag_s Creator] publish failed: {type(exc).__name__}: {exc}\n")
+            QtWidgets.QMessageBox.critical(self, "tag_s Creator", f"Publish failed.\n\n{type(exc).__name__}: {exc}")
+
+    def open_tag_creator_preview(self) -> None:
+        raw = str(self.cfg.tag_creator_preview_file or "").strip()
+        if not raw:
+            QtWidgets.QMessageBox.information(self, "tag_s Creator", "No preview file yet. Generate a preview first.")
+            return
+        self._open_local_path(Path(raw))
+
+    def open_tag_creator_published(self) -> None:
+        raw = str(self.cfg.tag_creator_publish_file or "").strip()
+        if not raw:
+            QtWidgets.QMessageBox.information(self, "tag_s Creator", "No published file yet. Publish a pack first.")
+            return
+        self._open_local_path(Path(raw))
+
+    def open_tag_creator_library_root(self) -> None:
+        self._open_local_path(tag_published_root(self.root_dir))
 
     def _build_tab_special_lessons(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
@@ -2304,7 +2712,10 @@ class MainWindow(QtWidgets.QMainWindow):
         mapping = {
             "touch_listen_cards": "Touch and Listen",
             "matching_pairs": "Matching Pairs",
+            "memory_pairs": "Memory Pairs",
             "image_cards": "Image Cards",
+            "listen_click_choice": "Listen and Choose",
+            "reveal_guess": "Reveal and Guess",
         }
         return mapping.get(key, key.replace("_", " ").title() if key else "tag_s")
 
@@ -2340,6 +2751,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         tags_base = _clean_env_value(os.getenv("TAGS_PUBLIC_BASE") or "https://skyedu.fun/tag_s")
         entries = list_all_tag_games(project_root=self.root_dir, tags_public_base=tags_base)
+        entries = [entry for entry in entries if str(entry.get("renderer") or "").strip().lower() == "touch_listen_cards"]
         for combo, selected_value in combos:
             selected_entry = self._parse_tag_game_entry(selected_value)
             selected_key = self._tag_game_key(selected_entry)
@@ -2363,7 +2775,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     target_index = combo.count() - 1
             combo.setCurrentIndex(target_index)
             combo.blockSignals(False)
-        self.append_log(f"[NG] tag_s list refreshed: {len(entries)} found\n")
+        self.append_log(f"[NG] touch-listen tag_s list refreshed: {len(entries)} found\n")
 
     def on_ng_settings_changed(self, *_args) -> None:
         for key in ("ng_words_repeat_1", "ng_words_repeat_2", "ng_words_repeat_3", "ng_phonics", "ng_chant", "ng_song", "ng_question", "ng_other", "ng_other_2"):
@@ -2389,6 +2801,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 continue
             if not isinstance(entry, dict):
                 continue
+            renderer = str(entry.get("renderer") or "").strip().lower()
+            if renderer != "touch_listen_cards":
+                continue
             tag = str(entry.get("tag") or "").strip()
             game_id = str(entry.get("game_id") or "").strip()
             if not tag or not game_id:
@@ -2406,6 +2821,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "local_root": str(entry.get("local_root") or "").strip(),
             }
             out.append({k: v for k, v in compact.items() if v})
+            if len(out) >= 2:
+                break
         return out
 
     def _ng_audio_field_map(self) -> Dict[str, str]:

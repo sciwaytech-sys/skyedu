@@ -395,9 +395,22 @@ def main() -> None:
     # auto-generated NG pack plus explicitly selected packs are allowed.
     enable_legacy_tag_discovery = (os.getenv("SKYED_ENABLE_SHARED_TAG_DISCOVERY", "0") or "0").strip().lower() in {"1", "true", "yes", "on"}
     selected_ng_tag_games = hydrate_tag_game_entries(_load_ng_selected_tag_games_from_env(), project_root=Path(__file__).resolve().parent) if (is_ng_workflow and lesson_theme == "ng") else []
+    if is_ng_workflow and lesson_theme == "ng":
+        filtered_selected_ng_tag_games = [
+            item for item in selected_ng_tag_games
+            if str(item.get("renderer") or "").strip().lower() == "touch_listen_cards"
+        ]
+        filtered_selected_ng_tag_games = filtered_selected_ng_tag_games[:2]
+    else:
+        filtered_selected_ng_tag_games = []
     auto_ng_tag_game = _tag_game_info_from_root(ng_tag_game_root) if (is_ng_workflow and lesson_theme == "ng") else None
     if is_ng_workflow and lesson_theme == "ng":
-        tag_games = _merge_tag_game_lists([auto_ng_tag_game] if auto_ng_tag_game else [], selected_ng_tag_games)
+        # NG pages should publish only the explicitly selected touch-listen packs.
+        # The automatic inline lesson pack is a fallback only when nothing is selected.
+        if filtered_selected_ng_tag_games:
+            tag_games = filtered_selected_ng_tag_games
+        else:
+            tag_games = [auto_ng_tag_game] if auto_ng_tag_game else []
     else:
         tag_games = []
     if enable_legacy_tag_discovery and page_kind != "picture_reader":
@@ -780,7 +793,8 @@ def main() -> None:
 
         payload_hash = hashlib.sha1(payload_path.read_bytes()).hexdigest()[:12]
         data_url_for_shortcode = f"{data_url}{'&' if '?' in data_url else '?'}v={payload_hash}"
-        shortcode = f'[skyed_lesson data_url="{data_url_for_shortcode}" theme="{lesson_theme}"]'
+        shortcode_tag = "skyed_ng_lesson" if is_ng_workflow else "skyed_lesson"
+        shortcode = f'[{shortcode_tag} data_url="{data_url_for_shortcode}" theme="{lesson_theme}"]'
 
         t_create_post = perf_counter()
         post = create_post(

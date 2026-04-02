@@ -376,7 +376,14 @@ def list_pages(
     page = 1
     out: List[Dict[str, Any]] = []
     while True:
-        params: Dict[str, Any] = {"per_page": 100, "page": page, "orderby": "menu_order", "order": "asc"}
+        params: Dict[str, Any] = {
+            "per_page": 100,
+            "page": page,
+            "orderby": "menu_order",
+            "order": "asc",
+            "context": "edit",
+            "_fields": "id,slug,parent,link,status",
+        }
         if parent is not None:
             params["parent"] = int(parent)
         if slug:
@@ -561,7 +568,15 @@ def create_post(
     for url in endpoints:
         t0 = time.perf_counter()
         try:
-            r = _request("POST", url, auth=auth, json=payload, timeout=timeout, session=sess)
+            r = _request(
+                "POST",
+                url,
+                auth=auth,
+                json=payload,
+                params={"context": "edit", "_fields": "id,slug,parent,link,status"},
+                timeout=timeout,
+                session=sess,
+            )
         except Exception as e:
             errors.append(f"{url} -> EXC {e}")
             continue
