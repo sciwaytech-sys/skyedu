@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+try:
+    from ._bootstrap import ensure_project_root_on_sys_path
+except ImportError:  # direct script execution
+    from _bootstrap import ensure_project_root_on_sys_path
+
+PROJECT_ROOT = ensure_project_root_on_sys_path()
+
+
 import argparse
 from pathlib import Path
 

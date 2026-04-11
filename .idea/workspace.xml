@@ -4,28 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="4.6.0 Beta. Functional update. Card cutter and layout configuration">
+    <list default="true" id="b09f3665-fd21-4e0a-b362-2b524b89e054" name="Changes" comment="5.0 Final&#10;tag_s creator is added.&#10;NG logic and NG_renderer plugins are added&#10;Pipeline and GUI are split into different files to avoid big files.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gui_config.json" beforeDir="false" afterPath="$PROJECT_DIR$/gui_config.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pyside_gui.py" beforeDir="false" afterPath="$PROJECT_DIR$/pyside_gui.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/run_pipeline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/build.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/mcq_text.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/prepositions_dragdrop.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/builders/qa_dialog.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/registry.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/base.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/dragdrop.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/mcq.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/qa.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/render/runtime.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/schema.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/skins/fluent_win11.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/quizes/skins/sky_brand.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/wp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/skyed/wp_fixed_no_proxy.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/tag_runtime/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/templates/tag_runtime/styles.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" beforeDir="false" afterPath="$PROJECT_DIR$/wp_plugin/skyed-lesson-renderer/skyed-lesson-renderer.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/build_image_specs.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/build_image_specs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/build_tag_s_once.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/build_tag_s_once.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/cards.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/cards.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/image_specs.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/image_specs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/skyed/tag_gamegen.py" beforeDir="false" afterPath="$PROJECT_DIR$/skyed/tag_gamegen.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -400,7 +387,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774946601292</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="5.0 Final&#10;tag_s creator is added.&#10;NG logic and NG_renderer plugins are added&#10;Pipeline and GUI are split into different files to avoid big files.">
+      <option name="closed" value="true" />
+      <created>1775160732047</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1775160732047</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -428,7 +423,8 @@
     <MESSAGE value="4.4.9 Beta NG publisher is added" />
     <MESSAGE value="4.5.0 Beta NG publisher is confugured. Tag_s selection logic is added" />
     <MESSAGE value="4.6.0 Beta. Functional update. Card cutter and layout configuration" />
-    <option name="LAST_COMMIT_MESSAGE" value="4.6.0 Beta. Functional update. Card cutter and layout configuration" />
+    <MESSAGE value="5.0 Final&#10;tag_s creator is added.&#10;NG logic and NG_renderer plugins are added&#10;Pipeline and GUI are split into different files to avoid big files." />
+    <option name="LAST_COMMIT_MESSAGE" value="5.0 Final&#10;tag_s creator is added.&#10;NG logic and NG_renderer plugins are added&#10;Pipeline and GUI are split into different files to avoid big files." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/skyed_automation$pyside_gui.coverage" NAME="pyside_gui Coverage Results" MODIFIED="1775125295307" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

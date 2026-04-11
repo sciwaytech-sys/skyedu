@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List
-import re
 
-
-def _safe_tag(s: str) -> str:
-    s = (s or "").strip().lower().replace(" ", "-")
-    return "".join(ch for ch in s if ch.isalnum() or ch in "-_").strip("-_")
+# Canonical implementation lives in tag_registry to avoid duplication.
+from .tag_registry import safe_tag as _safe_tag
 
 
 def export_tag_s_matching_pairs(
@@ -34,8 +32,6 @@ def export_tag_s_matching_pairs(
 
     for item in runtime_src.rglob("*"):
         rel = item.relative_to(runtime_src)
-        if rel.name == "styes.css":
-            rel = rel.with_name("styles.css")
         dst = game_root / rel
         if item.is_dir():
             dst.mkdir(parents=True, exist_ok=True)
@@ -98,8 +94,6 @@ def export_tag_s_touch_listen_cards(
 
     for item in runtime_src.rglob("*"):
         rel = item.relative_to(runtime_src)
-        if rel.name == "styes.css":
-            rel = rel.with_name("styles.css")
         dst = game_root / rel
         if item.is_dir():
             dst.mkdir(parents=True, exist_ok=True)

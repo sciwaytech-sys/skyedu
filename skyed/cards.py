@@ -386,6 +386,20 @@ def _save_clean_placeholder(label: str, out_path: Path, font_path: Optional[str]
     ph = _make_placeholder_panel(label, 768, 768, font_path)
     _save_png_optimized(ph, out_path)
 
+def _looks_blank(png_bytes: bytes) -> bool:
+    try:
+        im = Image.open(BytesIO(png_bytes)).convert("L")
+        im = im.resize((128, 128))
+        hist = im.histogram()
+        total = sum(hist)
+        if total <= 0:
+            return True
+        mean = sum(i * c for i, c in enumerate(hist)) / float(total)
+        var = sum(((i - mean) ** 2) * c for i, c in enumerate(hist)) / float(total)
+        return var < 1.0
+    except Exception:
+        return False
+
 
 def _should_use_local_cost_saver(img_spec: ImageSpec, backend_name: str) -> bool:
     if backend_name != "cloudflare_flux":
@@ -409,6 +423,165 @@ def _should_use_local_cost_saver(img_spec: ImageSpec, backend_name: str) -> bool
         return True
     return False
 
+
+
+def _generate_single_spec_image(
+    img_spec: ImageSpec,
+    *,
+    slug: str,
+    backend,
+    backend_name: str,
+    style: str,
+    width: int,
+    height: int,
+    steps: int,
+    timeout_s: int,
+    validator: Optional[ImageValidator],
+    ai_png: Path,
+    font_path: Optional[str] = None,
+    max_retries: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Generate or resolve one image spec into a PNG and report row.
+
+    Kept as a shared helper for Asset Factory and the lesson card pipeline so the
+    two flows stay aligned after the refactor.
+    """
+    ai_png = Path(ai_png)
+    ai_png.parent.mkdir(parents=True, exist_ok=True)
+    spec_word = str(getattr(img_spec, "word", "") or "").strip() or slug
+    row: Dict[str, Any] = {
+        "word": spec_word,
+        "slug": slug,
+        "status": "pending",
+        "backend": backend_name,
+        "attempts": [],
+        "ai_path": str(ai_png),
+        "image_spec": img_spec.to_dict(),
+    }
+
+    if max_retries is None:
+        if backend_name == "cloudflare_flux":
+            default_retries = 0
+        elif backend_name == "hf_endpoint":
+            default_retries = 1
+        else:
+            default_retries = 2
+        max_retries = _int_env("IMG_MAX_RETRIES", default_retries)
+
+    import hashlib
+    seed_base = int(hashlib.sha256((img_spec.positive_prompt or spec_word).encode("utf-8")).hexdigest()[:8], 16)
+    fail_marker = ai_png.with_suffix(".fail.txt")
+    fallback_marker = ai_png.with_suffix(".fallback.txt")
+    accepted = False
+    last_err: Optional[str] = None
+    validator = validator or ImageValidator()
+
+    if backend_name == "local_assets_only":
+        local_match = _materialize_local_asset_png(spec_word, ai_png)
+        if local_match is not None:
+            row["status"] = "local_asset_match"
+            row["local_asset_path"] = str(local_match)
+            row["final_prompt"] = "LOCAL_ASSET_ONLY"
+            return row
+        deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
+        if deterministic is not None:
+            row["status"] = "local_asset_missing_deterministic_fallback"
+            row["fallback_reason"] = "No matching local asset"
+            row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+            return row
+        _save_clean_placeholder(spec_word, ai_png, font_path)
+        row["status"] = "local_asset_missing_placeholder"
+        row["fallback_reason"] = "No matching local asset"
+        row["final_prompt"] = "LOCAL_PLACEHOLDER"
+        return row
+
+    if _should_use_local_cost_saver(img_spec, backend_name):
+        deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
+        if deterministic is not None:
+            row["status"] = "deterministic_local_no_cost"
+            row["smart_local"] = True
+            row["final_prompt"] = "LOCAL_DETERMINISTIC_SCENE"
+            return row
+
+    for attempt in range(0, max(0, int(max_retries)) + 1):
+        positive = _retry_positive_prompt(img_spec, attempt)
+        negative = _retry_negative_prompt(img_spec, attempt)
+        effective_positive = _compact_cloudflare_prompt(positive, negative) if backend_name == "cloudflare_flux" else positive
+        req = ImageGenRequest(
+            subject=img_spec.word,
+            style=style,
+            render_mode=_render_mode_for_image_spec(img_spec),
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed_base + attempt,
+            positive_prompt=effective_positive,
+            negative_prompt=negative,
+        )
+        attempt_row: Dict[str, Any] = {
+            "attempt": attempt,
+            "render_mode": req.render_mode,
+            "positive_prompt": positive,
+            "effective_positive_prompt": effective_positive,
+            "negative_prompt": negative,
+        }
+        try:
+            png_bytes = backend.generate_png(req, timeout_s=timeout_s)
+            if _looks_blank(png_bytes):
+                attempt_row["accepted"] = False
+                attempt_row["error"] = "Blank/near-blank output detected"
+                row["attempts"].append(attempt_row)
+                last_err = "Blank/near-blank output detected"
+                continue
+            ai_png.write_bytes(png_bytes)
+            validation = validator.validate(ai_png, img_spec, used_prompt=effective_positive)
+            attempt_row["validation"] = {
+                "accepted": validation.accepted,
+                "score": validation.score,
+                "reasons": list(validation.reasons),
+                "ocr_checked": validation.ocr_checked,
+                "ocr_error": validation.ocr_error,
+                "detected_text": list(validation.detected_text),
+            }
+            row["attempts"].append(attempt_row)
+            if validation.accepted:
+                accepted = True
+                row["status"] = "accepted"
+                row["final_prompt"] = effective_positive
+                row["source_positive_prompt"] = positive
+                row["final_negative_prompt"] = negative
+                if fail_marker.exists():
+                    fail_marker.unlink(missing_ok=True)
+                if fallback_marker.exists():
+                    fallback_marker.unlink(missing_ok=True)
+                break
+            last_err = "; ".join(validation.reasons) or "Validation rejected image"
+            if validation.ocr_error:
+                row["ocr_error"] = validation.ocr_error
+            if any(r.startswith("Text validation unavailable:") for r in validation.reasons):
+                break
+        except Exception as e:
+            attempt_row["accepted"] = False
+            attempt_row["error"] = f"{type(e).__name__}: {e}"
+            row["attempts"].append(attempt_row)
+            last_err = f"{type(e).__name__}: {e}"
+
+    if not accepted:
+        deterministic = render_deterministic_scene(img_spec, ai_png, include_labels=False)
+        if deterministic is not None:
+            fallback_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
+            fail_marker.write_text(last_err or "Deterministic fallback created", encoding="utf-8")
+            row["status"] = "deterministic_fallback"
+            row["fallback_reason"] = last_err or "AI image rejected"
+            row["deterministic_fallback"] = True
+        else:
+            _save_clean_placeholder(img_spec.word or spec_word, ai_png, font_path)
+            fallback_marker.write_text(last_err or "Clean placeholder created", encoding="utf-8")
+            fail_marker.write_text(last_err or "Clean placeholder created", encoding="utf-8")
+            row["status"] = "clean_placeholder"
+            row["fallback_reason"] = last_err or "AI image rejected"
+
+    return row
 
 def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir: Path) -> List[Path]:
     out_dir = Path(out_dir)
@@ -499,20 +672,6 @@ def generate_vocab_cards(spec: Dict[str, Any], font_path: Optional[str], out_dir
         lines.append(f"HF_TOKEN_SET={'yes' if os.environ.get('HF_TOKEN') else 'no'}")
         lines.append(f"HF_GUIDANCE={os.environ.get('HF_GUIDANCE','')}")
     status_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-    def _looks_blank(png_bytes: bytes) -> bool:
-        try:
-            im = Image.open(BytesIO(png_bytes)).convert("L")
-            im = im.resize((128, 128))
-            hist = im.histogram()
-            total = sum(hist)
-            if total <= 0:
-                return True
-            mean = sum(i * c for i, c in enumerate(hist)) / float(total)
-            var = sum(((i - mean) ** 2) * c for i, c in enumerate(hist)) / float(total)
-            return var < 1.0
-        except Exception:
-            return False
 
     def _gen_one(entry: Dict[str, str]) -> Dict[str, Any]:
         en_word = str(entry.get("en") or "").strip()

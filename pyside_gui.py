@@ -25,6 +25,7 @@ from skyed.tag_creator import (
     publish_preview_pack,
     published_root as tag_published_root,
 )
+from skyed.tag_game_profiles import default_settings_json, get_game_profile, ordered_game_types
 
 import requests
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -168,6 +169,7 @@ class AppConfig:
     tag_creator_category: str = "Vocabulary"
     tag_creator_game_id: str = ""
     tag_creator_style: str = "sky_soft"
+    tag_creator_settings_json: str = ""
     tag_creator_use_local_assets: bool = True
     tag_creator_generate_audio: bool = True
     tag_creator_preview_file: str = ""
@@ -238,6 +240,7 @@ def _default_config(root_dir: Path) -> AppConfig:
         tag_creator_category="Vocabulary",
         tag_creator_game_id="",
         tag_creator_style="sky_soft",
+        tag_creator_settings_json=default_settings_json("touch_listen_cards"),
         tag_creator_use_local_assets=True,
         tag_creator_generate_audio=True,
         tag_creator_preview_file="",
@@ -379,6 +382,7 @@ def load_config(path: Path, *, root_dir: Path) -> AppConfig:
         tag_creator_category=str(data.get("tag_creator_category", base.tag_creator_category) or base.tag_creator_category),
         tag_creator_game_id=str(data.get("tag_creator_game_id", base.tag_creator_game_id)),
         tag_creator_style=str(data.get("tag_creator_style", base.tag_creator_style) or base.tag_creator_style),
+        tag_creator_settings_json=str(data.get("tag_creator_settings_json", base.tag_creator_settings_json) or base.tag_creator_settings_json),
         tag_creator_use_local_assets=bool(data.get("tag_creator_use_local_assets", base.tag_creator_use_local_assets)),
         tag_creator_generate_audio=bool(data.get("tag_creator_generate_audio", base.tag_creator_generate_audio)),
         tag_creator_preview_file=str(data.get("tag_creator_preview_file", base.tag_creator_preview_file)),
@@ -456,6 +460,7 @@ def save_config(path: Path, cfg: AppConfig) -> None:
         "tag_creator_category": str(cfg.tag_creator_category),
         "tag_creator_game_id": str(cfg.tag_creator_game_id),
         "tag_creator_style": str(cfg.tag_creator_style),
+        "tag_creator_settings_json": str(cfg.tag_creator_settings_json),
         "tag_creator_use_local_assets": bool(cfg.tag_creator_use_local_assets),
         "tag_creator_generate_audio": bool(cfg.tag_creator_generate_audio),
         "tag_creator_preview_file": str(cfg.tag_creator_preview_file),
@@ -1748,13 +1753,18 @@ class MainWindow(QtWidgets.QMainWindow):
         fl_source.addRow("Source text:", self._layout_widget(row_source))
 
         self.combo_tag_creator_type = QtWidgets.QComboBox()
-        for key in ("touch_listen_cards", "listen_click_choice", "matching_pairs", "memory_pairs", "image_cards", "reveal_guess"):
+        for key in ordered_game_types():
             self.combo_tag_creator_type.addItem(GAME_LABELS.get(key, key.replace("_", " ").title()), key)
         current_game_type = str(self.cfg.tag_creator_game_type or "touch_listen_cards")
         idx = max(0, self.combo_tag_creator_type.findData(current_game_type))
         self.combo_tag_creator_type.setCurrentIndex(idx)
-        self.combo_tag_creator_type.currentIndexChanged.connect(self.on_tag_creator_settings_changed)
+        self.combo_tag_creator_type.currentIndexChanged.connect(self.on_tag_creator_game_type_changed)
         fl_source.addRow("Game type:", self.combo_tag_creator_type)
+
+        self.lbl_tag_creator_engine_note = QtWidgets.QLabel("")
+        self.lbl_tag_creator_engine_note.setWordWrap(True)
+        self.lbl_tag_creator_engine_note.setStyleSheet("color:#35516a;")
+        fl_source.addRow("Engine note:", self.lbl_tag_creator_engine_note)
 
         self.edit_tag_creator_title = QtWidgets.QLineEdit(str(self.cfg.tag_creator_title or ""))
         self.edit_tag_creator_title.setPlaceholderText("Optional title override")
@@ -1786,6 +1796,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.combo_tag_creator_style.setCurrentIndex(style_idx)
         self.combo_tag_creator_style.currentIndexChanged.connect(self.on_tag_creator_settings_changed)
         fl_source.addRow("Visual style:", self.combo_tag_creator_style)
+
+        self.edit_tag_creator_settings = QtWidgets.QPlainTextEdit(str(self.cfg.tag_creator_settings_json or default_settings_json(self._tag_creator_game_type_value())))
+        self.edit_tag_creator_settings.setMinimumHeight(150)
+        self.edit_tag_creator_settings.setPlaceholderText('{\n  "choice_count": 4\n}')
+        self.edit_tag_creator_settings.textChanged.connect(self.on_tag_creator_settings_changed)
+        btn_tag_creator_reset = QtWidgets.QPushButton("Reset defaults")
+        btn_tag_creator_reset.clicked.connect(self.reset_tag_creator_game_settings)
+        settings_wrap = QtWidgets.QVBoxLayout()
+        settings_wrap.setContentsMargins(0, 0, 0, 0)
+        settings_wrap.setSpacing(6)
+        settings_wrap.addWidget(self.edit_tag_creator_settings)
+        settings_wrap.addWidget(btn_tag_creator_reset, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
+        fl_source.addRow("Game options (JSON):", self._layout_widget(settings_wrap))
 
         g_source.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
         lay.addWidget(g_source)
@@ -1853,6 +1876,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tag_creator_summary.setMinimumHeight(240)
         self.tag_creator_summary.setPlaceholderText("Parsed source summary, preview output, and publish status will appear here.")
         lay.addWidget(self.tag_creator_summary)
+        self._tag_creator_last_default_settings = self._tag_creator_current_default_settings()
+        self._update_tag_creator_profile_note()
         self.refresh_tag_creator_summary()
         return self._wrap_tab_in_scroll(content)
 
@@ -1865,6 +1890,34 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self, "combo_tag_creator_style"):
             return str(self.combo_tag_creator_style.currentData() or "sky_soft")
         return "sky_soft"
+
+    def _tag_creator_current_default_settings(self) -> str:
+        return default_settings_json(self._tag_creator_game_type_value())
+
+    def _update_tag_creator_profile_note(self) -> None:
+        if not hasattr(self, "lbl_tag_creator_engine_note"):
+            return
+        profile = get_game_profile(self._tag_creator_game_type_value())
+        imported = f" Imported family: {', '.join(profile.imported_from)}." if profile.imported_from else ""
+        self.lbl_tag_creator_engine_note.setText(f"{profile.description} Source focus: {profile.source_focus}.{imported}")
+
+    def on_tag_creator_game_type_changed(self, *_args) -> None:
+        previous_default = str(getattr(self, "_tag_creator_last_default_settings", "") or "").strip()
+        current_text = self.edit_tag_creator_settings.toPlainText().strip() if hasattr(self, "edit_tag_creator_settings") else ""
+        if hasattr(self, "edit_tag_creator_settings") and (not current_text or current_text == previous_default):
+            new_default = self._tag_creator_current_default_settings()
+            blocker = QtCore.QSignalBlocker(self.edit_tag_creator_settings)
+            self.edit_tag_creator_settings.setPlainText(new_default)
+            del blocker
+        self._tag_creator_last_default_settings = self._tag_creator_current_default_settings()
+        self._update_tag_creator_profile_note()
+        self.on_tag_creator_settings_changed()
+
+    def reset_tag_creator_game_settings(self) -> None:
+        if hasattr(self, "edit_tag_creator_settings"):
+            self.edit_tag_creator_settings.setPlainText(self._tag_creator_current_default_settings())
+        self._tag_creator_last_default_settings = self._tag_creator_current_default_settings()
+        self.on_tag_creator_settings_changed()
 
     def on_tag_creator_settings_changed(self, *_args) -> None:
         if hasattr(self, "edit_tag_creator_source"):
@@ -1879,10 +1932,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self, "edit_tag_creator_game_id"):
             self.cfg.tag_creator_game_id = self.edit_tag_creator_game_id.text().strip()
         self.cfg.tag_creator_style = self._tag_creator_style_value()
+        if hasattr(self, "edit_tag_creator_settings"):
+            self.cfg.tag_creator_settings_json = self.edit_tag_creator_settings.toPlainText().strip() or self._tag_creator_current_default_settings()
         if hasattr(self, "check_tag_creator_assets"):
             self.cfg.tag_creator_use_local_assets = bool(self.check_tag_creator_assets.isChecked())
         if hasattr(self, "check_tag_creator_audio"):
             self.cfg.tag_creator_generate_audio = bool(self.check_tag_creator_audio.isChecked())
+        self._update_tag_creator_profile_note()
         save_config(self.cfg_path, self.cfg)
 
     def browse_tag_creator_source_file(self) -> None:
@@ -1917,18 +1973,31 @@ class MainWindow(QtWidgets.QMainWindow):
             parsed = parse_homework_text(text or "")
             vocab = [item for item in list(parsed.get("vocab") or []) if isinstance(item, dict) and str(item.get("en") or "").strip()]
             tags = [str(x).strip() for x in list(parsed.get("tags") or []) if str(x).strip()]
+            profile = get_game_profile(self._tag_creator_game_type_value())
+            settings_status = "valid"
+            settings_note = ""
+            try:
+                json.loads(self.cfg.tag_creator_settings_json or self._tag_creator_current_default_settings())
+            except Exception as exc:
+                settings_status = "invalid"
+                settings_note = f" ({type(exc).__name__}: {exc})"
             if not self.edit_tag_creator_title.text().strip() and str(parsed.get("title") or "").strip():
                 self.edit_tag_creator_title.setText(str(parsed.get("title") or "").strip())
             if not self.edit_tag_creator_tag.text().strip() and tags:
                 self.edit_tag_creator_tag.setText(tags[0])
-            if not self.combo_tag_creator_category.currentText().strip() and tags:
-                self.combo_tag_creator_category.setCurrentText(tags[0])
+            if not self.combo_tag_creator_category.currentText().strip():
+                self.combo_tag_creator_category.setCurrentText(profile.default_category)
             summary_lines = [
                 f"Source: {label}",
+                f"Game family: {profile.label}",
+                f"Imported family sources: {', '.join(profile.imported_from) if profile.imported_from else '(native SkyEd)'}",
+                f"Source focus: {profile.source_focus}",
+                f"Settings JSON: {settings_status}{settings_note}",
                 f"Title: {parsed.get('title') or ''}",
                 f"Tags: {', '.join(tags) if tags else '(none)'}",
                 f"Vocabulary items: {len(vocab)}",
                 f"Sentences: {len(list(parsed.get('sentences') or []))}",
+                f"Q&A items: {len(list(parsed.get('qa') or []))}",
                 f"Reading block: {'yes' if str((parsed.get('reading_block') or {}).get('text') or '').strip() else 'no'}",
                 f"Listening block: {'yes' if str((parsed.get('listening_block') or {}).get('text') or '').strip() else 'no'}",
                 "",
@@ -1961,6 +2030,7 @@ class MainWindow(QtWidgets.QMainWindow):
             game_id=str(self.cfg.tag_creator_game_id or "").strip(),
             style=self._tag_creator_style_value(),
             voice=str(self.cfg.voice_en or "en-US-GuyNeural"),
+            settings_json=str(self.cfg.tag_creator_settings_json or self._tag_creator_current_default_settings()),
             rate=_rate_string(int(self.cfg.tts_rate_percent)),
             use_local_assets=bool(self.cfg.tag_creator_use_local_assets),
             generate_audio=bool(self.cfg.tag_creator_generate_audio),

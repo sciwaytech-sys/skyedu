@@ -264,6 +264,53 @@ def build_specs_from_parsed_spec(spec: dict) -> list[ImageSpec]:
     return items
 
 
+
+def build_sentence_image_spec(
+    sentence_en: str,
+    *,
+    sentence_zh: str = "",
+    explicit_prompt: str = "",
+    theme: str = "",
+    visual_class: str = "scene",
+) -> ImageSpec:
+    """Build a lightweight ImageSpec for sentence-scene asset jobs.
+
+    This keeps Asset Factory compatible with the current ImageSpec model
+    without introducing a second sentence-scene prompt system.
+    """
+    sentence = re.sub(r"\s+", " ", str(sentence_en or "")).strip()
+    if not sentence:
+        sentence = "sentence scene"
+    sentence_zh = str(sentence_zh or "").strip()
+    visual = (visual_class or "scene").strip().lower()
+    render_mode = "guided_scene" if visual in {"scene", "flashcard", "text_card"} else "action_scene"
+    positive_prompt = (
+        str(explicit_prompt or "").strip()
+        or f"simple child-friendly educational scene illustrating: {sentence}, no text in image"
+    )
+    must_exclude = list(dict.fromkeys([
+        *TEXT_EXCLUSION_TOKENS,
+        "watermark",
+        "logo",
+        "crowded collage",
+        "random decorative text",
+    ]))
+    fallback_label = sentence if not sentence_zh else f"{sentence} · {sentence_zh}"
+    return ImageSpec(
+        word=sentence,
+        pos="sentence",
+        zh=sentence_zh,
+        theme=theme,
+        example_en=sentence,
+        scene_type="sentence_guided_scene",
+        render_mode=render_mode,
+        positive_prompt=positive_prompt,
+        negative_prompt=", ".join(must_exclude),
+        must_include=[sentence],
+        must_exclude=must_exclude,
+        fallback_label=fallback_label,
+    )
+
 def save_specs_json(specs: Iterable[ImageSpec], out_path: str | Path) -> Path:
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -281,5 +328,6 @@ __all__ = [
     "build_image_spec",
     "build_specs_from_homework_text",
     "build_specs_from_parsed_spec",
+    "build_sentence_image_spec",
     "save_specs_json",
 ]
